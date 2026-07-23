@@ -121,7 +121,7 @@ The template is ordinary HTML:
 ```html
 <template id="counter-template">
   <section class="counter">
-    <output data-counter-value>0</output>
+    <output data-counter-value>count is 0</output>
     <button data-counter-increment type="button">Increment</button>
   </section>
 </template>
@@ -130,7 +130,7 @@ The template is ordinary HTML:
 There are no placeholders, directives, handler names, or expressions in the
 markup. The `data-*` attributes are application-owned element hooks. Lumi
 does not interpret them. The browser can parse the template without knowing
-Lumi exists, and the initial `0` is real default content.
+Lumi exists, and `count is 0` is real default content.
 
 The rendering rules are ordinary JavaScript functions:
 
@@ -142,7 +142,7 @@ const counter = mount(model, {
   target: slot,
   template: document.querySelector('#counter-template'),
   bindings: [
-    text('[data-counter-value]', data => data.count),
+    text('[data-counter-value]', data => `count is ${data.count}`),
     property(
       '[data-counter-increment]',
       'disabled',

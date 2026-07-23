@@ -12,7 +12,7 @@ const counter = mount(data, {
   target: slot,
   template: document.querySelector('template'),
   bindings: [
-    text('[data-counter-value]', data => data.count),
+    text('[data-counter-value]', data => `count is ${data.count}`),
     property(
       '[data-counter-increment]',
       'disabled',

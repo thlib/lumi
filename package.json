@@ -1,0 +1,36 @@
+{
+  "name": "@thlib/lumi",
+  "version": "0.1.0",
+  "description": "Declarative DOM rendering with native HTML and plain JavaScript",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./src/index.js",
+      "default": "./src/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "src",
+    "dist",
+    "README.md",
+    "API.md",
+    "DESIGN.md"
+  ],
+  "scripts": {
+    "build:types": "tsc -p tsconfig.build.json",
+    "check": "npm run typecheck && npm test",
+    "prepack": "npm run build:types",
+    "test": "node --test",
+    "typecheck": "tsc -p jsconfig.json"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^27.0.0",
+    "jsdom": "^27.1.0",
+    "typescript": "^7.0.2"
+  }
+}

@@ -17,9 +17,10 @@ Native HTML + plain JavaScript + a data snapshot
 Give Lumi data and it renders. Give it different data and it renders again.
 
 It intentionally does not:
- - Fetch data
- - Watch for changes
- - Decide when rendering should happen
+
+- Fetch data
+- Watch for changes
+- Decide when rendering should happen
 
 ## The model
 
@@ -32,8 +33,9 @@ Lumi separates concerns that tend to become entangled in frontend code:
 - Native events carry user intent back to the application, which may produce
   new data and explicitly render again.
 
-At the application boundary, one page has one render operation.  
-Nested components participate in that render rather than becoming independently scheduled applications.
+At the application boundary, one page has one render operation.
+Nested components participate in that render rather than becoming
+independently scheduled applications.
 
 ## Why not React, Vue, or Angular?
 
@@ -60,12 +62,26 @@ those responsibilities.
 - Preserve real DOM nodes and the browser-managed state attached to them.
 - Use native events, bubbling, forms, focus behavior, layout, Shadow DOM, and
   slots rather than imitating the browser.
-- Use one component model for each level of complexity.
+- Use one component model regardless of complexity.
 - Keep compatibility shims below the component API.
+
+## Implementation
+
+The experimental implementation is plain JavaScript with no runtime
+dependencies. JSDoc generics provide type-safe component data and projection
+functions through `tsc --checkJs`.
+
+It currently supports template mounting and DOM adoption, scalar bindings,
+stable native events, nested components, and keyed repeated components.
+
+The public functions and lifecycle are documented in [API.md](./API.md). A
+no-build counter is available in
+[examples/counter.html](./examples/counter.html).
 
 ## Status
 
-Lumi is currently in the design phase.
+Lumi is in the experimental implementation phase. Its public API may change
+while the design is validated.
 
 The complete architecture, boundaries, event model, server-rendering model,
 intentional exclusions, acceptance criteria, and open questions are documented

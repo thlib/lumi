@@ -1,14 +1,13 @@
 # Lumi API
 
 Lumi is implemented as browser-native ES modules with no runtime dependencies.
-The source is plain JavaScript. JSDoc generics describe the public contracts,
-and TypeScript checks those contracts without transforming the runtime code.
+The source is plain JavaScript.
 
 The API is experimental and may change while the design is validated.
 
-## Type-safe component definition
+## Component definition
 
-JSDoc associates a component with the shape of data accepted by `render`:
+A component definition declares the shape of data accepted by `render`:
 
 ```js
 import {
@@ -54,9 +53,6 @@ if (target === null) {
 const mounted = counter.mount(target)
 mounted.render({ count: 0, maximum: 5 })
 ```
-
-Editors and `tsc --checkJs` infer `data` inside every projection and reject a
-render with an incompatible object.
 
 ## `component(options)`
 

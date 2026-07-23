@@ -68,8 +68,7 @@ those responsibilities.
 ## Implementation
 
 The experimental implementation is plain JavaScript with no runtime
-dependencies. JSDoc generics provide type-safe component data and projection
-functions through `tsc --checkJs`.
+dependencies.
 
 It currently supports template mounting and DOM adoption, scalar bindings,
 stable native events, nested components, and keyed repeated components.

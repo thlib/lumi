@@ -2,6 +2,7 @@
  * @template Data
  * @typedef {object} BindingContext
  * @property {() => Data} data Returns the latest successfully rendered data.
+ * @property {(data: Data) => void} render Renders another explicit snapshot.
  */
 
 /**
@@ -22,7 +23,16 @@
 /**
  * @template Data
  * @typedef {object} ComponentOptions
- * @property {HTMLTemplateElement} template
+ * @property {HTMLTemplateElement | null} template
+ * @property {ReadonlyArray<Binding<Data>>} [bindings]
+ * @property {ReadonlyArray<Binding<Data>>} [events]
+ */
+
+/**
+ * @template Data
+ * @typedef {object} MountOptions
+ * @property {Element | null} target
+ * @property {HTMLTemplateElement | null} template
  * @property {ReadonlyArray<Binding<Data>>} [bindings]
  * @property {ReadonlyArray<Binding<Data>>} [events]
  */
@@ -33,7 +43,7 @@
  *
  * @template Data
  * @typedef {object} Component
- * @property {(target: Element) => MountedComponent<Data>} mount
+ * @property {(target: Element | null) => MountedComponent<Data>} mount
  * @property {(root: Element) => MountedComponent<Data>} adopt
  */
 
@@ -51,6 +61,7 @@
  * @property {Data} data
  * @property {Element} element
  * @property {Event} event
+ * @property {(data: Data) => void} render
  * @property {Element} root
  */
 

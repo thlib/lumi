@@ -27,7 +27,7 @@ export function findElement(root, selector) {
 /**
  * Clones the single element that defines a component boundary.
  *
- * @param {HTMLTemplateElement} template
+ * @param {HTMLTemplateElement | null} template
  * @returns {Element}
  * @throws {TypeError} When the template does not contain exactly one root
  * element.
@@ -58,9 +58,9 @@ export function cloneTemplateRoot(template) {
 /**
  * Rejects values that cannot serve as a component or mount boundary.
  *
- * @param {Element} element
+ * @param {Element | null} element
  * @param {string} role
- * @returns {void}
+ * @returns {asserts element is Element}
  * @throws {TypeError} When the value is not a DOM element.
  */
 export function assertElement(element, role) {

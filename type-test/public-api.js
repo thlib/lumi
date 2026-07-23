@@ -2,6 +2,8 @@
 
 import {
   component,
+  mount,
+  on,
   property,
   repeat,
   text,
@@ -26,6 +28,27 @@ mounted.render({ count: 1 })
 
 // @ts-expect-error count is required to be a number.
 mounted.render({ count: '1' })
+
+const inferred = mount({ count: 1 }, {
+  target: document.querySelector('#target'),
+  template: document.querySelector('template'),
+  bindings: [
+    text('output', data => data.count),
+  ],
+  events: [
+    on('output', 'click', ({ data, render }) => {
+      render({ count: data.count + 1 })
+
+      // @ts-expect-error inferred count remains a number.
+      render({ count: '1' })
+    }),
+  ],
+})
+
+inferred.render({ count: 2 })
+
+// @ts-expect-error initial data determines the mounted data contract.
+inferred.render({ count: '2' })
 
 /** @typedef {{ id: string }} Item */
 const itemTemplate = document.createElement('template')

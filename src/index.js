@@ -25,6 +25,11 @@
  * @typedef {import('./types.js').MountedComponent<Data>} MountedComponent
  */
 
+/**
+ * @template Data
+ * @typedef {import('./types.js').MountOptions<Data>} MountOptions
+ */
+
 export {
   attribute,
   child,
@@ -35,4 +40,4 @@ export {
   style,
   text,
 } from './bindings.js'
-export { component } from './component.js'
+export { component, mount } from './component.js'

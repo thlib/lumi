@@ -8,6 +8,7 @@ import {
   child,
   classToggle,
   component,
+  mount,
   on,
   property,
   repeat,
@@ -105,6 +106,39 @@ test('renders scalar bindings into persistent native DOM', () => {
   assert.equal(root.getAttribute('aria-busy'), 'false')
   assert.equal(root.classList.contains('active'), false)
   assert.equal(/** @type {HTMLElement} */ (root).style.color, '')
+})
+
+test('mounts initial data and lets native events render explicitly', () => {
+  const { document, window } = createDocument()
+  const template = createTemplate(document, `
+    <section>
+      <output class="value">0</output>
+      <button class="increment" type="button">Increment</button>
+    </section>
+  `)
+  const target = document.createElement('div')
+
+  const mounted = mount({ count: 0 }, {
+    target,
+    template,
+    bindings: [
+      text('.value', data => data.count),
+    ],
+    events: [
+      on('.increment', 'click', ({ data, render }) => {
+        render({ count: data.count + 1 })
+      }),
+    ],
+  })
+  const button = /** @type {HTMLButtonElement} */ (
+    mounted.root.querySelector('.increment')
+  )
+
+  assert.equal(mounted.root.querySelector('.value')?.textContent, '0')
+
+  button.dispatchEvent(new window.Event('click', { bubbles: true }))
+
+  assert.equal(mounted.root.querySelector('.value')?.textContent, '1')
 })
 
 test('does not write an unchanged projected property', () => {

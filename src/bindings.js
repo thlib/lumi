@@ -42,7 +42,7 @@ function assertSafeBindingName(kind, name) {
  *
  * @template Data
  * @param {string} selector
- * @param {(data: Data) => string | number | boolean} project
+ * @param {(data: NoInfer<Data>) => string | number | boolean} project
  * @returns {import('./types.js').Binding<Data>}
  */
 export function text(selector, project) {
@@ -78,7 +78,7 @@ export function text(selector, project) {
  * @template Value
  * @param {string} selector
  * @param {string} name
- * @param {(data: Data) => Value} project
+ * @param {(data: NoInfer<Data>) => Value} project
  * @returns {import('./types.js').Binding<Data>}
  * @throws {TypeError} When name is an event handler or trusted-content sink.
  */
@@ -150,7 +150,7 @@ export function property(selector, name, project) {
  * @template Data
  * @param {string} selector
  * @param {string} name
- * @param {(data: Data) => string | number | boolean} project
+ * @param {(data: NoInfer<Data>) => string | number | boolean} project
  * @returns {import('./types.js').Binding<Data>}
  * @throws {TypeError} When name is an event handler or trusted-content sink.
  */
@@ -198,7 +198,7 @@ export function attribute(selector, name, project) {
  * @template Data
  * @param {string} selector
  * @param {string} name
- * @param {(data: Data) => boolean} project
+ * @param {(data: NoInfer<Data>) => boolean} project
  * @returns {import('./types.js').Binding<Data>}
  */
 export function classToggle(selector, name, project) {
@@ -231,7 +231,7 @@ export function classToggle(selector, name, project) {
  * @template Data
  * @param {string} selector
  * @param {string} name
- * @param {(data: Data) => string} project
+ * @param {(data: NoInfer<Data>) => string} project
  * @returns {import('./types.js').Binding<Data>}
  */
 export function style(selector, name, project) {
@@ -277,7 +277,7 @@ export function style(selector, name, project) {
  * @template Data
  * @param {string} selector
  * @param {string} type
- * @param {(context: import('./types.js').EventContext<Data>) => void} handle
+ * @param {(context: import('./types.js').EventContext<NoInfer<Data>>) => void} handle
  * @param {boolean | AddEventListenerOptions} [options]
  * @returns {import('./types.js').Binding<Data>}
  */
@@ -292,6 +292,7 @@ export function on(selector, type, handle, options = false) {
           data: context.data(),
           element,
           event,
+          render: context.render,
           root,
         })
       }
@@ -328,7 +329,7 @@ export function on(selector, type, handle, options = false) {
  * @template ChildData
  * @param {string} selector
  * @param {import('./types.js').Component<ChildData>} childComponent
- * @param {(data: ParentData) => ChildData} project
+ * @param {(data: NoInfer<ParentData>) => ChildData} project
  * @returns {import('./types.js').Binding<ParentData>}
  */
 export function child(selector, childComponent, project) {
@@ -369,7 +370,7 @@ export function child(selector, childComponent, project) {
  * @template {string | number} Key
  * @param {string} selector
  * @param {{
- *   items: (data: ParentData) => ReadonlyArray<Item>,
+ *   items: (data: NoInfer<ParentData>) => ReadonlyArray<Item>,
  *   key: (item: Item, index: number) => Key,
  *   component: import('./types.js').Component<Item>
  * }} options

@@ -20,10 +20,9 @@
   ],
   "scripts": {
     "build:types": "tsc -p tsconfig.build.json",
-    "check": "npm run lint && npm run test",
     "lint": "tsc -p jsconfig.json",
-    "prepack": "npm run build:types",
-    "test": "node --test"
+    "test": "node --test",
+    "prepack": "npm run build:types"
   },
   "engines": {
     "node": ">=22"

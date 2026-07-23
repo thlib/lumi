@@ -73,9 +73,9 @@ dependencies.
 It currently supports template mounting and DOM adoption, scalar bindings,
 stable native events, nested components, and keyed repeated components.
 
-The public functions and lifecycle are documented in [API.md](./API.md). A
-no-build counter is available in
-[examples/counter.html](./examples/counter.html).
+The public functions and lifecycle are documented in [API.md](./API.md).
+Try the [live counter example](https://thlib.github.io/lumi/examples/counter.html)
+or view its [HTML source](./examples/counter.html).
 
 ## Status
 

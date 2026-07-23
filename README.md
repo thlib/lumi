@@ -11,7 +11,7 @@ Native HTML + plain JavaScript + a data snapshot
                     |
                 render(data)
                     |
-          minimal writes to the DOM
+        minimal writes to the DOM
 ```
 
 Give Lumi data and it renders. Give it different data and it renders again.

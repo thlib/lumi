@@ -9,7 +9,6 @@ import {
   classToggle,
   component,
   mount,
-  on,
   property,
   repeat,
   style,
@@ -108,7 +107,7 @@ test('renders scalar bindings into persistent native DOM', () => {
   assert.equal(/** @type {HTMLElement} */ (root).style.color, '')
 })
 
-test('mounts initial data and lets native events render explicitly', () => {
+test('mounts initial data and leaves native events to the application', () => {
   const { document, window } = createDocument()
   const template = createTemplate(document, `
     <section>
@@ -117,17 +116,13 @@ test('mounts initial data and lets native events render explicitly', () => {
     </section>
   `)
   const target = document.createElement('div')
+  let data = { count: 0 }
 
-  const mounted = mount({ count: 0 }, {
+  const mounted = mount(data, {
     target,
     template,
     bindings: [
       text('.value', data => data.count),
-    ],
-    events: [
-      on('.increment', 'click', ({ data, render }) => {
-        render({ count: data.count + 1 })
-      }),
     ],
   })
   const button = /** @type {HTMLButtonElement} */ (
@@ -136,6 +131,10 @@ test('mounts initial data and lets native events render explicitly', () => {
 
   assert.equal(mounted.root.querySelector('.value')?.textContent, '0')
 
+  button.addEventListener('click', () => {
+    data = { count: data.count + 1 }
+    mounted.render(data)
+  })
   button.dispatchEvent(new window.Event('click', { bubbles: true }))
 
   assert.equal(mounted.root.querySelector('.value')?.textContent, '1')
@@ -195,43 +194,6 @@ test('restores a bound property after the browser changes it', () => {
   mounted.render({ value: 'authoritative' })
 
   assert.equal(input.value, 'authoritative')
-})
-
-test('native listeners are stable, read current data, and clean up', () => {
-  const { document, window } = createDocument()
-  const template = createTemplate(
-    document,
-    '<button class="increment" type="button">Increment</button>',
-  )
-  /** @type {Array<number>} */
-  const observedCounts = []
-
-  /** @type {import('../src/index.js').ComponentOptions<{ count: number }>} */
-  const options = {
-    template,
-    events: [
-      on('.increment', 'click', ({ data }) => {
-        observedCounts.push(data.count)
-      }),
-    ],
-  }
-
-  const target = document.createElement('div')
-  const mounted = component(options).mount(target)
-  const button = /** @type {HTMLButtonElement} */ (mounted.root)
-
-  button.dispatchEvent(new window.Event('click', { bubbles: true }))
-  assert.deepEqual(observedCounts, [])
-
-  mounted.render({ count: 1 })
-  mounted.render({ count: 2 })
-  button.dispatchEvent(new window.Event('click', { bubbles: true }))
-  assert.deepEqual(observedCounts, [2])
-
-  mounted.unmount()
-  button.dispatchEvent(new window.Event('click', { bubbles: true }))
-  assert.deepEqual(observedCounts, [2])
-  assert.equal(target.childElementCount, 0)
 })
 
 test('adopts an existing component root without replacing it', () => {
@@ -500,11 +462,11 @@ test('keeps raw HTML and native handlers out of generic bindings', () => {
   )
   assert.throws(
     () => property('button', 'onclick', () => () => {}),
-    /use on\(\)/,
+    /use addEventListener\(\)/,
   )
   assert.throws(
     () => attribute('button', 'onclick', () => 'run()'),
-    /use on\(\)/,
+    /use addEventListener\(\)/,
   )
   assert.throws(
     () => attribute('iframe', 'srcdoc', () => '<script>run()</script>'),
@@ -533,6 +495,28 @@ test('rejects invalid templates, missing targets, duplicate keys, and stale rend
     }).mount(target),
     /did not match/,
   )
+
+  assert.throws(
+    () => mount({}, {
+      target: null,
+      template: missingTargetTemplate,
+    }),
+    /mount target/,
+  )
+
+  assert.throws(
+    () => mount({ value: 'first' }, {
+      target,
+      template: missingTargetTemplate,
+      bindings: [
+        text('p', () => {
+          throw new Error('Projection failed')
+        }),
+      ],
+    }),
+    /Projection failed/,
+  )
+  assert.equal(target.childElementCount, 0)
 
   /** @typedef {{ id: string }} Item */
   const itemTemplate = createTemplate(document, '<li></li>')

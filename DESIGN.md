@@ -121,71 +121,49 @@ The template is ordinary HTML:
 ```html
 <template id="counter-template">
   <section class="counter">
-    <output class="counter-value">0</output>
-    <button class="counter-increment" type="button">Increment</button>
+    <output data-counter-value>0</output>
+    <button data-counter-increment type="button">Increment</button>
   </section>
 </template>
 ```
 
-There are no placeholders, directives, action names, or expressions in the
-markup. The browser can parse it without knowing Lumi exists. The initial
-`0` is real default content.
+There are no placeholders, directives, handler names, or expressions in the
+markup. The `data-*` attributes are application-owned element hooks. Lumi
+does not interpret them. The browser can parse the template without knowing
+Lumi exists, and the initial `0` is real default content.
 
-The component's rendering rules are ordinary JavaScript functions. The exact
-API is not decided, but its conceptual shape is:
+The rendering rules are ordinary JavaScript functions:
 
 ```js
-const counterDefinition = component({
-  template: document.querySelector('#counter-template'),
+let model = { count: 3, maximum: 5 }
+const slot = document.querySelector('#counter-slot')
 
+const counter = mount(model, {
+  target: slot,
+  template: document.querySelector('#counter-template'),
   bindings: [
-    text('.counter-value', data => data.count),
+    text('[data-counter-value]', data => data.count),
     property(
-      '.counter-increment',
+      '[data-counter-increment]',
       'disabled',
       data => data.count >= data.maximum,
     ),
   ],
-
-  events: [
-    on('.counter-increment', 'click', ({ root, data }) => {
-      root.dispatchEvent(new CustomEvent('counter:increment-requested', {
-        bubbles: true,
-        composed: true,
-        detail: { id: data.id },
-      }))
-    }),
-  ],
 })
 ```
 
-This example illustrates responsibilities, not a committed API. `component`,
-`text`, `property`, and `on` are regular JavaScript functions. Selectors,
-properties, event names, callbacks, and `CustomEvent` already belong to the
-web platform. Lumi must not create another grammar around them.
-
-The application mounts the component, supplies data, responds to its semantic
-event, and renders the resulting data:
+The application handles native events and decides the next data:
 
 ```js
-const slot = document.querySelector('#counter-slot')
-const counter = counterDefinition.mount(slot)
-
-let model = {
-  id: 'primary-counter',
-  count: 3,
-  maximum: 5,
-}
-
-slot.addEventListener('counter:increment-requested', event => {
-  if (event.detail.id !== model.id) return
-
+on(slot, 'click', '[data-counter-increment]', () => {
   model = { ...model, count: model.count + 1 }
   counter.render(model)
 })
-
-counter.render(model)
 ```
+
+Here `on` is an application-side convenience around `addEventListener`,
+event bubbling, and `closest()`. It is not a Lumi API. The same code could use
+those browser methods directly.
 
 The model contains no HTML, DOM nodes, selectors, or handlers. The template
 contains no application expressions. The application never assigns
@@ -208,8 +186,7 @@ coordinate a render call for every component.
 ## What a render actually does
 
 Mounting happens once. Lumi clones or adopts the template, resolves each
-binding to a real DOM node, installs stable native listeners, and keeps those
-references for later renders.
+binding to a real DOM node, and keeps those references for later renders.
 
 For every explicit `render(data)` call, Lumi:
 
@@ -219,7 +196,7 @@ For every explicit `render(data)` call, Lumi:
    representation.
 4. Writes only changed values to their already-resolved DOM targets.
 5. Reconciles declared conditional or repeated regions by stable identity.
-6. Retains the new snapshot and projected values for the next call.
+6. Retains projected values needed to avoid redundant DOM writes.
 
 With the example above, rendering `{ count: 3, maximum: 5 }` projects:
 
@@ -282,8 +259,6 @@ native click, input, or submit
                 |
       stable native listener
                 |
-    semantic bubbling event
-                |
  application decision or request
                 |
        next data snapshot
@@ -291,15 +266,14 @@ native click, input, or submit
            render(data)
 ```
 
-Lumi occupies only the two narrow translation points: data projections on the
-way in and semantic event mapping on the way out. It does not own the state
-between them.
+Lumi occupies only the data-to-DOM translation point. Native JavaScript owns
+the interaction path, and application state connects an event to a later
+explicit render.
 
-If the user clicks Increment, Lumi does not increment `count`. The component
-reports that an increment was requested. The application may accept it,
-reject it, send it to a server, update several models, navigate elsewhere, or
-do nothing. If the authoritative data changes, the application calls
-`render` with the result.
+If the user clicks Increment, the application may accept it, reject it, send
+it to a server, update several models, navigate elsewhere, or do nothing.
+Lumi does not observe the event. If authoritative data changes, the
+application calls `render` with the result.
 
 ## Ownership boundaries
 
@@ -309,7 +283,7 @@ Each piece has one job and one kind of authority.
 | --- | --- | --- | --- |
 | Application | Events, server results, stored state | Data, business rules, routing, state transitions, render timing | DOM mechanics |
 | HTML template | Browser parsing | Semantic structure and useful default content | Application behavior |
-| Component rules | A data snapshot or native event | Data-to-DOM projections and event-to-intent mapping | Authoritative state or network activity |
+| Component rules | A data snapshot | Data-to-DOM projections | Authoritative state, behavior, or network activity |
 | Lumi renderer | Rules, mounted DOM, explicit data | Stable bindings, comparisons, minimal writes, reconciliation, cleanup | When data changed or what the business should do |
 | Browser | HTML, CSS, DOM operations | Parsing, elements, events, forms, focus, layout, accessibility, ephemeral UI state | Application state |
 
@@ -321,11 +295,12 @@ The application owns:
 - Fetching, GraphQL, REST, WebSockets, caches, and server communication.
 - Business logic and state transitions.
 - Routing and choosing the active page or layout.
-- Receiving semantic UI events.
+- Handling native UI events.
 - Deciding when to call `render(nextData)`.
 
-The application should not need to find elements, patch text, attach component
-listeners, or manually arrange component nodes.
+The application may attach native behavior listeners to persistent elements
+or delegate them from a component root. It should not patch rendered text and
+properties or manually arrange component nodes.
 
 ### The template owns structure
 
@@ -355,9 +330,9 @@ Component rules say how data affects declared DOM state:
 - Repeated, keyed regions.
 - Child components.
 
-They also map native events to semantic events. Projection functions should
-be pure: the same data should produce the same projected value without
-fetching, mutating application state, or manipulating unrelated DOM.
+Projection functions should be pure: the same data should produce the same
+projected value without fetching, mutating application state, or manipulating
+unrelated DOM.
 
 ### Lumi owns mechanical synchronization
 
@@ -368,7 +343,6 @@ Lumi owns:
 - Applying minimal text, property, attribute, class, and style writes.
 - Reconciling structural regions without discarding stable nodes and with the
   fewest practical physical moves.
-- Installing listeners once and cleaning them up.
 - Adopting compatible server-rendered DOM.
 - Preserving component instances across page and layout composition.
 - Hiding compatibility shims behind the same component contract.
@@ -417,30 +391,31 @@ Lumi's remembered value. The exact API for declaring an opaque subtree remains
 open, but it must be declared in ordinary JavaScript rather than by inventing
 an HTML directive.
 
-## Events and buttons remain native
+## Events and buttons remain outside Lumi
 
 A button is a real `<button>`. A form is a real `<form>`. Their keyboard
 behavior, accessibility, default actions, validation, and bubbling come from
 the browser.
 
-Lumi's event rules are:
+Lumi has no event API. Application code uses `addEventListener()` directly or
+wraps it in ordinary JavaScript helpers. This preserves native capture,
+bubbling, cancellation, listener options, and default actions without a
+synthetic event system.
 
-- Attach listeners to persistent real elements and install them once.
-- Give handlers actual native `Event` objects and real function references.
-- Let a stable listener see the latest rendered data without reinstalling it.
-- Preserve native capture, bubbling, cancellation, and default actions.
-- Use bubbling `CustomEvent`s for component-level intentions where useful.
-- Use `composed: true` when an event intentionally crosses a Shadow DOM
-  boundary.
-- Keep `preventDefault()` and `stopPropagation()` explicit. Propagation should
-  rarely be stopped.
-- Handle a form's `submit` event rather than assuming one button click is the
-  only way to submit it.
+Persistent component roots make native event delegation practical. An
+application may attach one listener to a root and use `closest()` to identify
+the originating control. It may also attach a listener directly to a
+persistent element. Neither approach requires Lumi involvement.
 
-Direct listeners are the conceptual model. Lumi may use delegation internally
-when it has identical behavior, but that is an optimization. It should map
-actual nodes to functions, for example with a `WeakMap`, rather than turn HTML
-attributes into a handler registry.
+A template may expose an application-owned hook:
+
+```html
+<button data-counter-increment type="button">Increment</button>
+```
+
+The attribute has no behavior on its own. Application JavaScript gives it
+meaning by using `[data-counter-increment]` as an ordinary CSS selector. Lumi
+does not reserve the `data-*` name, scan it, or resolve it to a function.
 
 This is deliberately rejected:
 
@@ -453,7 +428,7 @@ invent name lookup, scope, argument, error, and lifecycle rules. The attribute
 therefore creates a small behavior language inside HTML.
 
 An ordinary JavaScript callback already has lexical scope, types, imports,
-tooling, and predictable errors. Lumi should use it.
+tooling, and predictable errors. The application should use it.
 
 ## Pages, templates, and persistent components
 
@@ -487,7 +462,7 @@ the live DOM before the first client render.
 When compatible DOM already exists, Lumi should:
 
 1. Find the existing nodes that correspond to the component rules.
-2. Attach its stable bindings and listeners to those nodes.
+2. Attach its stable bindings to those nodes.
 3. Compare the first supplied data projections with the existing DOM.
 4. Change only mismatches.
 
@@ -524,11 +499,11 @@ HTML must be a separate explicit operation with a defined sanitization and
 Trusted Types boundary.
 
 Generic bindings must not provide a side door into executable content. Native
-event handler properties and attributes use explicit `on()` bindings instead.
-Raw HTML sinks such as `innerHTML` and `srcdoc` are rejected until Lumi has an
-explicit trusted-content contract. URL trust remains an application boundary
-because a correct policy depends on whether a URL is navigation, media, or an
-executable resource.
+event handler properties and attributes are rejected because events remain
+outside Lumi. Raw HTML sinks such as `innerHTML` and `srcdoc` are rejected
+until Lumi has an explicit trusted-content contract. URL trust remains an
+application boundary because a correct policy depends on whether a URL is
+navigation, media, or an executable resource.
 
 ## No new language
 
@@ -644,9 +619,10 @@ The design is still Lumi only if all of these remain true:
 - Reordering keyed data preserves the corresponding element identities.
 - Changing layouts can relocate a shared component without recreating it.
 - Compatible server-rendered DOM is adopted rather than replaced.
-- Each native listener is installed once and sees the latest rendered data.
-- A click or submit produces an intention. The application decides the next
-  data and explicitly renders it.
+- Native application listeners remain attached because Lumi preserves their
+  elements across renders.
+- A click or submit stays native. The application decides the next data and
+  explicitly renders it.
 - A compatibility implementation does not change how components are written.
 
 These tests protect the architecture better than a feature checklist. A

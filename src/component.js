@@ -10,10 +10,7 @@ import { assertElement, cloneTemplateRoot } from './dom.js'
  * @returns {import('./types.js').Component<Data>}
  */
 export function component(options) {
-  const bindings = [
-    ...(options.bindings ?? []),
-    ...(options.events ?? []),
-  ]
+  const bindings = options.bindings ?? []
 
   return Object.freeze({
     mount(target) {
@@ -39,8 +36,6 @@ export function component(options) {
 /**
  * Mounts one component and renders its initial data snapshot.
  *
- * This is the concise form of component(options).mount(target).render(data).
- *
  * @template Data
  * @param {Data} data
  * @param {import('./types.js').MountOptions<NoInfer<Data>>} options
@@ -65,8 +60,6 @@ export function mount(data, options) {
  * @returns {import('./types.js').MountedComponent<Data>}
  */
 function connectComponent(root, bindings) {
-  /** @type {{ hasData: false } | { hasData: true, data: Data }} */
-  let dataState = { hasData: false }
   let isMounted = true
   let isRendering = false
 
@@ -89,31 +82,14 @@ function connectComponent(root, bindings) {
       for (const binding of connected) {
         binding.render(data)
       }
-      dataState = { hasData: true, data }
     } finally {
       isRendering = false
     }
   }
 
-  /** @type {import('./types.js').BindingContext<Data>} */
-  const context = {
-    data() {
-      if (!isMounted) {
-        throw new Error('Cannot read data from an unmounted Lumi component')
-      }
-
-      if (!dataState.hasData) {
-        throw new Error('Lumi events are unavailable before the first render')
-      }
-
-      return dataState.data
-    },
-    render,
-  }
-
   try {
     for (const binding of bindings) {
-      connected.push(binding.connect(root, context))
+      connected.push(binding.connect(root))
     }
   } catch (error) {
     for (let index = connected.length - 1; index >= 0; index -= 1) {

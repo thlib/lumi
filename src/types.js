@@ -1,12 +1,5 @@
 /**
  * @template Data
- * @typedef {object} BindingContext
- * @property {() => Data} data Returns the latest successfully rendered data.
- * @property {(data: Data) => void} render Renders another explicit snapshot.
- */
-
-/**
- * @template Data
  * @typedef {object} ConnectedBinding
  * @property {(data: Data) => void} render
  * @property {() => void} destroy
@@ -17,7 +10,7 @@
  *
  * @template Data
  * @typedef {object} Binding
- * @property {(root: Element, context: BindingContext<Data>) => ConnectedBinding<Data>} connect
+ * @property {(root: Element) => ConnectedBinding<Data>} connect
  */
 
 /**
@@ -25,7 +18,6 @@
  * @typedef {object} ComponentOptions
  * @property {HTMLTemplateElement | null} template
  * @property {ReadonlyArray<Binding<Data>>} [bindings]
- * @property {ReadonlyArray<Binding<Data>>} [events]
  */
 
 /**
@@ -34,7 +26,6 @@
  * @property {Element | null} target
  * @property {HTMLTemplateElement | null} template
  * @property {ReadonlyArray<Binding<Data>>} [bindings]
- * @property {ReadonlyArray<Binding<Data>>} [events]
  */
 
 /**
@@ -53,16 +44,6 @@
  * @property {Element} root
  * @property {(data: Data) => void} render
  * @property {() => void} unmount
- */
-
-/**
- * @template Data
- * @typedef {object} EventContext
- * @property {Data} data
- * @property {Element} element
- * @property {Event} event
- * @property {(data: Data) => void} render
- * @property {Element} root
  */
 
 export {}

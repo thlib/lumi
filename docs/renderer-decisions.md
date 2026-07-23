@@ -69,11 +69,11 @@ URL, and resource bindings. Vue labels its raw HTML path unsafe, and React
 requires the explicit `dangerouslySetInnerHTML` shape.
 
 Lumi's generic bindings reject native event handler names, `innerHTML`,
-`outerHTML`, and `srcdoc`. Event handlers use `on()`. Raw HTML remains
-unimplemented until it has a separate Trusted Types and sanitization contract.
-Lumi does not include a partial URL sanitizer because the correct policy
-depends on the element and resource context. Applications must validate
-untrusted URLs at their data boundary.
+`outerHTML`, and `srcdoc`. Event handlers remain application-owned native
+listeners. Raw HTML remains unimplemented until it has a separate Trusted
+Types and sanitization contract. Lumi does not include a partial URL sanitizer
+because the correct policy depends on the element and resource context.
+Applications must validate untrusted URLs at their data boundary.
 
 Sources:
 
@@ -97,11 +97,9 @@ React delegates a broad event set at a root. Angular can coalesce multiple
 handlers for one element and event. Vue stores stable invokers and includes a
 timestamp guard for listeners attached during bubbling.
 
-Lumi retains direct stable native listeners. This preserves native listener
-options and ordering with much less machinery. Lumi already updates the data
-observed by a stable listener without reinstalling it. Delegation or
-coalescing can be reconsidered only with evidence that listener count is a
-real bottleneck and native semantics remain identical.
+Lumi has no event system. Applications retain direct native listeners or use
+their own small delegation helpers. Persistent component elements let those
+listeners survive renders without framework machinery.
 
 Sources:
 

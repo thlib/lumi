@@ -17,11 +17,6 @@
 
 /**
  * @template Data
- * @typedef {import('./types.js').EventContext<Data>} EventContext
- */
-
-/**
- * @template Data
  * @typedef {import('./types.js').MountedComponent<Data>} MountedComponent
  */
 
@@ -34,7 +29,6 @@ export {
   attribute,
   child,
   classToggle,
-  on,
   property,
   repeat,
   style,

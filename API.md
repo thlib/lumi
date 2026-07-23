@@ -5,54 +5,59 @@ The source is plain JavaScript.
 
 The API is experimental and may change while the design is validated.
 
-## Component definition
-
-A component definition declares the shape of data accepted by `render`:
+## Quick start
 
 ```js
 import {
-  component,
-  on,
+  mount,
   property,
   text,
 } from '@thlib/lumi'
+import { on } from './plain.js'
 
-/** @typedef {{ count: number, maximum: number }} CounterData */
+let data = { count: 0, maximum: 5 }
+const slot = document.querySelector('#counter-slot')
 
-const template = document.querySelector('#counter-template')
-
-if (!(template instanceof HTMLTemplateElement)) {
-  throw new TypeError('Expected #counter-template to be a template')
-}
-
-/** @type {import('@thlib/lumi').ComponentOptions<CounterData>} */
-const options = {
-  template,
+const counter = mount(data, {
+  target: slot,
+  template: document.querySelector('template'),
   bindings: [
-    text('.counter-value', data => data.count),
+    text('[data-counter-value]', data => data.count),
     property(
-      '.counter-increment',
+      '[data-counter-increment]',
       'disabled',
       data => data.count >= data.maximum,
     ),
   ],
-  events: [
-    on('.counter-increment', 'click', ({ data, event }) => {
-      console.log(data.count, event.type)
-    }),
-  ],
-}
+})
 
-const counter = component(options)
-const target = document.querySelector('#counter-slot')
-
-if (target === null) {
-  throw new Error('Expected #counter-slot to exist')
-}
-
-const mounted = counter.mount(target)
-mounted.render({ count: 0, maximum: 5 })
+on(slot, 'click', '[data-counter-increment]', () => {
+  data = { ...data, count: data.count + 1 }
+  counter.render(data)
+})
 ```
+
+The first argument supplies the initial data and its inferred shape. The
+options identify native DOM and declare only data-to-DOM projections. Events
+and state transitions remain ordinary application JavaScript.
+
+`data-counter-value` and `data-counter-increment` are application-owned hooks.
+Lumi does not inspect their names or values. Classes, IDs, or any other valid
+CSS selector work equally well.
+
+The example-local `on` helper is a small wrapper around native event bubbling,
+`closest()`, and `addEventListener()`. It is not part of Lumi.
+
+## `mount(data, options)`
+
+`mount` clones the template into the target, connects its bindings, renders
+the initial data, and returns a mounted component. It is the concise form for
+one component instance.
+
+The target and template may be direct `querySelector` results. Lumi throws a
+clear error if either is missing or the template does not contain exactly one
+root element. If connecting or initially rendering fails, it removes the
+partially mounted root.
 
 ## `component(options)`
 
@@ -60,18 +65,16 @@ mounted.render({ count: 0, maximum: 5 })
 template until an instance is mounted.
 
 The template must contain exactly one root element. That root is the component
-boundary used for scoped selectors and native event dispatch.
+boundary used for scoped selectors and nested rendering.
 
 ```js
 const definition = component({
   template,
   bindings: [],
-  events: [],
 })
 ```
 
-Both arrays are optional. They are separated for readability and share the
-same binding lifecycle internally.
+The bindings array is optional.
 
 ### `definition.mount(target)`
 
@@ -102,7 +105,7 @@ the data object.
 
 ### `mounted.unmount()`
 
-`unmount` removes native listeners, unmounts owned child components, and
+`unmount` destroys connected bindings, unmounts owned child components, and
 removes the component root. Repeated calls have no effect. Rendering after
 unmount throws.
 
@@ -124,38 +127,14 @@ allows HTML, CSS, other bindings, and explicitly separate code to own other
 parts of the same element.
 
 Generic property and attribute bindings reject native event handler names such
-as `onclick`. Use `on()` so the listener remains a native function with an
-explicit lifecycle. They also reject `innerHTML`, `outerHTML`, and `srcdoc`
-where applicable. Trusted HTML requires a separate explicit API and is not
-implemented.
+as `onclick`. Attach behavior with the browser's `addEventListener()`. Generic
+bindings also reject `innerHTML`, `outerHTML`, and `srcdoc` where applicable.
+Trusted HTML requires a separate explicit API and is not implemented.
 
 URL-valued properties and attributes such as `href`, `src`, and `action` remain
 ordinary strings. Lumi does not claim to sanitize them without knowing the
 application's trust and resource context. Applications must validate untrusted
 URLs before including them in a render snapshot.
-
-## `on(selector, type, handle, options)`
-
-`on` installs one native `addEventListener` callback during the first render.
-The same function remains installed until unmount and receives the latest
-successfully rendered data.
-
-```js
-on('form', 'submit', ({ data, element, event, root }) => {
-  event.preventDefault()
-
-  root.dispatchEvent(new CustomEvent('profile:save-requested', {
-    bubbles: true,
-    composed: true,
-    detail: { id: data.id },
-  }))
-})
-```
-
-`event`, `element`, and `root` are native DOM objects. Capture, bubbling,
-cancellation, passive listeners, and default actions retain their browser
-semantics. Events dispatched before the first render have no Lumi listener
-because no data snapshot exists yet.
 
 ## `child(selector, component, project)`
 

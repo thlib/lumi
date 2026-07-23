@@ -23,7 +23,7 @@ function assertSafeBindingName(kind, name) {
 
   if (normalizedName.startsWith('on')) {
     throw new TypeError(
-      `Lumi ${kind} binding "${name}" is an event handler; use on()`,
+      `Lumi ${kind} binding "${name}" is an event handler; use addEventListener()`,
     )
   }
 
@@ -42,7 +42,7 @@ function assertSafeBindingName(kind, name) {
  *
  * @template Data
  * @param {string} selector
- * @param {(data: NoInfer<Data>) => string | number | boolean} project
+ * @param {(data: Data) => string | number | boolean} project
  * @returns {import('./types.js').Binding<Data>}
  */
 export function text(selector, project) {
@@ -78,7 +78,7 @@ export function text(selector, project) {
  * @template Value
  * @param {string} selector
  * @param {string} name
- * @param {(data: NoInfer<Data>) => Value} project
+ * @param {(data: Data) => Value} project
  * @returns {import('./types.js').Binding<Data>}
  * @throws {TypeError} When name is an event handler or trusted-content sink.
  */
@@ -150,7 +150,7 @@ export function property(selector, name, project) {
  * @template Data
  * @param {string} selector
  * @param {string} name
- * @param {(data: NoInfer<Data>) => string | number | boolean} project
+ * @param {(data: Data) => string | number | boolean} project
  * @returns {import('./types.js').Binding<Data>}
  * @throws {TypeError} When name is an event handler or trusted-content sink.
  */
@@ -198,7 +198,7 @@ export function attribute(selector, name, project) {
  * @template Data
  * @param {string} selector
  * @param {string} name
- * @param {(data: NoInfer<Data>) => boolean} project
+ * @param {(data: Data) => boolean} project
  * @returns {import('./types.js').Binding<Data>}
  */
 export function classToggle(selector, name, project) {
@@ -231,7 +231,7 @@ export function classToggle(selector, name, project) {
  * @template Data
  * @param {string} selector
  * @param {string} name
- * @param {(data: NoInfer<Data>) => string} project
+ * @param {(data: Data) => string} project
  * @returns {import('./types.js').Binding<Data>}
  */
 export function style(selector, name, project) {
@@ -271,55 +271,6 @@ export function style(selector, name, project) {
 }
 
 /**
- * Installs one stable native listener during the first render and reads the
- * latest rendered data thereafter.
- *
- * @template Data
- * @param {string} selector
- * @param {string} type
- * @param {(context: import('./types.js').EventContext<NoInfer<Data>>) => void} handle
- * @param {boolean | AddEventListenerOptions} [options]
- * @returns {import('./types.js').Binding<Data>}
- */
-export function on(selector, type, handle, options = false) {
-  return {
-    connect(root, context) {
-      const element = findElement(root, selector)
-      let isListening = false
-      /** @param {Event} event */
-      const listener = (event) => {
-        handle({
-          data: context.data(),
-          element,
-          event,
-          render: context.render,
-          root,
-        })
-      }
-
-      return {
-        render() {
-          if (isListening) {
-            return
-          }
-
-          element.addEventListener(type, listener, options)
-          isListening = true
-        },
-        destroy() {
-          if (!isListening) {
-            return
-          }
-
-          element.removeEventListener(type, listener, options)
-          isListening = false
-        },
-      }
-    },
-  }
-}
-
-/**
  * Mounts one nested component and projects parent data into it.
  *
  * The selected container owns the child root and must not contain another
@@ -329,7 +280,7 @@ export function on(selector, type, handle, options = false) {
  * @template ChildData
  * @param {string} selector
  * @param {import('./types.js').Component<ChildData>} childComponent
- * @param {(data: NoInfer<ParentData>) => ChildData} project
+ * @param {(data: ParentData) => ChildData} project
  * @returns {import('./types.js').Binding<ParentData>}
  */
 export function child(selector, childComponent, project) {
@@ -370,7 +321,7 @@ export function child(selector, childComponent, project) {
  * @template {string | number} Key
  * @param {string} selector
  * @param {{
- *   items: (data: NoInfer<ParentData>) => ReadonlyArray<Item>,
+ *   items: (data: ParentData) => ReadonlyArray<Item>,
  *   key: (item: Item, index: number) => Key,
  *   component: import('./types.js').Component<Item>
  * }} options

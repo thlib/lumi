@@ -3,7 +3,6 @@
 import {
   component,
   mount,
-  on,
   property,
   repeat,
   text,
@@ -34,14 +33,6 @@ const inferred = mount({ count: 1 }, {
   template: document.querySelector('template'),
   bindings: [
     text('output', data => data.count),
-  ],
-  events: [
-    on('output', 'click', ({ data, render }) => {
-      render({ count: data.count + 1 })
-
-      // @ts-expect-error inferred count remains a number.
-      render({ count: '1' })
-    }),
   ],
 })
 

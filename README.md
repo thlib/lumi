@@ -4,7 +4,7 @@ Lumi is a small browser-first rendering layer.
 
 It solves one problem: Declarative DOM rendering.
 
-Application code describes what the DOM should show, and Lumi finds, creates, moves, and updates the necessary DOM nodes.
+Application code describes what the [DOM](https://en.wikipedia.org/wiki/Document_Object_Model) should show, and Lumi finds, creates, moves, and updates the necessary DOM nodes.
 
 ```text
 Native HTML + plain JavaScript + a data snapshot

@@ -71,8 +71,8 @@ function connectComponent(root, bindings) {
       connected.push(binding.connect(root, context))
     }
   } catch (error) {
-    for (const binding of connected.reverse()) {
-      binding.destroy()
+    for (let index = connected.length - 1; index >= 0; index -= 1) {
+      connected[index]?.destroy()
     }
     throw error
   }
@@ -106,8 +106,8 @@ function connectComponent(root, bindings) {
         return
       }
 
-      for (const binding of connected.reverse()) {
-        binding.destroy()
+      for (let index = connected.length - 1; index >= 0; index -= 1) {
+        connected[index]?.destroy()
       }
 
       root.remove()

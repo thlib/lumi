@@ -92,8 +92,14 @@ server-rendered DOM.
 ### `mounted.render(data)`
 
 `render` evaluates every projection against the supplied snapshot. A binding
-compares its projected value with its preceding value or the adopted DOM state
-and writes only when the value differs.
+compares its projected value with the corresponding DOM state and writes only
+when the value differs. Bindings cache values where the browser cannot change
+the owned state independently.
+
+Property bindings also compare against the live property on every render.
+This lets authoritative data restore a user-mutated `value`, `checked`, or
+similar browser state. Lumi remembers the browser's post-assignment value so
+native coercion does not cause a repeated write.
 
 Rendering is synchronous and explicit. Lumi does not retain subscriptions to
 the data object.
@@ -120,6 +126,17 @@ The component root itself participates in selector matching.
 Bindings do not replace an element's complete class or style attribute. This
 allows HTML, CSS, other bindings, and explicitly separate code to own other
 parts of the same element.
+
+Generic property and attribute bindings reject native event handler names such
+as `onclick`. Use `on()` so the listener remains a native function with an
+explicit lifecycle. They also reject `innerHTML`, `outerHTML`, and `srcdoc`
+where applicable. Trusted HTML requires a separate explicit API and is not
+implemented.
+
+URL-valued properties and attributes such as `href`, `src`, and `action` remain
+ordinary strings. Lumi does not claim to sanitize them without knowing the
+application's trust and resource context. Applications must validate untrusted
+URLs before including them in a render snapshot.
 
 ## `on(selector, type, handle, options)`
 
@@ -171,6 +188,9 @@ repeat('.results', {
 Keys must be unique strings or finite numbers within one render. Existing
 keys retain their component roots and receive new item data. Removed keys are
 unmounted. Reordered keys move the existing roots instead of recreating them.
+Lumi keeps the longest already-ordered subsequence in place, which minimizes
+physical DOM moves. Browsers with native `moveBefore()` use its
+state-preserving move semantics. Other browsers fall back to `insertBefore()`.
 
 The selected container is owned by the repeat binding and must not initially
 contain another element. Adoption of server-rendered repeated children is not
@@ -232,6 +252,7 @@ Lumi throws when:
 - Repeated data contains an invalid or duplicate key.
 - A render is recursive or targets an unmounted component.
 - A DOM property cannot be assigned.
+- A generic binding targets an event handler or trusted-content sink.
 
 Selector syntax errors remain native `DOMException`s from the browser.
 
@@ -241,5 +262,6 @@ The current implementation targets modern browsers with native support for ES
 modules, `<template>`, `querySelector`, `cloneNode`, `classList`,
 `addEventListener`, `Map`, `Set`, and `Reflect`.
 
-Compatibility shims are not included in the first implementation. They can be
-added below the public API without changing component definitions.
+Native `moveBefore()` is used when available and is not required. Compatibility
+shims are not included in the first implementation. They can be added below
+the public API without changing component definitions.

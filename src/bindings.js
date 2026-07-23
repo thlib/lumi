@@ -1,8 +1,41 @@
 // @ts-check
 
 import { findElement } from './dom.js'
+import {
+  longestIncreasingSubsequencePositions,
+  moveElementBefore,
+} from './reconcile.js'
 
 const noOperation = () => {}
+const unsafePropertyNames = new Set([
+  'innerhtml',
+  'outerhtml',
+])
+
+/**
+ * Keeps raw HTML content and native event handlers out of generic bindings.
+ *
+ * @param {'attribute' | 'property'} kind
+ * @param {string} name
+ */
+function assertSafeBindingName(kind, name) {
+  const normalizedName = name.toLowerCase()
+
+  if (normalizedName.startsWith('on')) {
+    throw new TypeError(
+      `Lumi ${kind} binding "${name}" is an event handler; use on()`,
+    )
+  }
+
+  if (
+    normalizedName === 'srcdoc'
+    || (kind === 'property' && unsafePropertyNames.has(normalizedName))
+  ) {
+    throw new TypeError(
+      `Lumi ${kind} binding "${name}" requires an explicit trusted-content API`,
+    )
+  }
+}
 
 /**
  * Projects data into an element's textContent.
@@ -36,7 +69,10 @@ export function text(selector, project) {
 }
 
 /**
- * Projects data into a native DOM property.
+ * Projects data into a native DOM property and reconciles against its live
+ * value on every render.
+ *
+ * Native event handlers and trusted-content sinks require explicit APIs.
  *
  * @template Data
  * @template Value
@@ -44,23 +80,46 @@ export function text(selector, project) {
  * @param {string} name
  * @param {(data: Data) => Value} project
  * @returns {import('./types.js').Binding<Data>}
+ * @throws {TypeError} When name is an event handler or trusted-content sink.
  */
 export function property(selector, name, project) {
+  assertSafeBindingName('property', name)
+
   return {
     connect(root) {
       const element = findElement(root, selector)
-      /** @type {{ hasValue: false } | { hasValue: true, value: Value }} */
+      /**
+       * DOM setters may coerce a projected value. Remember both sides so an
+       * unchanged coerced value can be skipped without ignoring DOM drift.
+       *
+       * @type {{
+       *   hasValue: false
+       * } | {
+       *   hasValue: true,
+       *   projectedValue: Value,
+       *   domValue: unknown
+       * }}
+       */
       let state = { hasValue: false }
 
       return {
         render(data) {
           const value = project(data)
-          const previous = state.hasValue
-            ? state.value
-            : Reflect.get(element, name)
+          const domValue = Reflect.get(element, name)
 
-          if (Object.is(value, previous)) {
-            state = { hasValue: true, value }
+          if (
+            Object.is(value, domValue)
+            || (
+              state.hasValue
+              && Object.is(value, state.projectedValue)
+              && Object.is(domValue, state.domValue)
+            )
+          ) {
+            state = {
+              hasValue: true,
+              projectedValue: value,
+              domValue,
+            }
             return
           }
 
@@ -70,7 +129,11 @@ export function property(selector, name, project) {
             )
           }
 
-          state = { hasValue: true, value }
+          state = {
+            hasValue: true,
+            projectedValue: value,
+            domValue: Reflect.get(element, name),
+          }
         },
         destroy: noOperation,
       }
@@ -82,13 +145,18 @@ export function property(selector, name, project) {
  * Projects false to an absent attribute, true to an empty attribute, and
  * strings or numbers to their text representation.
  *
+ * Native event handlers and trusted-content sinks require explicit APIs.
+ *
  * @template Data
  * @param {string} selector
  * @param {string} name
  * @param {(data: Data) => string | number | boolean} project
  * @returns {import('./types.js').Binding<Data>}
+ * @throws {TypeError} When name is an event handler or trusted-content sink.
  */
 export function attribute(selector, name, project) {
+  assertSafeBindingName('attribute', name)
+
   return {
     connect(root) {
       const element = findElement(root, selector)
@@ -292,7 +360,9 @@ export function child(selector, childComponent, project) {
  * Reconciles keyed data with persistent child component roots.
  *
  * The selected container owns all of its element children. Keys must be
- * unique strings or finite numbers for every render.
+ * unique strings or finite numbers for every render. Reorders preserve the
+ * longest stable subsequence and use native state-preserving moves when
+ * available.
  *
  * @template ParentData
  * @template Item
@@ -355,12 +425,28 @@ export function repeat(selector, options) {
             nextKeys.add(keyedItem.key)
           }
 
+          /** @type {Map<Element, number>} */
+          const oldPositionByRoot = new Map()
+          let position = 1
+
+          for (const childElement of container.children) {
+            oldPositionByRoot.set(childElement, position)
+            position += 1
+          }
+
           for (const [key, mounted] of mountedByKey) {
             if (!nextKeys.has(key)) {
               mounted.unmount()
               mountedByKey.delete(key)
             }
           }
+
+          /** @type {Array<import('./types.js').MountedComponent<Item>>} */
+          const orderedMounted = []
+          /** @type {number[]} */
+          const oldPositions = []
+          let highestOldPosition = 0
+          let hasMoved = false
 
           for (const keyedItem of keyedItems) {
             let mounted = mountedByKey.get(keyedItem.key)
@@ -370,28 +456,44 @@ export function repeat(selector, options) {
               mountedByKey.set(keyedItem.key, mounted)
             }
 
+            const oldPosition = oldPositionByRoot.get(mounted.root) ?? 0
+
+            if (oldPosition !== 0) {
+              if (oldPosition < highestOldPosition) {
+                hasMoved = true
+              } else {
+                highestOldPosition = oldPosition
+              }
+            }
+
+            orderedMounted.push(mounted)
+            oldPositions.push(oldPosition)
             mounted.render(keyedItem.item)
           }
 
-          let cursor = container.firstElementChild
+          const stablePositions = hasMoved
+            ? longestIncreasingSubsequencePositions(oldPositions)
+            : null
 
-          for (const keyedItem of keyedItems) {
-            const mounted = mountedByKey.get(keyedItem.key)
-
+          for (let index = orderedMounted.length - 1; index >= 0; index -= 1) {
+            const mounted = orderedMounted[index]
             if (mounted === undefined) {
-              throw new Error(
-                `Lumi lost repeated component "${keyedItem.key}" during render`,
-              )
+              throw new Error('Lumi lost a repeated component during render')
             }
 
-            if (mounted.root === cursor) {
-              cursor = cursor.nextElementSibling
-            } else if (cursor === null) {
-              if (container.lastElementChild !== mounted.root) {
-                container.append(mounted.root)
-              }
-            } else {
-              container.insertBefore(mounted.root, cursor)
+            const anchor = orderedMounted[index + 1]?.root ?? null
+            const oldPosition = oldPositions[index]
+            const requiresPlacement = oldPosition === 0
+              || (
+                stablePositions !== null
+                && !stablePositions.has(index)
+              )
+
+            if (
+              requiresPlacement
+              && mounted.root.nextElementSibling !== anchor
+            ) {
+              moveElementBefore(container, mounted.root, anchor)
             }
           }
         },

@@ -215,8 +215,8 @@ For every explicit `render(data)` call, Lumi:
 
 1. Receives the complete data snapshot from the application.
 2. Runs every declared projection function against that snapshot.
-3. Compares each projected value with the value produced by the preceding
-   render.
+3. Compares each projected value with the owned DOM state or its safely cached
+   representation.
 4. Writes only changed values to their already-resolved DOM targets.
 5. Reconciles declared conditional or repeated regions by stable identity.
 6. Retains the new snapshot and projected values for the next call.
@@ -235,6 +235,13 @@ write.
 Rendering the same projected values again performs no meaningful DOM writes.
 Rendering `{ count: 5, maximum: 5 }` changes the text and sets `disabled` to
 `true`.
+
+Property bindings verify the live DOM value as well as the preceding
+projection. This matters for properties such as an input's `value` or
+`checked`, which the browser or the user can change between renders. When the
+data snapshot owns that property, the next render restores the supplied value.
+Lumi also remembers native coercion so projecting the number `1` into a
+string-valued property does not cause a write on every render.
 
 This is not reactive dependency tracking. Lumi does not observe which
 properties a function reads, subscribe to them, or infer that a render is
@@ -359,7 +366,8 @@ Lumi owns:
 - Resolving rules to persistent real DOM nodes.
 - Caching prior projected values.
 - Applying minimal text, property, attribute, class, and style writes.
-- Reconciling structural regions without discarding stable nodes.
+- Reconciling structural regions without discarding stable nodes and with the
+  fewest practical physical moves.
 - Installing listeners once and cleaning them up.
 - Adopting compatible server-rendered DOM.
 - Preserving component instances across page and layout composition.
@@ -515,6 +523,13 @@ contains characters that resemble markup or placeholders. Rendering trusted
 HTML must be a separate explicit operation with a defined sanitization and
 Trusted Types boundary.
 
+Generic bindings must not provide a side door into executable content. Native
+event handler properties and attributes use explicit `on()` bindings instead.
+Raw HTML sinks such as `innerHTML` and `srcdoc` are rejected until Lumi has an
+explicit trusted-content contract. URL trust remains an application boundary
+because a correct policy depends on whether a URL is navigation, media, or an
+executable resource.
+
 ## No new language
 
 This is the hardest boundary.
@@ -556,6 +571,7 @@ Use existing platform primitives when they satisfy the contract:
 
 - `<template>` and `DocumentFragment`.
 - Native DOM nodes, properties, attributes, and selectors.
+- State-preserving `moveBefore()` with an `insertBefore()` fallback.
 - Native events, `CustomEvent`, capture, and bubbling.
 - `AbortSignal` for listener cleanup.
 - Forms, constraint validation, and `FormData`.

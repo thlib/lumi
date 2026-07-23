@@ -56,6 +56,64 @@ code remains responsible for data and decisions. The browser remains
 responsible for the DOM and native behavior. Lumi performs the repetitive
 translation between them.
 
+## Why not React, Vue, or Angular?
+
+The difference is not whether these tools can render efficiently. They can.
+The difference is what an application adopts in order to get declarative
+rendering.
+
+Their common authoring and update models place more responsibility in a UI
+runtime:
+
+- React components return element descriptions, commonly written with JSX.
+  State updates schedule component work, and React reconciles the resulting
+  descriptions with the mounted UI.
+- Vue commonly combines HTML-like templates with Vue expressions and
+  directives. Its reactive runtime tracks state used by components and
+  schedules the affected updates.
+- Angular templates contain Angular bindings and directives. Angular's
+  component runtime and change detection determine when those bindings are
+  updated.
+
+Those mechanisms are useful because the projects address more than DOM
+mutation. They provide an application-level component and lifecycle model,
+with mature ecosystems around routing, state, forms, server rendering,
+development tools, and testing.
+
+Lumi separates out the narrower mechanism:
+
+```text
+React, Vue, or Angular
+
+framework state change
+        |
+framework scheduling or change detection
+        |
+framework component and template model
+        |
+DOM update
+
+Lumi
+
+application produces a data snapshot
+        |
+application calls render(data)
+        |
+plain JavaScript projections are compared
+        |
+DOM update
+```
+
+Lumi therefore does not replace the complete role of these projects. It
+replaces the need to adopt their authoring and runtime models when the
+application only needs declarative DOM rendering. The application keeps
+authority over data and render timing, HTML remains native HTML, events remain
+native events, and Lumi owns only the mechanical synchronization with the DOM.
+
+This is a scope boundary rather than a claim that less machinery is always
+better. A project that wants a framework-managed component lifecycle,
+reactivity, scheduling, and ecosystem is outside Lumi's intended use case.
+
 ## One concrete component
 
 The template is ordinary HTML:

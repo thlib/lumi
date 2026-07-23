@@ -35,6 +35,21 @@ Lumi separates concerns that tend to become entangled in frontend code:
 At the application boundary, one page has one render operation.  
 Nested components participate in that render rather than becoming independently scheduled applications.
 
+## Why not React, Vue, or Angular?
+
+React, Vue, and Angular already provide declarative UI rendering, but rendering
+is part of a broader framework-specific model. That model commonly includes a
+template or component syntax, reactive state or change detection, scheduled
+updates, component lifecycles, and framework tooling.
+
+Lumi isolates the rendering capability.
+
+The application does not adopt a framework's state, scheduling, template, or
+lifecycle model to obtain efficient DOM updates. React, Vue, and Angular remain
+the better fit when those broader models and ecosystems are wanted. Lumi
+addresses the narrower case where the browser and application should retain
+those responsibilities.
+
 ## Lumi's Principles
 
 - Do not invent a language. Templates are HTML, styles are CSS, and rendering

@@ -168,6 +168,18 @@ are available in
 [`examples/framework-spa`](./examples/framework-spa). They share the demo's
 content and visual design, but do not import or depend on Lumi.
 
+## SPA benchmark
+
+The equivalent SPAs are exercised through the same verified route and project
+filter workload in headless Chromium.
+
+> [**View the latest SPA performance comparison →**](./benchmark/results/spa-performance.md)
+
+The generated report is the source of truth for current results, environment
+details, and methodology. The [benchmark source](./benchmark/spa-comparison.js)
+and [raw samples](./benchmark/results/spa-performance.json) are also available.
+Run it locally with `pnpm benchmark:spa`.
+
 The SPA's `demo-components.js` module contains ordinary JavaScript
 orchestration utilities owned by that demo, including its `define`, `resolve`,
 `present`, and `connect` functions. They are not Lumi APIs; another SPA using

@@ -361,7 +361,10 @@ test('a preparation failure leaves the live form and focus unchanged', async ({
     return ''
   })
 
-  expect(message).toBe('preparation failed')
+  expect(message).toBe(
+    'Lumi bind projection for ".second" at matched position 1 failed: '
+    + 'preparation failed',
+  )
   await expect(page.locator('.first')).toHaveText('before')
   await expect(page.locator('.second')).toHaveText('stable')
   await expect(input).toHaveValue('keep this')

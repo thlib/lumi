@@ -9,7 +9,7 @@ import {
 } from 'node:fs/promises'
 import {createServer} from 'node:http'
 import {platform, release} from 'node:os'
-import {dirname, extname, resolve, sep} from 'node:path'
+import {dirname, extname, relative, resolve, sep} from 'node:path'
 import {spawnSync} from 'node:child_process'
 import {gzipSync} from 'node:zlib'
 import {chromium} from '@playwright/test'
@@ -866,19 +866,30 @@ function summarize(values) {
  */
 async function readDependencyVersion(directory, dependencyName) {
   const lockfile = await readFile(
-    resolve(directory, 'pnpm-lock.yaml'),
+    resolve(root, 'pnpm-lock.yaml'),
     'utf8',
   )
-  return readPnpmDependencyVersion(lockfile, dependencyName)
+  const importer = relative(root, directory) || '.'
+  return readPnpmDependencyVersion(lockfile, importer, dependencyName)
 }
 
 /**
  * @param {string} lockfile
+ * @param {string} importer
  * @param {string} dependencyName
  */
-function readPnpmDependencyVersion(lockfile, dependencyName) {
+function readPnpmDependencyVersion(lockfile, importer, dependencyName) {
+  const importerPattern = importer.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const dependencyPattern = dependencyName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const match = lockfile.match(new RegExp(
+  const importerMatch = lockfile.match(new RegExp(
+    `^ {2}['"]?${importerPattern}['"]?:\\n([\\s\\S]*?)(?=^ {2}[^\\s].*:\\n|^packages:)`,
+    'm',
+  ))
+  const importerContents = importerMatch?.[1]
+  if (importerContents === undefined) {
+    return undefined
+  }
+  const match = importerContents.match(new RegExp(
     `^ {6}['"]?${dependencyPattern}['"]?:\\n`
       + `(?:^ {8}.*\\n)*?^ {8}version: ['"]?([^\\s'"(]+)`,
     'm',

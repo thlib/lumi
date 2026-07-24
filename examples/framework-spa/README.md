@@ -11,19 +11,21 @@ They share only [`data.ts`](./data.ts) and [`spa.css`](./spa.css).
 None imports Lumi, `@thlib/lumi`, or anything from the repository's `src`
 directory.
 
-Each application is an independent package:
+The applications are pnpm workspace packages. Install all workspace dependencies
+from the repository root, then run an application by package name:
 
 ```sh
-cd examples/framework-spa/react # or vue / angular
 pnpm install
-pnpm run dev
+pnpm --filter luminate-spa-react run dev
 ```
 
-Use `pnpm run build` in an application directory to create its production
-bundle. The production bundles are committed so the repository-wide static
-server can also open the applications at `/examples/framework-spa/react/`,
-`/examples/framework-spa/vue/`, and `/examples/framework-spa/angular/`.
-Rebuild the corresponding application after changing its source.
+Substitute `luminate-spa-vue` or `luminate-spa-angular` to run another
+application. Use `pnpm --filter <package-name> run build` to create its
+production bundle. The production bundles are committed so the repository-wide
+static server can also open the applications at
+`/examples/framework-spa/react/`, `/examples/framework-spa/vue/`, and
+`/examples/framework-spa/angular/`. Rebuild the corresponding application after
+changing its source.
 
 ## Performance comparison
 

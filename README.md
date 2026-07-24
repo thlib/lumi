@@ -156,7 +156,7 @@ counter.update({count: 1})
 Bare HTML, SVG, and MathML tag selectors receive the corresponding native DOM
 element type. Complex selectors receive `Element`, matching the safe fallback
 used by the browser's selector APIs. The declaration build and a package-level
-TypeScript consumer contract run as part of `npm run lint`.
+TypeScript consumer contract run as part of `pnpm run lint`.
 
 Try the [live counter example](https://thlib.github.io/lumi/examples/counter/)
 or the [component-based SPA](https://thlib.github.io/lumi/examples/spa/).
@@ -210,9 +210,9 @@ python -m http.server 8008
 Run the JSDOM unit suite and the portable browser contracts with:
 
 ```sh
-npm test
-npx playwright install chromium firefox
-npm run test:browser -- --project=chromium --project=firefox
+pnpm test
+pnpm exec playwright install chromium firefox
+pnpm run test:browser -- --project=chromium --project=firefox
 ```
 
 ## Status

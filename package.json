@@ -1,6 +1,7 @@
 {
   "name": "@thlib/lumi",
   "version": "0.1.0",
+  "packageManager": "pnpm@9.15.0",
   "description": "Declarative DOM rendering with native HTML and plain JavaScript",
   "keywords": [
     "browser",
@@ -41,14 +42,14 @@
   ],
   "scripts": {
     "clean:types": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build:types": "npm run clean:types && tsc -p tsconfig.build.json",
-    "lint": "npm run build:types && tsc -p jsconfig.json",
+    "build:types": "pnpm run clean:types && tsc -p tsconfig.build.json",
+    "lint": "pnpm run build:types && tsc -p jsconfig.json",
     "benchmark": "node benchmark/performance-baseline.js",
     "benchmark:spa": "node benchmark/spa-comparison.js",
     "test": "node --test test/*.test.js",
     "test:browser": "playwright test",
     "test:package": "node scripts/test-package.js",
-    "prepack": "npm run build:types"
+    "prepack": "pnpm run build:types"
   },
   "engines": {
     "node": ">=22"

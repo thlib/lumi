@@ -8,16 +8,16 @@ Small fixes can go directly to a pull request.
 Lumi requires Node.js 22 or newer.
 
 ```sh
-npm ci
-npm run lint
-npm test
-npm run benchmark
-npm run test:package
-npx playwright install chromium firefox
-npm run test:browser -- --project=chromium --project=firefox
+pnpm install --frozen-lockfile
+pnpm run lint
+pnpm test
+pnpm run benchmark
+pnpm run test:package
+pnpm exec playwright install chromium firefox
+pnpm run test:browser -- --project=chromium --project=firefox
 ```
 
-`npm run benchmark` is a small, repeatable Node/jsdom performance baseline for
+`pnpm run benchmark` is a small, repeatable Node/jsdom performance baseline for
 scalar updates and positional-list growth. Use it to compare local changes on
 the same machine; its timings are not cross-machine targets.
 

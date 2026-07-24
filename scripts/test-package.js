@@ -16,30 +16,19 @@ import { fileURLToPath } from 'node:url'
 
 const repository = dirname(dirname(fileURLToPath(import.meta.url)))
 const temporary = mkdtempSync(join(tmpdir(), 'lumi-package-'))
-const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 
 try {
   const packDirectory = join(temporary, 'pack')
-  const npmCache = join(temporary, 'npm-cache')
+  const pnpmStore = join(temporary, 'pnpm-store')
   mkdirSync(packDirectory)
 
   const packOutput = execFileSync(
-    npm,
-    [
-      'pack',
-      '--ignore-scripts=false',
-      '--json',
-      '--pack-destination',
-      packDirectory,
-    ],
+    pnpm,
+    ['pack', '--json', '--pack-destination', packDirectory],
     {
       cwd: repository,
       encoding: 'utf8',
-      env: {
-        ...process.env,
-        npm_config_cache: npmCache,
-        npm_config_loglevel: 'silent',
-      },
     },
   )
 
@@ -49,7 +38,7 @@ try {
    * }>} */
   const packResult = JSON.parse(packOutput)
   const packed = packResult[0]
-  assert.ok(packed, 'npm pack did not describe a package')
+  assert.ok(packed, 'pnpm pack did not describe a package')
 
   const declarationFiles = packed.files
     .map(file => file.path)
@@ -73,21 +62,16 @@ try {
     type: 'module',
   }))
   execFileSync(
-    npm,
+    pnpm,
     [
       'install',
       '--ignore-scripts',
-      '--no-audit',
-      '--no-fund',
+      '--store-dir',
+      pnpmStore,
       join(packDirectory, packed.filename),
     ],
     {
       cwd: temporary,
-      env: {
-        ...process.env,
-        npm_config_cache: npmCache,
-        npm_config_loglevel: 'silent',
-      },
       stdio: 'ignore',
     },
   )

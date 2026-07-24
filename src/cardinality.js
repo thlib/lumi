@@ -37,6 +37,7 @@ import { projectionError } from './internal/projection-error.js'
  *   domValue: unknown
  * }>} values
  * @property {unknown[]} replay
+ * @property {boolean} requiresTrustedHTML
  */
 
 /**

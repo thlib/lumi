@@ -161,6 +161,11 @@ or the [component-based SPA](https://thlib.github.io/lumi/examples/spa/).
 Their source is in [`examples/counter`](./examples/counter) and
 [`examples/spa`](./examples/spa).
 
+Equivalent standalone implementations of the SPA in React, Vue, and Angular
+are available in
+[`examples/framework-spa`](./examples/framework-spa). They share the demo's
+content and visual design, but do not import or depend on Lumi.
+
 The SPA's `demo-components.js` module contains ordinary JavaScript
 orchestration utilities owned by that demo, including its `define`, `resolve`,
 `present`, and `connect` functions. They are not Lumi APIs; another SPA using

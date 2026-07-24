@@ -68,6 +68,7 @@ class CardinalityRequired extends Error {
  * @property {number} index
  * @property {WeakMap<Element, CachedValue>} values
  * @property {unknown[]} replay
+ * @property {boolean} requiresTrustedHTML
  */
 
 /**
@@ -177,14 +178,20 @@ export function getOwnedDomSubtrees(connected) {
  * @returns {import('./types.js').ConnectedBinding<Data>}
  */
 export function connectDomBindings(root, descriptors, ownedSubtrees = []) {
-  const trustedTypes = trustedTypesFactory(root)
   /** @type {Array<DomBindingRuntime<Data>>} */
   const runtimes = descriptors.map((descriptor, index) => ({
     descriptor,
     index,
     values: new WeakMap(),
     replay: [],
+    requiresTrustedHTML: (
+      descriptor.kind === 'property'
+      && isTrustedHTMLProperty(descriptor.name)
+    ),
   }))
+  const trustedTypes = runtimes.some(runtime => runtime.requiresTrustedHTML)
+    ? trustedTypesFactory(root)
+    : null
   const planningDocument = root.ownerDocument.implementation
     .createHTMLDocument()
   const blueprintRoot = importElementTree(planningDocument, root)
@@ -236,7 +243,7 @@ export function connectDomBindings(root, descriptors, ownedSubtrees = []) {
             ownedSubtreePaths,
             (runtime, projected) => {
               return normalizeProjectedValue(
-                runtime.descriptor,
+                runtime,
                 projected,
                 trustedTypes,
               )
@@ -741,11 +748,12 @@ function refreshParentCaches(records) {
       continue
     }
 
-    const descriptor = record.runtime.descriptor
+    const runtime = record.runtime
+    const descriptor = runtime.descriptor
     const domValue = Reflect.get(record.element, requiredName(descriptor))
 
-    record.runtime.values.set(record.element, {
-      projectedValue: projectedCacheValue(descriptor, record.value),
+    runtime.values.set(record.element, {
+      projectedValue: projectedCacheValue(runtime, record.value),
       domValue,
     })
   }
@@ -918,17 +926,12 @@ function isTrustedHTMLProperty(name) {
  * while comparing its immutable string data with the DOM's serialized value.
  *
  * @template Data
- * @param {DomBindingDescriptor<Data>} descriptor
+ * @param {DomBindingRuntime<Data>} runtime
  * @param {unknown} value
  * @returns {unknown}
  */
-function projectedCacheValue(descriptor, value) {
-  return (
-    descriptor.kind === 'property'
-    && isTrustedHTMLProperty(descriptor.name)
-  )
-    ? String(value)
-    : value
+function projectedCacheValue(runtime, value) {
+  return runtime.requiresTrustedHTML ? String(value) : value
 }
 
 /**
@@ -956,33 +959,36 @@ function projectValue(runtime, data, element, matchIndex, trustedTypes) {
     throw new CardinalityRequired(descriptor.selector)
   }
 
-  return normalizeProjectedValue(descriptor, projected, trustedTypes)
+  return normalizeProjectedValue(runtime, projected, trustedTypes)
 }
 
 /**
  * @template Data
- * @param {DomBindingDescriptor<Data>} descriptor
+ * @param {DomBindingRuntime<Data>} runtime
  * @param {unknown} projected
  * @param {TrustedTypesFactory | null} trustedTypes
  * @returns {unknown}
  */
-function normalizeProjectedValue(descriptor, projected, trustedTypes) {
+function normalizeProjectedValue(runtime, projected, trustedTypes) {
   if (projected === null || projected === undefined) {
     return noValue
   }
+
+  const descriptor = runtime.descriptor
 
   switch (descriptor.kind) {
     case 'bind':
       assertTextValue(projected, 'bind')
       return String(projected)
-    case 'property': {
-      const name = requiredName(descriptor)
-
-      if (isTrustedHTMLProperty(name)) {
-        assertTrustedHTML(projected, trustedTypes, name)
+    case 'property':
+      if (runtime.requiresTrustedHTML) {
+        assertTrustedHTML(
+          projected,
+          trustedTypes,
+          requiredName(descriptor),
+        )
       }
       return projected
-    }
     case 'attribute':
       assertTextValue(projected, 'attribute')
       return projected === false
@@ -1053,7 +1059,7 @@ function applyPlannedValue(
       }
 
       const current = Reflect.get(element, name)
-      const projectedValue = projectedCacheValue(descriptor, value)
+      const projectedValue = projectedCacheValue(runtime, value)
       const previous = liveElement === undefined
         ? undefined
         : runtime.values.get(liveElement)
@@ -1134,7 +1140,7 @@ function applyLiveValue(runtime, element, value) {
     case 'property': {
       const name = requiredName(descriptor)
       const current = Reflect.get(element, name)
-      const projectedValue = projectedCacheValue(descriptor, value)
+      const projectedValue = projectedCacheValue(runtime, value)
       const previous = runtime.values.get(element)
 
       if (

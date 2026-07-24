@@ -1741,6 +1741,68 @@ test('bind works without the Trusted Types API or an HTML property sink', () => 
   )
 })
 
+test('does not inspect Trusted Types for bindings without HTML sinks', () => {
+  const { document, window } = createDocument()
+  const template = createTemplate(
+    document,
+    '<section><output></output><button></button></section>',
+  )
+
+  Object.defineProperty(window, 'trustedTypes', {
+    configurable: true,
+    get() {
+      throw new Error('Safe bindings must not inspect Trusted Types')
+    },
+  })
+
+  const mounted = component({
+    template,
+    bindings: [
+      bind('output', data => data.text),
+      prop('button', data => data.disabled, 'disabled'),
+    ],
+  }).mount(document.createElement('div'))
+
+  mounted.update({ text: 'Ready', disabled: true })
+
+  assert.equal(mounted.root.querySelector('output')?.textContent, 'Ready')
+  assert.equal(
+    /** @type {HTMLButtonElement | null} */ (
+      mounted.root.querySelector('button')
+    )?.disabled,
+    true,
+  )
+})
+
+test('resolves Trusted Types once for a component with HTML sinks', () => {
+  const { document, window } = createDocument()
+  const markup = trustedHTML(document, '<strong>Ready</strong>')
+  const factory = Reflect.get(window, 'trustedTypes')
+  const template = createTemplate(document, '<div></div>')
+  let factoryReads = 0
+
+  Object.defineProperty(window, 'trustedTypes', {
+    configurable: true,
+    get() {
+      factoryReads += 1
+      return factory
+    },
+  })
+
+  const mounted = component({
+    template,
+    bindings: [prop('div', () => markup, 'innerHTML')],
+  }).mount(document.createElement('div'))
+
+  assert.equal(factoryReads, 1)
+
+  mounted.update({})
+  mounted.update({})
+
+  assert.equal(factoryReads, 1)
+  assert.equal(mounted.root.innerHTML, '<strong>Ready</strong>')
+})
+
 test('fails closed when TrustedHTML cannot be authenticated', () => {
   const { document, window } = createDocument()
   const markup = trustedHTML(document, '<strong>Trusted elsewhere</strong>')

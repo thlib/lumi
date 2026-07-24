@@ -2,24 +2,27 @@
 
 Lumi is a small browser-first rendering layer.
 
-Lumi has one responsibility: declarative DOM rendering. Application code
-describes what the DOM should show, and Lumi finds, creates, moves, and updates
-the necessary DOM nodes.
+Its one responsibility is declarative DOM rendering. Application code
+describes what the DOM should show. Rendering finds, creates, moves, and
+updates the necessary nodes.
 
 ```text
 native HTML + ordinary JavaScript or TypeScript rules + a data snapshot
                                   |
-                              render(data)
+                              update(data)
                                   |
                      minimal writes to the real DOM
 ```
 
-Give Lumi data and it renders. Give it different data and it renders again.
-Lumi does not fetch the data, watch it for changes, or decide when another
-render should happen.
+Call `update(data)` to render a snapshot, then call it again when the snapshot
+changes. Data fetching, change detection, and update timing remain application
+concerns.
 
-Lumi is not a framework around the browser. It is the missing mechanical step
+This is not a framework around the browser. It is the missing mechanical step
 between plain data and persistent native DOM.
+
+Declarative updates work with native HTML, without relocating that HTML into
+JavaScript or imposing a state-management model.
 
 ## The problem it removes
 
@@ -45,16 +48,58 @@ This works, but the application now owns several unrelated concerns:
 - Which DOM property must change.
 - When listeners are installed and removed.
 - Which updates must be repeated after every state change.
-- How nodes survive conditionals, list reordering, and layout changes.
+- How nodes survive conditionals, positional list changes, and layout changes.
 
 The difficult part is not assigning `textContent` once. It is preserving the
 correct relationship between changing data and long-lived browser state as
 the page grows.
 
-Lumi moves that relationship into declarative JavaScript rules. Application
+Declarative JavaScript rules capture that relationship. Application
 code remains responsible for data and decisions. The browser remains
-responsible for the DOM and native behavior. Lumi performs the repetitive
+responsible for the DOM and native behavior. Rendering provides the repetitive
 translation between them.
+
+## Native HTML as an extensible substrate
+
+Let HTML describe the document. Let small, replaceable tools connect data or
+behavior to it.
+
+Rendering starts with HTML parsed by the browser, including native `<template>`
+elements, rather than an HTML-shaped value embedded in another language. The
+template owns semantic structure and may contain useful default content.
+Ordinary attributes and `data-*` metadata give other tools stable places to
+attach their own conventions.
+
+That metadata has no built-in meaning. A tool may interpret a data path,
+associate schema fields with controls, provide localization keys, or connect
+native events to application behavior. It then expresses the resulting
+data-to-DOM relationships as bindings. Another tool may use different metadata
+or an external binding map while relying on the same rendering API.
+
+The rendering substrate supports independently specified binding languages
+without imposing one of its own.
+
+That separation produces this architecture:
+
+```text
+browser primitives
+    <template>, DOM, selectors, events, forms
+                       |
+Lumi renderer
+    mounting, reconciliation, ownership, minimal writes
+                       |
+independent tools
+    data paths, schemas, forms, localization, component conventions
+                       |
+application
+    state, behavior, routing, scheduling
+```
+
+Each layer remains independently replaceable. DOM reconciliation can improve
+without changing an injected binding language. A binding tool can evolve
+without becoming rendering policy. Applications can combine tools where their
+ownership does not conflict, and can use direct JavaScript projections where
+no additional convention is useful.
 
 ## Why not React, Vue, or Angular?
 
@@ -80,7 +125,7 @@ mutation. They provide an application-level component and lifecycle model,
 with mature ecosystems around routing, state, forms, server rendering,
 development tools, and testing.
 
-Lumi separates out the narrower mechanism:
+Declarative rendering can be isolated:
 
 ```text
 React, Vue, or Angular
@@ -97,22 +142,22 @@ Lumi
 
 application produces a data snapshot
         |
-application calls render(data)
+application calls update(data)
         |
 plain JavaScript projections are compared
         |
 DOM update
 ```
 
-Lumi therefore does not replace the complete role of these projects. It
-replaces the need to adopt their authoring and runtime models when the
+The narrower scope does not replace the complete role of these projects. It
+removes the need to adopt their authoring and runtime models when an
 application only needs declarative DOM rendering. The application keeps
-authority over data and render timing, HTML remains native HTML, events remain
-native events, and Lumi owns only the mechanical synchronization with the DOM.
+authority over data and update timing, HTML remains native HTML, events remain
+native events, while only mechanical DOM synchronization is handled here.
 
 This is a scope boundary rather than a claim that less machinery is always
 better. A project that wants a framework-managed component lifecycle,
-reactivity, scheduling, and ecosystem is outside Lumi's intended use case.
+reactivity, scheduling, and ecosystem is outside the intended use case.
 
 ## One concrete component
 
@@ -121,120 +166,205 @@ The template is ordinary HTML:
 ```html
 <template id="counter-template">
   <section class="counter">
-    <output data-counter-value>count is 0</output>
-    <button data-counter-increment type="button">Increment</button>
+    <output>count is <span data-bind="$.count">0</span></output>
+    <button
+      data-action="decrement"
+      data-disabled="$.decrementDisabled"
+    >Decrement</button>
+    <button
+      data-action="increment"
+      data-disabled="$.counterDisabled"
+    >Increment</button>
+    <ul data-bind="$.items">
+      <li data-bind="$.items.name">Item</li>
+    </ul>
   </section>
 </template>
 ```
 
-There are no placeholders, directives, handler names, or expressions in the
-markup. The `data-*` attributes are application-owned element hooks. Lumi
-does not interpret them. The browser can parse the template without knowing
-Lumi exists, and `count is 0` is real default content.
+The `data-bind` and `data-disabled` values are application-owned metadata and
+have no built-in interpretation. The example injects a projection adapter that
+returns ordinary JavaScript scalar or array values. Its named path members
+distribute through arrays, but that convention is external. The browser can
+parse the template without knowing about either the rendering mechanism or the
+convention, and the template retains real default content.
 
-The rendering rules are ordinary JavaScript functions:
+The component owns a presentation function that derives the exact snapshot
+required by its template and rendering rules:
 
 ```js
-let model = { count: 3, maximum: 5 }
+let actualData = {
+  count: 3,
+  maximum: 5,
+  items: [
+    {name: 'Item 1'},
+    {name: 'Item 2'},
+    {name: 'Item 3'},
+  ],
+}
+
+function presentCounter(data) {
+  return {
+    count: data.count,
+    counterDisabled: data.count >= data.maximum,
+    decrementDisabled: data.count <= 0,
+    items: data.items,
+  }
+}
+```
+
+The presentation snapshot is allowed to contain derived, presentation-specific
+values such as `counterDisabled`. They are computed from actual application
+data rather than maintained as a second source of truth. Each component owns
+the shape and derivation of its own presentation data. A page presentation
+function composes those component presentation functions into the snapshot
+passed to the root component.
+
+Presentation functions run before rendering. Only their resulting snapshot is
+passed through, with no reference to the actual data that produced it.
+
+The rendering rules explicitly connect that snapshot to the application-side
+adapter:
+
+```js
 const slot = document.querySelector('#counter-slot')
 
-const counter = mount(model, {
-  target: slot,
+const counter = component({
   template: document.querySelector('#counter-template'),
   bindings: [
-    text('[data-counter-value]', data => `count is ${data.count}`),
-    property(
-      '[data-counter-increment]',
-      'disabled',
-      data => data.count >= data.maximum,
+    bind(
+      '[data-bind]',
+      (data, element) => jsonPath(data, element.dataset.bind),
     ),
+    prop(
+      '[data-disabled]',
+      (data, element) => jsonPath(data, element.dataset.disabled),
+      'disabled',
+    ),
+    event('[data-action="increment"]', 'click', () => {
+      const count = actualData.count + 1
+      actualData = {
+        ...actualData,
+        count,
+        items: [...actualData.items, {name: `Item ${count}`}],
+      }
+      counter.update(presentCounter(actualData))
+    }),
+    event('[data-action="decrement"]', 'click', () => {
+      const count = Math.max(0, actualData.count - 1)
+      actualData = {
+        ...actualData,
+        count,
+        items: actualData.items.slice(0, count),
+      }
+      counter.update(presentCounter(actualData))
+    }),
   ],
-})
+}).mount(slot)
+
+counter.update(presentCounter(actualData))
 ```
 
-The application handles native events and decides the next data:
+The `event` declarations manage native delegated listeners at the component
+boundary. The application handlers still decide the next actual data and call
+`update()` explicitly; Lumi does not synthesize events or state transitions.
 
-```js
-on(slot, 'click', '[data-counter-increment]', () => {
-  model = { ...model, count: model.count + 1 }
-  counter.render(model)
-})
-```
+The actual data and presentation snapshot contain no DOM nodes, selectors, or
+handlers. The application adapter may interpret inert metadata, but no
+expression language is built in. The application never assigns `textContent`
+or `disabled`.
 
-Here `on` is an application-side convenience around `addEventListener`,
-event bubbling, and `closest()`. It is not a Lumi API. The same code could use
-those browser methods directly.
+That separation is the core of the design.
 
-The model contains no HTML, DOM nodes, selectors, or handlers. The template
-contains no application expressions. The application never assigns
-`textContent` or `disabled`.
+Actual data and presentation data may have any ordinary JavaScript shapes the
+application needs. No store, schema, proxy, base class, or special object type
+is required. The constraint is about ownership: the application owns actual
+data, each component owns its presentation data, and neither smuggles rendering
+instructions or DOM objects into the snapshot.
 
-That separation is the core of Lumi.
-
-The data may have any ordinary JavaScript shape the application needs. Lumi
-does not require a store, schema, proxy, base class, or special object type.
-The constraint is about ownership: data describes application state and does
-not smuggle rendering instructions or DOM objects into the renderer.
-
-At the application boundary, one page has one render operation. Calling
-`render(pageData)` updates the active component tree. Nested components
-receive their relevant data through that render rather than becoming
+At the application boundary, one page has one update operation. Calling
+`update(pageData)` updates the active component tree. Nested components
+receive their relevant data through that update rather than becoming
 independently scheduled mini-applications. A document may deliberately mount
-multiple independent roots, but Lumi does not require the application to
-coordinate a render call for every component.
+multiple independent roots, but a separate update call for every component is
+not required.
 
-## What a render actually does
+## What an update actually does
 
-Mounting happens once. Lumi clones or adopts the template, resolves each
-binding to a real DOM node, and keeps those references for later renders.
+Mounting happens once. The template is cloned, replaces the mount target's
+existing contents, and has its bindings connected to that component boundary.
+Scalar selectors are resolved again for each explicit update, so structural
+rules may create or remove later scalar targets without leaving stale
+references to detached nodes.
 
-For every explicit `render(data)` call, Lumi:
+Each explicit `update(data)` call proceeds as follows:
 
 1. Receives the complete data snapshot from the application.
-2. Runs every declared projection function against that snapshot.
-3. Compares each projected value with the owned DOM state or its safely cached
-   representation.
-4. Writes only changed values to their already-resolved DOM targets.
-5. Reconciles declared conditional or repeated regions by stable identity.
-6. Retains projected values needed to avoid redundant DOM writes.
+2. Identifies structural dependencies between the current selector matches.
+   Independent leaf rules use the live DOM only as a read-only preparation
+   view.
+3. When dependencies exist, imports the component tree into an inert document
+   that cannot construct another instance of a live custom element, applies
+   content-owning rules in ancestor order, and resolves descendant selectors
+   against the result.
+4. Runs every matching projection and validates structural data without
+   mutating the live DOM. An unmatched scalar selector is a no-op.
+5. Recursively prepares the active component tree.
+6. Discards the complete plan without live DOM changes if preparation fails.
+7. Replays the prepared DOM operations on persistent live nodes, compares
+   projected values with owned DOM state or its safely cached representation,
+   and writes only differences.
+8. Reconciles positional structural regions and nested child components.
+9. Retains projected values needed to avoid redundant DOM writes.
 
-With the example above, rendering `{ count: 3, maximum: 5 }` projects:
+This separation makes projection and validation failures recoverable: the
+previous live component tree remains authoritative and a later update may be
+attempted.
+
+DOM commit itself cannot be completely transactional. A native property or
+custom-element setter can perform arbitrary side effects before throwing, and
+those effects cannot be safely reversed by a general renderer. A commit error
+therefore faults the mounted component. It may be unmounted, but the
+application must mount a fresh boundary before rendering again.
+
+With the example above, rendering
+`{ count: 3, counterDisabled: false }` projects:
 
 ```text
 .counter-value     textContent -> 3
 .counter-increment disabled    -> false
 ```
 
-Rendering `{ count: 4, maximum: 5 }` next changes only the output text. The
-disabled projection is still `false`, so Lumi performs no disabled-property
-write.
+Rendering `{ count: 4, counterDisabled: false }` next changes only the output
+text. The disabled projection is still `false`, so there is no
+disabled-property write.
 
 Rendering the same projected values again performs no meaningful DOM writes.
-Rendering `{ count: 5, maximum: 5 }` changes the text and sets `disabled` to
-`true`.
+Rendering `{ count: 5, counterDisabled: true }` changes the text and sets
+`disabled` to `true`.
 
 Property bindings verify the live DOM value as well as the preceding
 projection. This matters for properties such as an input's `value` or
 `checked`, which the browser or the user can change between renders. When the
-data snapshot owns that property, the next render restores the supplied value.
-Lumi also remembers native coercion so projecting the number `1` into a
-string-valued property does not cause a write on every render.
+data snapshot owns that property, the next update restores the supplied value.
+The binding also remembers native coercion, so projecting the number `1` into a
+string-valued property does not cause a write on every update.
 
-This is not reactive dependency tracking. Lumi does not observe which
-properties a function reads, subscribe to them, or infer that a render is
-needed. It simply evaluates the declared projections when the application
-calls `render`, then avoids unnecessary DOM writes.
+This is not reactive dependency tracking. No properties are observed or
+subscribed to, and update timing is never inferred from what a function reads.
+Declared projections are evaluated when the application calls `update`, then
+unnecessary DOM writes are avoided.
 
 The distinction matters:
 
 ```text
-deciding whether new application data exists  -> not Lumi
-making the DOM match explicitly supplied data -> Lumi
+deciding whether new application data exists  -> application
+making the DOM match explicitly supplied data -> renderer
 ```
 
 JavaScript comparisons are cheap and predictable. DOM mutations can trigger
-browser work and can destroy browser-managed state. Lumi optimizes the latter
-without taking control of the former.
+browser work and can destroy browser-managed state. Optimization therefore
+targets DOM mutation without taking control of application data.
 
 ## The two directions through the system
 
@@ -247,7 +377,7 @@ server, cache, or application state
                 |
          plain data snapshot
                 |
-           render(data)
+           update(data)
                 |
        persistent native DOM
 ```
@@ -263,17 +393,17 @@ native click, input, or submit
                 |
        next data snapshot
                 |
-           render(data)
+           update(data)
 ```
 
-Lumi occupies only the data-to-DOM translation point. Native JavaScript owns
-the interaction path, and application state connects an event to a later
-explicit render.
+Only the data-to-DOM translation happens here. Native JavaScript owns the
+interaction path, and application state connects an event to a later explicit
+update.
 
 If the user clicks Increment, the application may accept it, reject it, send
 it to a server, update several models, navigate elsewhere, or do nothing.
-Lumi does not observe the event. If authoritative data changes, the
-application calls `render` with the result.
+Rendering does not observe the event. If authoritative data changes, the
+application calls `update` with the result.
 
 ## Ownership boundaries
 
@@ -281,10 +411,10 @@ Each piece has one job and one kind of authority.
 
 | Part | Receives | Owns | Must not decide |
 | --- | --- | --- | --- |
-| Application | Events, server results, stored state | Data, business rules, routing, state transitions, render timing | DOM mechanics |
+| Application | Events, server results, stored state | Data, business rules, routing, state transitions, update timing | DOM mechanics |
 | HTML template | Browser parsing | Semantic structure and useful default content | Application behavior |
 | Component rules | A data snapshot | Data-to-DOM projections | Authoritative state, behavior, or network activity |
-| Lumi renderer | Rules, mounted DOM, explicit data | Stable bindings, comparisons, minimal writes, reconciliation, cleanup | When data changed or what the business should do |
+| Renderer | Rules, mounted DOM, explicit data | Stable bindings, comparisons, minimal writes, reconciliation, cleanup | When data changed or what the business should do |
 | Browser | HTML, CSS, DOM operations | Parsing, elements, events, forms, focus, layout, accessibility, ephemeral UI state | Application state |
 
 ### The application owns data and decisions
@@ -296,7 +426,7 @@ The application owns:
 - Business logic and state transitions.
 - Routing and choosing the active page or layout.
 - Handling native UI events.
-- Deciding when to call `render(nextData)`.
+- Deciding when to call `update(nextData)`.
 
 The application may attach native behavior listeners to persistent elements
 or delegate them from a component root. It should not patch rendered text and
@@ -307,7 +437,7 @@ properties or manually arrange component nodes.
 The template owns:
 
 - Native semantic elements and their relationships.
-- Useful initial, server-rendered, or fallback content.
+- Useful initial or fallback content.
 - Native controls such as buttons, forms, links, `details`, dialogs, and
   popovers.
 - Locations that ordinary selectors, element references, or slots can
@@ -315,8 +445,8 @@ The template owns:
 - Inert reusable markup through `<template>` where appropriate.
 
 Templates may already be in the page, be included by the server or a build
-step, or be fetched explicitly. Lumi should not fake a browser feature for
-importing HTML. Packaging is separate from rendering.
+step, or be fetched explicitly. Importing HTML should use those mechanisms
+instead of imitating a browser feature. Packaging is separate from rendering.
 
 ### Component rules own projection
 
@@ -327,29 +457,28 @@ Component rules say how data affects declared DOM state:
 - Attributes.
 - Classes and inline styles.
 - Conditional regions.
-- Repeated, keyed regions.
+- Positional repeated regions.
 - Child components.
 
 Projection functions should be pure: the same data should produce the same
 projected value without fetching, mutating application state, or manipulating
 unrelated DOM.
 
-### Lumi owns mechanical synchronization
+### Mechanical synchronization
 
-Lumi owns:
+Responsibilities include:
 
 - Resolving rules to persistent real DOM nodes.
 - Caching prior projected values.
 - Applying minimal text, property, attribute, class, and style writes.
 - Reconciling structural regions without discarding stable nodes and with the
   fewest practical physical moves.
-- Adopting compatible server-rendered DOM.
 - Preserving component instances across page and layout composition.
 - Hiding compatibility shims behind the same component contract.
-- Reporting useful binding, key, and adoption failures during development.
+- Reporting useful binding and component failures during development.
 
-Lumi may collect and batch writes produced by one render call. It must not
-introduce a hidden scheduler that decides when the application renders.
+Writes produced by one update call may be collected and batched, but update
+timing must not be hidden behind a scheduler.
 
 ### The browser owns browser state
 
@@ -364,58 +493,77 @@ The browser already owns:
 - Accessibility semantics.
 - Shadow DOM, slots, custom elements, and their native lifecycles.
 
-Lumi should cooperate with these capabilities, not emulate them. Avoiding
-unnecessary node replacement is important because a replacement can discard
-state that was never present in the application data.
+These capabilities should be used, not emulated. Avoiding unnecessary node
+replacement is important because a replacement can discard state that was
+never present in the application data.
 
 ## One writer for each piece of DOM
 
 Ordinary JavaScript must still be able to use the DOM. The safe boundary is
 ownership, not a ban on imperative code.
 
-- If a Lumi rule binds an element's text, property, attribute, children, or
-  placement, Lumi owns that state.
-- If no Lumi rule owns a piece of DOM state, the browser or application may
-  own it and Lumi leaves it unchanged.
+- If a rendering rule binds an element's text, property, attribute, children,
+  or placement, that state belongs to the binding.
+- If no rendering rule owns a piece of DOM state, the browser or application
+  may own it and renders leave it unchanged.
 - A third-party widget or imperative controller may own an explicitly opaque
-  subtree. Lumi may preserve or move that subtree as one unit but must not
-  reconcile inside it.
+  subtree. It may be preserved or moved as one unit but must not be reconciled
+  internally.
 
-For example, if Lumi binds an input's `value`, the data snapshot owns that
-value and Lumi writes changes to it. If Lumi does not bind `value`, user input
-and browser state own it and renders must leave it alone.
+For example, if a rule binds an input's `value`, the data snapshot owns that
+value and rendering writes changes to it. Without that binding, user input and
+browser state own the value and renders must leave it alone.
 
-Two writers must not compete over the same property or subtree. Otherwise a
-render could undo an imperative change, while imperative code could invalidate
-Lumi's remembered value. The exact API for declaring an opaque subtree remains
-open, but it must be declared in ordinary JavaScript rather than by inventing
-an HTML directive.
+Multiple built-in rules may deliberately overlap. Ownership is tracked at the
+sink level: `textContent`, one named property, one named attribute, one class
+token, one style property, or a child subtree. Different sinks on the same
+element are independent. If multiple built-in rules reach the same sink, they
+run deterministically and the last declaration wins.
 
-## Events and buttons remain outside Lumi
+Content sinks also define DOM dependencies. An ancestor content write is
+prepared before rules for its descendants are resolved, regardless of
+declaration order. The descendant selector sees the prepared parent result. If
+that result removed the descendant, the selector has no matches and does
+nothing. If it created matching descendants, their projections run in the same
+update.
+
+This overlap rule does not grant imperative or opaque custom code shared
+ownership. A custom binding's writes are not visible to the DOM planner, and
+imperative code can invalidate cached comparisons. Those writers must still
+own separate sinks. `child` subtrees are explicit component
+boundaries: parent scalar selectors do not enter them, and a parent content
+write that would replace one is rejected before commit. The exact API for
+declaring another kind of opaque subtree remains open, but it must be ordinary
+JavaScript rather than an HTML directive.
+
+## Events and buttons
 
 A button is a real `<button>`. A form is a real `<form>`. Their keyboard
 behavior, accessibility, default actions, validation, and bubbling come from
 the browser.
 
-Lumi has no event API. Application code uses `addEventListener()` directly or
-wraps it in ordinary JavaScript helpers. This preserves native capture,
-bubbling, cancellation, listener options, and default actions without a
-synthetic event system.
+`event(selector, type, handle, options?)` manages a native listener on the
+persistent component root. It delegates through the event's composed path and
+removes the listener on unmount. The native event, capture, bubbling,
+cancellation, listener options, and default actions remain intact; there is
+no synthetic event system.
 
-Persistent component roots make native event delegation practical. An
-application may attach one listener to a root and use `closest()` to identify
-the originating control. It may also attach a listener directly to a
-persistent element. Neither approach requires Lumi involvement.
+Delegation lets one listener keep working for matching elements created by
+later structural updates. Events must bubble to the component root unless the
+listener uses capture. Application code may still use `addEventListener()`
+directly when delegation or component-managed cleanup is not appropriate.
 
 A template may expose an application-owned hook:
 
 ```html
-<button data-counter-increment type="button">Increment</button>
+<button data-action="increment" type="button">Increment</button>
 ```
 
 The attribute has no behavior on its own. Application JavaScript gives it
-meaning by using `[data-counter-increment]` as an ordinary CSS selector. Lumi
-does not reserve the `data-*` name, scan it, or resolve it to a function.
+meaning by using `[data-action="increment"]` as an ordinary CSS selector. This
+provides a common hook shape for different application actions while keeping
+each callback explicit. No `data-*` name is reserved or scanned, and action
+values are neither dispatched nor resolved to functions.
 
 This is deliberately rejected:
 
@@ -423,8 +571,8 @@ This is deliberately rejected:
 <button data-on-click="increment">Increment</button>
 ```
 
-`increment` is not meaningful to the browser. Supporting it requires Lumi to
-invent name lookup, scope, argument, error, and lifecycle rules. The attribute
+`increment` is not meaningful to the browser. Supporting it would require new
+rules for name lookup, scope, arguments, errors, and lifecycle. The attribute
 therefore creates a small behavior language inside HTML.
 
 An ordinary JavaScript callback already has lexical scope, types, imports,
@@ -433,9 +581,7 @@ tooling, and predictable errors. The application should use it.
 ## Pages, templates, and persistent components
 
 A document may contain several inert `<template>` definitions while one page
-composition is live. The live page may begin as server-rendered content,
-useful default content, or a loader. Lumi does not care where its first data
-snapshot came from.
+composition is live. Templates may contain useful default content or a loader.
 
 Changing pages selects a different composition of component instances. It
 does not require a new kind of component.
@@ -453,26 +599,6 @@ other information the browser is already maintaining.
 
 All components obey the same contract. There is no easy component, advanced
 component, reactive component, or escape-hatch component.
-
-## Initial and server-rendered DOM
-
-Server rendering is not a second architecture. It is one possible source of
-the live DOM before the first client render.
-
-When compatible DOM already exists, Lumi should:
-
-1. Find the existing nodes that correspond to the component rules.
-2. Attach its stable bindings to those nodes.
-3. Compare the first supplied data projections with the existing DOM.
-4. Change only mismatches.
-
-This association of rules with existing nodes is often called adoption or
-hydration. The concrete requirement matters more than the term: a compatible
-server-rendered button must remain the same button after Lumi starts.
-
-If the existing DOM cannot be associated safely, development mode should
-explain the mismatch. A controlled rebuild may be necessary, but silent
-replacement must not be the normal path.
 
 ## HTML, scripts, and styles
 
@@ -494,47 +620,55 @@ elements. Packaging must not create a new runtime language or depend on cloned
 scripts executing as a side effect of inserting markup.
 
 Text data uses `textContent` semantics by default. A string is data even if it
-contains characters that resemble markup or placeholders. Rendering trusted
-HTML must be a separate explicit operation with a defined sanitization and
-Trusted Types boundary.
+contains characters that resemble markup or placeholders.
 
-Generic bindings must not provide a side door into executable content. Native
-event handler properties and attributes are rejected because events remain
-outside Lumi. Raw HTML sinks such as `innerHTML` and `srcdoc` are rejected
-until Lumi has an explicit trusted-content contract. URL trust remains an
-application boundary because a correct policy depends on whether a URL is
-navigation, media, or an executable resource.
+Native event handler properties and attributes are rejected because event
+handling remains separate. `srcdoc` remains rejected. Otherwise `prop()`
+preserves the native property surface, including `innerHTML` and `outerHTML`. The
+application must supply already trusted or sanitized markup before assigning
+`innerHTML`. A `data-html` name has no meaning unless application code injects
+that convention. URL trust remains an application boundary because a correct
+policy depends on whether a URL is navigation, media, or an executable
+resource.
 
-## No new language
+## No imposed template language
 
 This is the hardest boundary.
 
-Lumi components use three languages the browser and tooling already
-understand:
+Components use three languages the browser and tooling already understand:
 
 - HTML for structure.
 - CSS for presentation.
 - JavaScript or TypeScript for rules and behavior.
 
-A construct is inside the boundary when the existing language parser
-understands its semantics. Calling `text('.value', data => data.count)` uses a
-normal JavaScript function, native selector syntax, and a callback. Lumi
-defines what its function does, as every library does, but it does not parse
-the callback or selector as Lumi code.
+A construct is inside the boundary when an existing language or published
+standard defines its semantics. Calling
+`bind('.value', data => data.count)` uses a normal JavaScript function, native
+selector syntax, and a callback. The API defines the function's behavior but
+does not parse the callback or selector as a separate language.
 
-A construct is outside the boundary when Lumi must parse or interpret a
+A construct is outside the boundary when it requires parsing or interpreting a
 string as application behavior:
 
 ```html
-<!-- Rejected: Lumi would need to interpret these. -->
+<!-- Rejected: these require interpretation beyond HTML. -->
 <output>{{ count }}</output>
 <section lumi-if="account.enabled"></section>
 <button data-on-click="increment">Increment</button>
 ```
 
-Also rejected are a Lumi-specific file format, a compiler-required template
-syntax, string property paths, expression strings, implicit global handler
-names, and runtime evaluation of application code.
+Other rejected features include a custom file format, compiler-required
+template syntax, string property paths, expression strings, implicit global
+handler names, and runtime evaluation of application code.
+Applications remain free to inject their own projection conventions through
+ordinary JavaScript; the counter's example-local JSONPath adapter demonstrates
+that boundary.
+
+An independent adapter may deliberately define a small language in `data-*`
+metadata, provided that it owns and documents the parsing, scope, errors, and
+lifecycle. The rendering API still receives ordinary selectors, projection
+functions, and JavaScript values. The example's `data-bind` path is therefore
+a language owned by `jsonPath`, not a hidden template language.
 
 The API itself should stay unsurprising JavaScript. It must not grow clever
 chaining, control-flow keywords, or conventions that amount to a language
@@ -546,7 +680,6 @@ Use existing platform primitives when they satisfy the contract:
 
 - `<template>` and `DocumentFragment`.
 - Native DOM nodes, properties, attributes, and selectors.
-- State-preserving `moveBefore()` with an `insertBefore()` fallback.
 - Native events, `CustomEvent`, capture, and bubbling.
 - `AbortSignal` for listener cleanup.
 - Forms, constraint validation, and `FormData`.
@@ -560,35 +693,38 @@ belongs below the component contract, so old and new browsers do not require
 different component definitions.
 
 A shim must not promise behavior it cannot preserve. If a browser cannot
-retain some ephemeral state during a physical move, Lumi should document the
-support boundary rather than introduce another authoring model.
+retain some ephemeral state during a physical move, the support boundary
+should be documented rather than introducing another authoring model.
 
-## What Lumi intentionally avoids
+## Intentional exclusions
 
-Lumi must not:
+The design must not:
 
 - Invent syntax, a template language, an expression language, or a file
   format.
 - Introduce single-file components, placeholder expressions, HTML behavior
-  directives, string handler names, string property paths, runtime evaluation,
-  or a parser for application expressions.
+  directives, string handler names, built-in string property paths, runtime
+  evaluation, or a parser for application expressions.
 - Make JavaScript strings the primary home of HTML.
 - Add signals, proxies, watchers, subscriptions, dependency tracking,
   computed graphs, or automatic rerendering.
+- Add or infer keyed identity for array repetition. Repeated occurrence
+  identity is deliberately positional.
 - Become a state manager, store, router, data cache, network client, GraphQL
   layer, server protocol, or business-logic runtime.
 - Decide whether application data changed. It only makes the DOM match data
   that was explicitly supplied.
 - Introduce a synthetic event system or hide native event behavior.
 - Mutate application data in response to an event.
-- Require data to contain DOM nodes, markup, callbacks, or mutable Lumi
+- Require data to contain DOM nodes, markup, callbacks, or special mutable
   objects.
 - Expose manual DOM mutation as the normal component-authoring model.
 - Maintain an application-facing virtual DOM or diff an entire tree when
   stable bindings identify the relevant locations.
-- Replace persistent nodes merely because `render` was called.
-- Overwrite browser-owned or imperative state that no Lumi rule owns.
-- Let Lumi and another writer control the same DOM property or subtree.
+- Replace persistent nodes merely because `update` was called.
+- Overwrite browser-owned or imperative state that no rendering rule owns.
+- Let a binding and an imperative or opaque custom writer control the same DOM
+  property or subtree.
 - Create separate simple and advanced component systems.
 - Require a build step for runtime meaning. TypeScript and builds may provide
   checks, packaging, and optimization, but the model remains HTML, CSS, and
@@ -598,51 +734,58 @@ Lumi must not:
   global.
 - Depend on experimental browser behavior without a fallback or explicit
   support boundary.
-- Hide application render timing behind an automatic scheduler.
+- Hide application update timing behind an automatic scheduler.
 
 ## Design acceptance tests
 
-The design is still Lumi only if all of these remain true:
+The design remains intact only if all of these stay true:
 
 - A component template is valid ordinary HTML.
-- Component rules are valid ordinary JavaScript or TypeScript.
-- No Lumi parser or syntax transform is needed to understand component
+- Computed component rules are valid ordinary JavaScript or TypeScript.
+- No parser or syntax transform is needed to understand component
   behavior.
-- One explicit page render updates its active component tree.
+- One explicit page update updates its active component tree.
 - The data snapshot contains values, not presentation or behavior.
-- Useful default or server-rendered content can exist before Lumi runs.
-- Calling `render` twice with identical projected values performs no
+- Useful default content can exist before rendering begins.
+- Calling `update` twice with identical projected values performs no
   meaningful DOM writes.
+- A projection or structural-validation failure performs no live DOM writes
+  and does not prevent a later valid update.
+- A parent content rule may create or remove a descendant binding target in
+  the same update; the descendant selector sees the prepared result.
+- An unmatched scalar selector is a no-op.
+- Overlapping built-in selector sets are deterministic, and the last
+  declaration wins when they reach the same sink.
+- Scalar bindings reject projection results outside their declared value
+  types instead of relying on implicit DOM string or boolean coercion. Text
+  bindings additionally accept explicitly defined positional array shapes.
+- Empty bind arrays produce zero elements, nested arrays preserve their
+  dimensions, and repeated element identity remains positional across renders.
 - Changing one scalar projection changes only its bound DOM state.
 - An unbound DOM property remains untouched.
 - An opaque imperative subtree survives renders unchanged.
-- Reordering keyed data preserves the corresponding element identities.
 - Changing layouts can relocate a shared component without recreating it.
-- Compatible server-rendered DOM is adopted rather than replaced.
-- Native application listeners remain attached because Lumi preserves their
-  elements across renders.
+- Native application listeners remain attached because their elements persist
+  across renders.
 - A click or submit stays native. The application decides the next data and
   explicitly renders it.
 - A compatibility implementation does not change how components are written.
 
 These tests protect the architecture better than a feature checklist. A
-feature that fails one of them must be redesigned or kept outside Lumi.
+feature that fails one of them must be redesigned or kept outside the API.
 
 ## Questions intentionally left open
 
 These require prototypes and measurements:
 
 - The smallest useful typed binding API.
-- How rules obtain stable element references without adding template syntax.
 - How conditional and repeated regions are anchored in ordinary HTML.
-- Key requirements and failure behavior for repeated data.
 - How an opaque, imperatively owned subtree is registered.
 - How component definitions stored outside the active document are packaged.
-- Exact server-DOM adoption and mismatch behavior.
 - Browser support targets and the features worth shimming.
-- Synchronous commit and optional batching details within one render.
+- Optional batching details within the synchronous commit phase.
 - Style-isolation options.
-- Trusted HTML and sanitization integration.
+- Trusted Types and sanitization integration for `innerHTML` property bindings.
 - Development diagnostics, cleanup, and error containment.
 
 Each answer must pass the same test: does it remove difficult DOM manipulation
@@ -656,6 +799,6 @@ morphdom and Mikado contain lessons about reconciling real DOM while
 preserving identity. Proposed DOM Parts work explores whether the platform can
 expose stable update locations directly.
 
-Lumi draws on the implementation lessons from these projects while retaining
-its own component and ownership model. Dependencies are evaluated against that
-model, including the requirement to use existing web languages.
+The design draws on lessons from these projects while retaining its own
+component and ownership model. Dependencies are evaluated against that model,
+including the requirement to use existing web languages.

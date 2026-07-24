@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Lumi counter</title>
+    <script type="module">
+      import {bind, component, event, prop} from '../../src/index.js'
+      import {jsonPath} from './plain.js'
+
+      let data = {
+        count: 0,
+        maximum: 5,
+        items: [],
+      }
+      const slot = document.querySelector('#counter-slot')
+
+      const counter = component({
+        template: document.querySelector('#counter-template'),
+        bindings: [
+          bind(
+            '[data-bind]',
+            (data, element) => jsonPath(data, element.dataset.bind),
+          ),
+          prop(
+            '[data-increment]',
+            data => data.count >= data.maximum,
+            'disabled',
+          ),
+          prop(
+            '[data-decrement]',
+            data => data.count <= 0,
+            'disabled',
+          ),
+          event('[data-increment]', 'click', () => {
+            const count = data.count + 1
+            data = {
+              ...data,
+              count,
+              items: [...data.items, {name: `Item ${count}`}],
+            }
+            counter.update(data)
+          }),
+          event('[data-decrement]', 'click', () => {
+            const count = Math.max(0, data.count - 1)
+            data = {
+              ...data,
+              count,
+              items: data.items.slice(0, count),
+            }
+            counter.update(data)
+          }),
+        ],
+      }).mount(slot)
+
+      counter.update(data)
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>Lumi counter</h1>
+      <div id="counter-slot"></div>
+    </main>
+
+    <template id="counter-template">
+      <section class="counter">
+        <output>count is <span data-bind="$.count">0</span></output>
+        <button data-increment type="button">Increment</button>
+        <button data-decrement type="button">Decrement</button>
+        <ul data-bind="$.items">
+          <li data-bind="$.items.name">Item</li>
+        </ul>
+      </section>
+    </template>
+  </body>
+</html>

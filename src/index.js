@@ -2,11 +2,6 @@
 
 /**
  * @template Data
- * @typedef {import('./types.js').Binding<Data>} Binding
- */
-
-/**
- * @template Data
  * @typedef {import('./types.js').Component<Data>} Component
  */
 
@@ -20,18 +15,13 @@
  * @typedef {import('./types.js').MountedComponent<Data>} MountedComponent
  */
 
-/**
- * @template Data
- * @typedef {import('./types.js').MountOptions<Data>} MountOptions
- */
-
 export {
-  attribute,
+  attr,
+  bind,
   child,
   classToggle,
-  property,
-  repeat,
+  event,
+  prop,
   style,
-  text,
 } from './bindings.js'
-export { component, mount } from './component.js'
+export { component } from './component.js'

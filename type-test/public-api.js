@@ -1,12 +1,22 @@
 // @ts-check
 
 import {
+  attr,
+  bind,
+  classToggle,
   component,
-  mount,
-  property,
-  repeat,
-  text,
+  event,
+  prop,
+  style,
 } from '../src/index.js'
+import * as lumi from '../src/index.js'
+
+// @ts-expect-error unused convenience mounting is not public.
+lumi.mount
+// @ts-expect-error raw HTML has no dedicated public binding.
+lumi.html
+// @ts-expect-error keyed component repetition is not public.
+lumi.repeat
 
 /** @typedef {{ count: number }} CounterData */
 
@@ -17,53 +27,42 @@ template.innerHTML = '<output></output>'
 const options = {
   template,
   bindings: [
-    text('output', data => data.count),
-    property('output', 'value', data => data.count),
-  ],
-}
-
-const mounted = component(options).mount(document.body)
-mounted.render({ count: 1 })
-
-// @ts-expect-error count is required to be a number.
-mounted.render({ count: '1' })
-
-const inferred = mount({ count: 1 }, {
-  target: document.querySelector('#target'),
-  template: document.querySelector('template'),
-  bindings: [
-    text('output', data => data.count),
-  ],
-})
-
-inferred.render({ count: 2 })
-
-// @ts-expect-error initial data determines the mounted data contract.
-inferred.render({ count: '2' })
-
-/** @typedef {{ id: string }} Item */
-const itemTemplate = document.createElement('template')
-itemTemplate.innerHTML = '<li></li>'
-/** @type {import('../src/index.js').ComponentOptions<Item>} */
-const itemOptions = { template: itemTemplate }
-
-/** @type {import('../src/index.js').ComponentOptions<{ items: Item[] }>} */
-const listOptions = {
-  template,
-  bindings: [
-    repeat('output', {
-      items: data => data.items,
-      key: item => item.id,
-      component: component(itemOptions),
+    bind('output', data => data.count),
+    prop('output', data => data.count, 'value'),
+    attr('output', 'aria-label', data => data.count),
+    event('output', 'click', (nativeEvent, output) => {
+      const click = /** @type {MouseEvent} */ (nativeEvent)
+      const control = /** @type {HTMLOutputElement} */ (output)
+      void click
+      void control
     }),
   ],
 }
 
-component(listOptions)
+// @ts-expect-error bind projections must return text values or arrays.
+bind('output', () => ({ count: 1 }))
 
-repeat('output', {
-  items: (data) => data.items,
-  // @ts-expect-error repeat keys must be strings or numbers.
-  key: (item) => ({ id: item.id }),
-  component: component(itemOptions),
-})
+bind('output', () => [{ count: 1 }])
+bind('output', () => null)
+bind('output', () => undefined)
+
+// @ts-expect-error attribute projections must return text-compatible primitives.
+attr('output', 'title', () => ['invalid'])
+attr('output', 'title', () => null)
+
+// @ts-expect-error class projections must return booleans.
+classToggle('output', 'active', () => 'true')
+classToggle('output', 'active', () => undefined)
+
+// @ts-expect-error style projections must return strings.
+style('output', 'color', () => 1)
+style('output', 'color', () => null)
+
+// Property bindings intentionally preserve arbitrary inferred value types.
+prop('output', () => ({ mode: 'compact' }), 'lumiConfig')
+
+const mounted = component(options).mount(document.body)
+mounted.update({ count: 1 })
+
+// @ts-expect-error count is required to be a number.
+mounted.update({ count: '1' })

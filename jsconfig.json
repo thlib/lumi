@@ -18,8 +18,9 @@
   },
   "include": [
     "examples/**/*.js",
+    "scripts/**/*.js",
     "src/**/*.js",
     "test/**/*.js",
-    "type-test/**/*.js"
+    "type-test/**/*"
   ]
 }

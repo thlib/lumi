@@ -31,16 +31,13 @@
         ></button>
 
         <main class="main-content" id="main-content" tabindex="-1">
-          <div data-page-slot="overview" hidden></div>
-          <div data-page-slot="projects" hidden></div>
-          <div data-page-slot="activity" hidden></div>
-          <div data-page-slot="teams" hidden></div>
+          <div data-page-slot></div>
         </main>
       </div>
     </template>
 
     <script type="module">
-      import {child, classToggle, component, prop} from '../../src/index.js'
+      import {child, classToggle, component} from '../../src/index.js'
       import {define} from './demo-components.js'
       import {update} from './page.js'
 
@@ -61,26 +58,6 @@
               '.app-shell',
               'nav-open',
               data => data.appShell.navOpen,
-            ),
-            prop(
-              '[data-page-slot="overview"]',
-              data => data.appShell.route !== 'overview',
-              'hidden',
-            ),
-            prop(
-              '[data-page-slot="projects"]',
-              data => data.appShell.route !== 'projects',
-              'hidden',
-            ),
-            prop(
-              '[data-page-slot="activity"]',
-              data => data.appShell.route !== 'activity',
-              'hidden',
-            ),
-            prop(
-              '[data-page-slot="teams"]',
-              data => data.appShell.route !== 'teams',
-              'hidden',
             ),
             child(
               '[data-header-slot]',

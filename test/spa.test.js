@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { JSDOM } from 'jsdom'
-import {bind, component, prop} from '../src/index.js'
+import {bind, component} from '../src/index.js'
 import {mountApplication} from '../examples/spa/application.js'
 import {define} from '../examples/spa/demo-components.js'
 import { emailValidationMessage } from '../examples/spa/validation.js'
@@ -92,7 +92,7 @@ test('disconnects SPA routing before unmount and permits reconnection', async ()
   }
 })
 
-test('presents and updates only the active persistent SPA page', () => {
+test('keeps only the active SPA page connected to the document', () => {
   const window = new JSDOM().window
   const {document} = window
   /** @type {Record<string, number>} */
@@ -112,18 +112,9 @@ test('presents and updates only the active persistent SPA page', () => {
     return component({
       template: createTemplate(document, `
         <div class="app-shell">
-          <div data-page-slot="overview" hidden></div>
-          <div data-page-slot="projects" hidden></div>
-          <div data-page-slot="activity" hidden></div>
-          <div data-page-slot="teams" hidden></div>
+          <div data-page-slot></div>
         </div>
       `),
-      bindings: [
-        pageVisibility('overview'),
-        pageVisibility('projects'),
-        pageVisibility('activity'),
-        pageVisibility('teams'),
-      ],
     })
   })
 
@@ -134,39 +125,39 @@ test('presents and updates only the active persistent SPA page', () => {
 
   const target = document.createElement('div')
   const application = mountApplication(target)
-  const roots = {
-    overview: pageRoot('overview'),
-    projects: pageRoot('projects'),
-    activity: pageRoot('activity'),
-    teams: pageRoot('teams'),
-  }
-
-  assert.deepEqual(
-    Object.values(roots).map(root => root.textContent),
-    ['Not presented', 'Not presented', 'Not presented', 'Not presented'],
-  )
+  assert.equal(pageSlot().childElementCount, 0)
 
   application.update({route: 'overview', value: 'First'})
 
-  assert.equal(roots.overview.textContent, 'overview: First')
-  assert.equal(roots.projects.textContent, 'Not presented')
+  const overviewRoot = pageRoot()
+  assert.equal(overviewRoot.textContent, 'overview: First')
   assert.equal(presentationCount.overview, 1)
   assert.equal(presentationCount.projects, undefined)
-  assert.equal(pageSlot('overview').hidden, false)
-  assert.equal(pageSlot('projects').hidden, true)
+
+  application.update({route: 'overview', value: 'Updated'})
+
+  assert.strictEqual(pageRoot(), overviewRoot)
+  assert.equal(overviewRoot.textContent, 'overview: Updated')
+  assert.equal(presentationCount.overview, 2)
 
   application.update({route: 'projects', value: 'Second'})
 
-  assert.strictEqual(pageRoot('overview'), roots.overview)
-  assert.strictEqual(pageRoot('projects'), roots.projects)
-  assert.equal(roots.overview.textContent, 'overview: First')
-  assert.equal(roots.projects.textContent, 'projects: Second')
-  assert.equal(presentationCount.overview, 1)
+  const projectsRoot = pageRoot()
+  assert.notStrictEqual(projectsRoot, overviewRoot)
+  assert.equal(overviewRoot.isConnected, false)
+  assert.equal(projectsRoot.textContent, 'projects: Second')
+  assert.equal(presentationCount.overview, 2)
   assert.equal(presentationCount.projects, 1)
   assert.equal(presentationCount.activityPage, undefined)
   assert.equal(presentationCount.teams, undefined)
-  assert.equal(pageSlot('overview').hidden, true)
-  assert.equal(pageSlot('projects').hidden, false)
+  assert.equal(pageSlot().childElementCount, 1)
+
+  application.update({route: 'overview', value: 'Again'})
+
+  assert.strictEqual(pageRoot(), overviewRoot)
+  assert.equal(overviewRoot.textContent, 'overview: Again')
+  assert.equal(projectsRoot.isConnected, false)
+  assert.equal(presentationCount.overview, 3)
 
   application.unmount()
   assert.equal(target.childElementCount, 0)
@@ -199,28 +190,17 @@ test('presents and updates only the active persistent SPA page', () => {
     presentationCount[name] = (presentationCount[name] ?? 0) + 1
   }
 
-  /** @param {'overview' | 'projects' | 'activity' | 'teams'} route */
-  function pageVisibility(route) {
-    return prop(
-      `[data-page-slot="${route}"]`,
-      data => data.appShell.route !== route,
-      'hidden',
-    )
-  }
-
-  /** @param {'overview' | 'projects' | 'activity' | 'teams'} route */
-  function pageSlot(route) {
+  function pageSlot() {
     const slot = application.root.querySelector(
-      `[data-page-slot="${route}"]`,
+      '[data-page-slot]',
     )
 
     assert.ok(slot instanceof window.HTMLElement)
     return slot
   }
 
-  /** @param {'overview' | 'projects' | 'activity' | 'teams'} route */
-  function pageRoot(route) {
-    const root = pageSlot(route).firstElementChild
+  function pageRoot() {
+    const root = pageSlot().firstElementChild
 
     assert.ok(root instanceof window.HTMLElement)
     return root

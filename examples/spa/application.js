@@ -5,6 +5,7 @@ import {connect, present, resolve} from './demo-components.js'
 /** @typedef {'overview' | 'projects' | 'activity' | 'teams'} Route */
 /** @typedef {{route: Route} & Record<string, unknown>} ApplicationData */
 /** @typedef {import('../../src/types.js').MountedComponent<any>} Mounted */
+/** @typedef {import('../../src/types.js').Component<any>} Component */
 
 const pageNames = Object.freeze({
   overview: 'overview',
@@ -14,10 +15,11 @@ const pageNames = Object.freeze({
 })
 
 /**
- * Mounts the SPA's persistent component roots.
+ * Mounts the SPA's persistent shell and active page.
  *
- * Page components deliberately remain mounted for their complete lifetime,
- * but the application presents and updates only the active page.
+ * Route templates remain native HTML templates. Pages are mounted lazily and
+ * retained after their first visit, but only the active page is connected to
+ * the document.
  *
  * @param {Element | null} target
  * @returns {{
@@ -28,25 +30,29 @@ const pageNames = Object.freeze({
  */
 export function mountApplication(target) {
   const shell = resolve('appShell').mount(target)
+  const pageSlot = shell.root.querySelector('[data-page-slot]')
+  /** @type {Record<Route, Component>} */
+  const pages = /** @type {Record<Route, Component>} */ ({})
   /** @type {Partial<Record<Route, Mounted>>} */
   const mountedPages = {}
-  /** @type {Array<Mounted>} */
-  const mountedPageList = []
+  /** @type {Route | undefined} */
+  let activeRoute
   /** @type {undefined | (() => void)} */
   let disconnect
 
   try {
-    for (const route of /** @type {Route[]} */ (Object.keys(pageNames))) {
-      const slot = shell.root.querySelector(`[data-page-slot="${route}"]`)
-      const mounted = resolve(pageNames[route]).mount(slot)
+    if (pageSlot === null) {
+      throw new Error('The application shell requires a page slot')
+    }
 
-      mountedPages[route] = mounted
-      mountedPageList.push(mounted)
+    for (const route of /** @type {Route[]} */ (Object.keys(pageNames))) {
+      // Resolve every definition before connecting the shared delegated event
+      // boundary, without cloning inactive templates into the document.
+      pages[route] = resolve(pageNames[route])
     }
 
     disconnect = connect(shell.root)
   } catch (error) {
-    unmountAll(mountedPageList)
     shell.unmount()
     throw error
   }
@@ -62,10 +68,10 @@ export function mountApplication(target) {
       }
 
       const route = data.route
-      const activePage = mountedPages[route]
+      const page = pages[route]
 
-      if (activePage === undefined) {
-        throw new Error(`Page "${route}" is not mounted`)
+      if (page === undefined) {
+        throw new Error(`Page "${route}" is not defined`)
       }
 
       // Calculate every selected presentation before mutating any component.
@@ -76,7 +82,16 @@ export function mountApplication(target) {
         navigation: present('navigation', data),
       }
 
-      // Prepare the destination while its slot is still hidden, then reveal it.
+      let activePage = mountedPages[route]
+
+      if (activePage === undefined) {
+        activePage = page.mount(pageSlot)
+        mountedPages[route] = activePage
+      } else if (activeRoute !== route) {
+        pageSlot.replaceChildren(activePage.root)
+      }
+      activeRoute = route
+
       activePage.update(pagePresentation)
       shell.update(shellPresentation)
     },
@@ -87,7 +102,7 @@ export function mountApplication(target) {
       }
 
       disconnect?.()
-      unmountAll(mountedPageList)
+      unmountAll(Object.values(mountedPages))
       shell.unmount()
       isMounted = false
     },

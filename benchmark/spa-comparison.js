@@ -83,9 +83,11 @@ const root = resolve(import.meta.dirname, '..')
  *   filterMsPerUpdate: Statistics,
  *   firstContentfulPaintMs: Statistics,
  *   heapDeltaBytes: Statistics,
+ *   initialNodes: Statistics,
  *   loadMs: Statistics,
  *   longTaskCount: Statistics,
  *   longTaskMaxMs: Statistics,
+ *   longTaskTotalMs: Statistics,
  *   nodeDelta: Statistics,
  *   routeMsPerUpdate: Statistics,
  * }} MetricSummary
@@ -279,6 +281,9 @@ async function runSample(browser, url, options) {
   try {
     await page.goto(url, {waitUntil: 'load'})
     await page.waitForSelector('main h1', {state: 'visible'})
+    await page.evaluate(() => new Promise(resolvePaint => {
+      requestAnimationFrame(() => requestAnimationFrame(resolvePaint))
+    }))
     await page.addStyleTag({
       content: `
         *, *::before, *::after {
@@ -526,13 +531,26 @@ async function createReport(result, options, browserVersion) {
       : framework.id === 'angular'
         ? '@angular/core'
         : framework.id
+    const packageLock = dependencyName === null
+      ? null
+      : JSON.parse(await readFile(
+        resolve(dirname(framework.packageFile), 'package-lock.json'),
+        'utf8',
+      ))
+    const installedVersion = dependencyName === null
+      ? packageJson.version
+      : packageLock.packages[`node_modules/${dependencyName}`]?.version
+    if (typeof installedVersion !== 'string') {
+      throw new Error(`Could not resolve the installed ${framework.label} version`)
+    }
     return {
       ...framework,
-      version: dependencyName === null
-        ? packageJson.version
-        : packageJson.dependencies[dependencyName],
+      version: installedVersion,
     }
   }))
+  const versions = Object.fromEntries(
+    packageDetails.map(framework => [framework.id, framework.version]),
+  )
 
   const assets = /** @type {Record<string, AssetSummary>} */ (Object.fromEntries(
     await Promise.all(frameworks.map(async framework => {
@@ -579,6 +597,9 @@ async function createReport(result, options, browserVersion) {
       heapDeltaBytes: summarize(frameworkSamples
         .map(sample => sample.stress.heapDeltaBytes)
         .filter(value => value !== null)),
+      initialNodes: summarize(frameworkSamples.map(
+        sample => sample.stress.initialNodes,
+      )),
       loadMs: summarize(frameworkSamples.map(
         sample => sample.startup.loadMs,
       )),
@@ -587,6 +608,9 @@ async function createReport(result, options, browserVersion) {
       )),
       longTaskMaxMs: summarize(frameworkSamples.map(
         sample => sample.stress.longTaskMaxMs,
+      )),
+      longTaskTotalMs: summarize(frameworkSamples.map(
+        sample => sample.stress.longTaskTotalMs,
       )),
       nodeDelta: summarize(frameworkSamples.map(
         sample => sample.stress.nodeDelta,
@@ -624,11 +648,14 @@ async function createReport(result, options, browserVersion) {
 
   const resultRows = frameworks.map(framework => {
     const values = recordValue(summary, framework.id)
-    return `| ${framework.label} `
+    return `| ${framework.label} ${recordValue(versions, framework.id)} `
       + `| ${formatTiming(values.loadMs)} `
+      + `| ${formatTiming(values.firstContentfulPaintMs)} `
       + `| ${formatTiming(values.routeMsPerUpdate, 3)} `
       + `| ${formatTiming(values.filterMsPerUpdate, 3)} `
-      + `| ${formatNumber(values.longTaskCount.median, 0)} `
+      + `| ${formatNumber(values.longTaskCount.median, 0)} / `
+      + `${formatNumber(values.longTaskTotalMs.median)} `
+      + `| ${formatNumber(values.initialNodes.median, 0)} `
       + `| ${formatNumber(values.nodeDelta.median, 0)} |`
   }).join('\n')
   const assetRows = frameworks.map(framework => {
@@ -674,11 +701,11 @@ Chromium ${browserVersion}. Lower timing and size values are better.
 
 ## Results
 
-Each timing cell is the median, with p95 in parentheses, across
-${options.samples} cache-disabled samples.
+Load, FCP, and update timing cells show the median, with p95 in parentheses,
+across ${options.samples} cache-disabled samples.
 
-| Framework | Cold load ms | Route ms/update | Filter ms/update | Long tasks/sample | DOM node delta |
-| --- | ---: | ---: | ---: | ---: | ---: |
+| Framework | Cold load ms | FCP ms | Route ms/update | Filter ms/update | Long tasks count / ms | Initial DOM nodes | DOM node delta |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${resultRows}
 
 ## Initial asset footprint
@@ -746,13 +773,13 @@ application code splitting.
   with reduced motion enabled.
 - Cold load is \`PerformanceNavigationTiming.loadEventEnd\`. Update timings are
   measured inside the page with \`performance.now()\`.
-- Full samples and environment metadata are available in the adjacent JSON
-  report.
+- Long tasks use the browser's 50 ms Long Tasks API threshold. Heap deltas are
+  measured after forced garbage collection and indicate retained memory for
+  this workload, not a proven leak.
+- Full samples, exact dependency versions, and environment metadata are
+  available in the adjacent JSON report.
 `
 
-  const versions = Object.fromEntries(
-    packageDetails.map(framework => [framework.id, framework.version]),
-  )
   const json = {
     generatedAt,
     environment: {

@@ -24,3 +24,21 @@ bundle. The production bundles are committed so the repository-wide static
 server can also open the applications at `/examples/framework-spa/react/`,
 `/examples/framework-spa/vue/`, and `/examples/framework-spa/angular/`.
 Rebuild the corresponding application after changing its source.
+
+## Performance comparison
+
+From the repository root, run the production SPA stress benchmark:
+
+```sh
+npm run benchmark:spa
+```
+
+The runner rebuilds the React, Vue, and Angular applications, serves all four
+implementations from one local server, and measures cache-disabled cold load,
+route-render churn, repeated project filtering, long tasks, DOM stability, heap
+change, and initial asset size in headless Chromium. It writes a readable report
+to `benchmark/results/spa-performance.md` and full samples to the adjacent JSON
+file.
+
+Use `npm run benchmark:spa -- --help` for shorter smoke runs, custom cycle
+counts, output paths, or `--skip-build`.

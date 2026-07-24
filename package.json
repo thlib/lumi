@@ -44,6 +44,7 @@
     "build:types": "npm run clean:types && tsc -p tsconfig.build.json",
     "lint": "npm run build:types && tsc -p jsconfig.json",
     "benchmark": "node benchmark/performance-baseline.js",
+    "benchmark:spa": "node benchmark/spa-comparison.js",
     "test": "node --test test/*.test.js",
     "test:browser": "playwright test",
     "test:package": "node scripts/test-package.js",

@@ -1,6 +1,6 @@
 // @ts-check
 
-// Static content and routing helpers for the Lumi SPA.
+// Static content and routing helpers shared by the Lumi SPA.
 /** @typedef {'overview' | 'projects' | 'activity' | 'teams'} Route */
 /** @typedef {'all' | 'active' | 'planning'} ProjectFilter */
 
@@ -65,14 +65,10 @@
  * @typedef {{
  *   route: Route,
  *   navOpen: boolean,
- *   toasts: readonly Toast[],
+ *   toasts: Toast[],
  *   selectedMemberId: string | null,
  *   filter: ProjectFilter,
- *   projects: readonly Project[],
- *   activities: readonly Activity[],
- *   members: readonly Member[],
- *   metrics: readonly Metric[],
- * }} PageData
+ * }} AppState
  */
 
 export const routeLabels = Object.freeze({
@@ -409,14 +405,15 @@ export function routeFromHash(hash) {
 }
 
 /** @param {string} hash */
-export function isKnownHash(hash) {
-  return /^#\/(overview|projects|activity|teams)(?:[/?]|$)/.test(hash)
-}
-
-/** @param {string} hash */
 export function memberFromHash(hash) {
   const match = /^#\/teams\/([a-z0-9-]+)(?:[/?]|$)/.exec(hash)
   return match?.[1] ?? null
+}
+
+export function normalizeHash() {
+  if (!/^#\/(overview|projects|activity|teams)(?:[/?]|$)/.test(window.location.hash)) {
+    window.history.replaceState(null, '', '#/overview')
+  }
 }
 
 /**

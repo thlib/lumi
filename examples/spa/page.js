@@ -77,10 +77,10 @@
 import {
   activities,
   documentTitle,
-  isKnownHash,
   memberFromHash,
   members,
   metrics,
+  normalizeHash,
   projects,
   routeFromHash,
 } from './data.js'
@@ -138,10 +138,7 @@ export function connectPage(lumiPage) {
   window.addEventListener('hashchange', handleHashChange)
 
   try {
-    if (!isKnownHash(window.location.hash)) {
-      window.history.replaceState(null, '', '#/overview')
-    }
-
+    normalizeHash()
     data = dataFromCurrentHash(data)
     render()
   } catch (error) {

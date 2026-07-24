@@ -50,9 +50,9 @@ const root = resolve(import.meta.dirname, '..')
  *   heapDeltaBytes: number | null,
  *   initialHeapBytes: number | null,
  *   initialNodes: number,
- *   longTaskCount: number,
- *   longTaskMaxMs: number,
- *   longTaskTotalMs: number,
+ *   blockingTaskCount: number,
+ *   blockingTaskMaxMs: number,
+ *   blockingTaskTotalMs: number,
  *   nodeDelta: number,
  *   routeElapsedMs: number,
  *   routeMsPerUpdate: number,
@@ -85,9 +85,9 @@ const root = resolve(import.meta.dirname, '..')
  *   heapDeltaBytes: Statistics,
  *   initialNodes: Statistics,
  *   loadMs: Statistics,
- *   longTaskCount: Statistics,
- *   longTaskMaxMs: Statistics,
- *   longTaskTotalMs: Statistics,
+ *   blockingTaskCount: Statistics,
+ *   blockingTaskMaxMs: Statistics,
+ *   blockingTaskTotalMs: Statistics,
  *   nodeDelta: Statistics,
  *   routeMsPerUpdate: Statistics,
  * }} MetricSummary
@@ -129,6 +129,8 @@ const frameworks = Object.freeze([
     ),
   },
 ])
+
+const TASK_THRESHOLD_MS = 10
 
 const contentTypes = new Map([
   ['.css', 'text/css; charset=utf-8'],
@@ -271,8 +273,15 @@ async function runSample(browser, url, options) {
   })
   const page = await context.newPage()
   const session = await context.newCDPSession(page)
+  const taskTrace = createTaskTrace(session, TASK_THRESHOLD_MS)
   await session.send('Network.enable')
   await session.send('Network.setCacheDisabled', {cacheDisabled: true})
+  await page.exposeFunction('__startBenchmarkTaskTrace', () => {
+    return taskTrace.start()
+  })
+  await page.exposeFunction('__stopBenchmarkTaskTrace', () => {
+    return taskTrace.stop()
+  })
 
   /** @type {Error[]} */
   const pageErrors = []
@@ -429,18 +438,21 @@ async function runSample(browser, url, options) {
           Performance & {memory?: {usedJSHeapSize: number}}
         } */ (performance)
         const initialHeapBytes = browserPerformance.memory?.usedJSHeapSize ?? null
-        /** @type {number[]} */
-        const longTasks = []
-        const observer = new PerformanceObserver(list => {
-          for (const entry of list.getEntries()) {
-            longTasks.push(entry.duration)
-          }
-        })
-        try {
-          observer.observe({entryTypes: ['longtask']})
-        } catch {
-          // Long Task Timing is optional; other metrics remain valid.
+        const startTaskTrace = Reflect.get(
+          globalThis,
+          '__startBenchmarkTaskTrace',
+        )
+        const stopTaskTrace = Reflect.get(
+          globalThis,
+          '__stopBenchmarkTaskTrace',
+        )
+        if (
+          typeof startTaskTrace !== 'function'
+          || typeof stopTaskTrace !== 'function'
+        ) {
+          throw new Error('Benchmark task tracing is unavailable')
         }
+        await Reflect.apply(startTaskTrace, globalThis, [])
 
         const routeStart = performance.now()
         for (let cycle = 0; cycle < routeCycles; cycle += 1) {
@@ -458,11 +470,12 @@ async function runSample(browser, url, options) {
           }
         }
         const filterElapsedMs = performance.now() - filterStart
+        const blockingTasks = /** @type {number[]} */ (
+          await Reflect.apply(stopTaskTrace, globalThis, [])
+        )
 
         await navigate('overview')
         await new Promise(resolveFrame => requestAnimationFrame(resolveFrame))
-        observer.disconnect()
-        longTasks.push(...observer.takeRecords().map(entry => entry.duration))
         globalThis.gc?.()
 
         const finalNodes = document.getElementsByTagName('*').length
@@ -485,9 +498,11 @@ async function runSample(browser, url, options) {
             : finalHeapBytes - initialHeapBytes,
           initialHeapBytes,
           initialNodes,
-          longTaskCount: longTasks.length,
-          longTaskMaxMs: longTasks.length === 0 ? 0 : Math.max(...longTasks),
-          longTaskTotalMs: longTasks.reduce(
+          blockingTaskCount: blockingTasks.length,
+          blockingTaskMaxMs: blockingTasks.length === 0
+            ? 0
+            : Math.max(...blockingTasks),
+          blockingTaskTotalMs: blockingTasks.reduce(
             (total, duration) => total + duration,
             0,
           ),
@@ -531,15 +546,12 @@ async function createReport(result, options, browserVersion) {
       : framework.id === 'angular'
         ? '@angular/core'
         : framework.id
-    const packageLock = dependencyName === null
-      ? null
-      : JSON.parse(await readFile(
-        resolve(dirname(framework.packageFile), 'package-lock.json'),
-        'utf8',
-      ))
     const installedVersion = dependencyName === null
       ? packageJson.version
-      : packageLock.packages[`node_modules/${dependencyName}`]?.version
+      : await readDependencyVersion(
+        dirname(framework.packageFile),
+        dependencyName,
+      )
     if (typeof installedVersion !== 'string') {
       throw new Error(`Could not resolve the installed ${framework.label} version`)
     }
@@ -603,14 +615,14 @@ async function createReport(result, options, browserVersion) {
       loadMs: summarize(frameworkSamples.map(
         sample => sample.startup.loadMs,
       )),
-      longTaskCount: summarize(frameworkSamples.map(
-        sample => sample.stress.longTaskCount,
+      blockingTaskCount: summarize(frameworkSamples.map(
+        sample => sample.stress.blockingTaskCount,
       )),
-      longTaskMaxMs: summarize(frameworkSamples.map(
-        sample => sample.stress.longTaskMaxMs,
+      blockingTaskMaxMs: summarize(frameworkSamples.map(
+        sample => sample.stress.blockingTaskMaxMs,
       )),
-      longTaskTotalMs: summarize(frameworkSamples.map(
-        sample => sample.stress.longTaskTotalMs,
+      blockingTaskTotalMs: summarize(frameworkSamples.map(
+        sample => sample.stress.blockingTaskTotalMs,
       )),
       nodeDelta: summarize(frameworkSamples.map(
         sample => sample.stress.nodeDelta,
@@ -653,8 +665,8 @@ async function createReport(result, options, browserVersion) {
       + `| ${formatTiming(values.firstContentfulPaintMs)} `
       + `| ${formatTiming(values.routeMsPerUpdate, 3)} `
       + `| ${formatTiming(values.filterMsPerUpdate, 3)} `
-      + `| ${formatNumber(values.longTaskCount.median, 0)} / `
-      + `${formatNumber(values.longTaskTotalMs.median)} `
+      + `| ${formatNumber(values.blockingTaskCount.median, 0)} / `
+      + `${formatNumber(values.blockingTaskTotalMs.median)} `
       + `| ${formatNumber(values.initialNodes.median, 0)} `
       + `| ${formatNumber(values.nodeDelta.median, 0)} |`
   }).join('\n')
@@ -704,7 +716,7 @@ Chromium ${browserVersion}. Lower timing and size values are better.
 Load, FCP, and update timing cells show the median, with p95 in parentheses,
 across ${options.samples} cache-disabled samples.
 
-| Framework | Cold load ms | FCP ms | Route ms/update | Filter ms/update | Tasks >50 ms count / total ms | Initial DOM nodes | DOM node delta |
+| Framework | Cold load ms | FCP ms | Route ms/update | Filter ms/update | Tasks >${TASK_THRESHOLD_MS} ms count / total ms | Initial DOM nodes | DOM node delta |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${resultRows}
 
@@ -773,10 +785,11 @@ application code splitting.
   with reduced motion enabled.
 - Cold load is \`PerformanceNavigationTiming.loadEventEnd\`. Update timings are
   measured inside the page with \`performance.now()\`.
-- Tasks >50 ms use the browser's Long Tasks API. Zero means that no individual
-  main-thread task crossed the 50 ms threshold, not that the run was incomplete.
-  Heap deltas are measured after forced garbage collection and indicate retained
-  memory for this workload, not a proven leak.
+- Tasks >${TASK_THRESHOLD_MS} ms are complete Chromium renderer \`RunTask\`
+  intervals captured through the DevTools timeline. Zero means that no
+  individual main-thread task crossed the threshold, not that the run was
+  incomplete. Heap deltas are measured after forced garbage collection and
+  indicate retained memory for this workload, not a proven leak.
 - Full samples, exact dependency versions, and environment metadata are
   available in the adjacent JSON report.
 `
@@ -795,6 +808,7 @@ application code splitting.
       routeCycles: options.routeCycles,
       routeUpdatesPerSample: options.routeCycles * 4,
       samples: options.samples,
+      taskThresholdMs: TASK_THRESHOLD_MS,
     },
     versions,
     assets,
@@ -846,6 +860,140 @@ function summarize(values) {
   }
 }
 
+/**
+ * Reads pnpm's lockfile when present, with package-lock.json compatibility for
+ * an existing application bundle that has not been migrated yet.
+ *
+ * @param {string} directory
+ * @param {string} dependencyName
+ */
+async function readDependencyVersion(directory, dependencyName) {
+  try {
+    const lockfile = await readFile(
+      resolve(directory, 'pnpm-lock.yaml'),
+      'utf8',
+    )
+    return readPnpmDependencyVersion(lockfile, dependencyName)
+  } catch (error) {
+    if (
+      typeof error !== 'object'
+      || error === null
+      || !('code' in error)
+      || error.code !== 'ENOENT'
+    ) {
+      throw error
+    }
+  }
+
+  const packageLock = JSON.parse(await readFile(
+    resolve(directory, 'package-lock.json'),
+    'utf8',
+  ))
+  return packageLock.packages[`node_modules/${dependencyName}`]?.version
+}
+
+/**
+ * @param {string} lockfile
+ * @param {string} dependencyName
+ */
+function readPnpmDependencyVersion(lockfile, dependencyName) {
+  const dependencyPattern = dependencyName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = lockfile.match(new RegExp(
+    `^ {6}['"]?${dependencyPattern}['"]?:\\n`
+      + `(?:^ {8}.*\\n)*?^ {8}version: ['"]?([^\\s'"(]+)`,
+    'm',
+  ))
+  return match?.[1]
+}
+
+/**
+ * Captures complete Chromium renderer tasks, including intervals below the
+ * fixed 50 ms threshold exposed by the browser's Long Tasks API.
+ *
+ * @param {import('@playwright/test').CDPSession} session
+ * @param {number} thresholdMs
+ */
+function createTaskTrace(session, thresholdMs) {
+  let isActive = false
+
+  return {
+    async start() {
+      if (isActive) {
+        throw new Error('Benchmark task tracing is already active')
+      }
+
+      await session.send('Tracing.start', {
+        categories: 'devtools.timeline,toplevel',
+        transferMode: 'ReturnAsStream',
+      })
+      isActive = true
+    },
+
+    async stop() {
+      if (!isActive) {
+        throw new Error('Benchmark task tracing is not active')
+      }
+
+      const completed = new Promise(resolveComplete => {
+        session.once('Tracing.tracingComplete', resolveComplete)
+      })
+      await session.send('Tracing.end')
+      const details = /** @type {{stream?: string}} */ (await completed)
+      const stream = details.stream
+
+      if (stream === undefined) {
+        throw new Error('Chromium task trace did not expose a data stream')
+      }
+
+      let traceJson = ''
+      try {
+        while (true) {
+          const chunk = await session.send('IO.read', {handle: stream})
+          traceJson += chunk.data
+
+          if (chunk.eof === true) {
+            break
+          }
+        }
+      } finally {
+        await session.send('IO.close', {handle: stream})
+        isActive = false
+      }
+
+      const trace = /** @type {{traceEvents?: Array<{
+       *   args?: {name?: string},
+       *   dur?: number,
+       *   name?: string,
+       *   ph?: string,
+       *   pid?: number,
+       *   tid?: number,
+       * }>}} */ (JSON.parse(traceJson))
+      const thresholdMicroseconds = thresholdMs * 1_000
+      const events = trace.traceEvents ?? []
+      const rendererMainThreads = new Set(events
+        .filter(event => {
+          return event.name === 'thread_name'
+            && event.ph === 'M'
+            && event.args?.name === 'CrRendererMain'
+        })
+        .map(event => `${event.pid}:${event.tid}`))
+
+      return events
+        .filter(event => {
+          return (
+            event.name === 'RunTask'
+            || event.name === 'ThreadControllerImpl::RunTask'
+          )
+            && event.ph === 'X'
+            && typeof event.dur === 'number'
+            && event.dur >= thresholdMicroseconds
+            && rendererMainThreads.has(`${event.pid}:${event.tid}`)
+        })
+        .map(event => /** @type {number} */ (event.dur) / 1_000)
+    },
+  }
+}
+
 function buildApplications() {
   for (const framework of frameworks) {
     if (framework.buildDirectory === null) {
@@ -853,8 +1001,8 @@ function buildApplications() {
     }
 
     console.log(`Building ${framework.label} production application`)
-    const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-    const build = spawnSync(npm, ['run', 'build'], {
+    const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+    const build = spawnSync(pnpm, ['run', 'build'], {
       cwd: framework.buildDirectory,
       encoding: 'utf8',
       stdio: 'inherit',
@@ -995,7 +1143,7 @@ function parsePositiveInteger(name, value) {
 }
 
 function printHelp() {
-  console.log(`Usage: npm run benchmark:spa -- [options]
+  console.log(`Usage: pnpm run benchmark:spa -- [options]
 
 Options:
   --samples=N          Cache-disabled samples per framework (default: 5)

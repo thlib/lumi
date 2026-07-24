@@ -47,4 +47,4 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium firefox
 
       - name: Run browser contracts
-        run: pnpm run test:browser -- --project=chromium --project=firefox
+        run: pnpm exec playwright test --project=chromium --project=firefox

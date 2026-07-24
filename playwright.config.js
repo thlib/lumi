@@ -25,15 +25,6 @@ export default defineConfig({
       },
     },
     {
-      name: 'opera',
-      use: {
-        browserName: 'chromium',
-        launchOptions: {
-          executablePath: process.env.OPERA_EXECUTABLE_PATH ?? '/usr/bin/opera',
-        },
-      },
-    },
-    {
       name: 'edge',
       use: {
         browserName: 'chromium',

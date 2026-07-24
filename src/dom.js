@@ -41,10 +41,36 @@ export function findElement(root, selector) {
  * @returns {Element[]}
  */
 export function queryElements(root, selector) {
-  /** @type {Element[]} */
-  const elements = []
-  queryElementTree(root, selector, elements)
-  return elements
+  return createElementQuery(root).find(selector)
+}
+
+/**
+ * Reuses one shadow-topology check while resolving several selectors against
+ * the same read-only component view.
+ *
+ * @param {Element} root
+ * @returns {{
+ *   find: (selector: string) => Element[],
+ *   invalidate: () => void,
+ * }}
+ */
+export function createElementQuery(root) {
+  /** @type {boolean | null} */
+  let hasOpenShadowRoot = null
+
+  return {
+    find(selector) {
+      hasOpenShadowRoot ??= containsOpenShadowRoot(root)
+      /** @type {Element[]} */
+      const elements = []
+      queryElementTree(root, selector, elements, hasOpenShadowRoot)
+      return elements
+    },
+
+    invalidate() {
+      hasOpenShadowRoot = null
+    },
+  }
 }
 
 /**
@@ -55,24 +81,62 @@ export function queryElements(root, selector) {
  * @param {Element | ShadowRoot} scope
  * @param {string} selector
  * @param {Element[]} matches
+ * @param {boolean} [hasOpenShadowRoot]
  */
-function queryElementTree(scope, selector, matches) {
-  const matchesInScope = new Set(scope.querySelectorAll(selector))
+function queryElementTree(scope, selector, matches, hasOpenShadowRoot) {
+  const matchesInScope = scope.querySelectorAll(selector)
+
+  if (!(hasOpenShadowRoot ?? containsOpenShadowRoot(scope))) {
+    if (
+      scope.nodeType === 1
+      && /** @type {Element} */ (scope).matches(selector)
+    ) {
+      matches.push(/** @type {Element} */ (scope))
+    }
+
+    matches.push(...matchesInScope)
+    return
+  }
+
+  const matchSet = new Set(matchesInScope)
 
   if (scope.nodeType === 1) {
     const root = /** @type {Element} */ (scope)
 
     if (root.matches(selector)) {
-      matchesInScope.add(root)
+      matchSet.add(root)
     }
 
-    visitScopedElement(root, selector, matchesInScope, matches)
+    visitScopedElement(root, selector, matchSet, matches)
     return
   }
 
   for (const child of scope.children) {
-    visitScopedElement(child, selector, matchesInScope, matches)
+    visitScopedElement(child, selector, matchSet, matches)
   }
+}
+
+/**
+ * Uses native tree traversal for the common light-DOM case. The full merge
+ * walk is needed only when an open shadow root participates in tree order.
+ *
+ * @param {Element | ShadowRoot} scope
+ */
+function containsOpenShadowRoot(scope) {
+  if (
+    scope.nodeType === 1
+    && /** @type {Element} */ (scope).shadowRoot !== null
+  ) {
+    return true
+  }
+
+  for (const element of scope.querySelectorAll('*')) {
+    if (element.shadowRoot !== null) {
+      return true
+    }
+  }
+
+  return false
 }
 
 /**

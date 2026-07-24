@@ -1,6 +1,6 @@
 # SPA performance comparison
 
-Generated 2026-07-24T19:22:26.090Z on linux 6.17.0-1028-oem, Node v22.12.0,
+Generated 2026-07-24T19:42:47.559Z on linux 6.6.87.2-microsoft-standard-WSL2, Node v24.14.1,
 Chromium 149.0.7827.55. Lower timing and size values are better.
 
 ## Results
@@ -8,12 +8,12 @@ Chromium 149.0.7827.55. Lower timing and size values are better.
 Load, FCP, and update timing cells show the median, with p95 in parentheses,
 across 5 cache-disabled samples.
 
-| Framework | Cold load ms | FCP ms | Route ms/update | Filter ms/update | Long tasks count / ms | Initial DOM nodes | DOM node delta |
+| Framework | Cold load ms | FCP ms | Route ms/update | Filter ms/update | Tasks >50 ms count / total ms | Initial DOM nodes | DOM node delta |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Lumi 0.1.0 | 25.1 (27.6) | 60.0 (68.0) | 1.361 (1.460) | 0.955 (1.002) | 1 / 287.0 | 566 | 0 |
-| React 19.2.8 | 7.8 (8.1) | 64.0 (68.0) | 0.535 (0.559) | 0.070 (0.093) | 0 / 0.0 | 192 | 0 |
-| Vue 3.5.40 | 7.5 (7.9) | 56.0 (60.0) | 0.440 (0.486) | 0.043 (0.050) | 0 / 0.0 | 192 | 0 |
-| Angular 21.2.18 | 21.3 (22.6) | 52.0 (52.0) | 0.558 (0.626) | 1.723 (1.759) | 0 / 0.0 | 194 | 0 |
+| Lumi 0.1.0 | 30.0 (46.5) | 80.0 (104.0) | 0.686 (0.776) | 0.225 (0.239) | 1 / 68.0 | 566 | 0 |
+| React 19.2.8 | 10.4 (11.0) | 76.0 (80.0) | 0.697 (0.702) | 0.112 (0.120) | 0 / 0.0 | 192 | 0 |
+| Vue 3.5.40 | 10.3 (12.2) | 72.0 (84.0) | 0.600 (0.638) | 0.064 (0.069) | 0 / 0.0 | 192 | 0 |
+| Angular 21.2.18 | 21.9 (24.9) | 72.0 (80.0) | 0.688 (0.691) | 1.629 (1.654) | 0 / 0.0 | 194 | 0 |
 
 ## Initial asset footprint
 
@@ -23,7 +23,7 @@ compressed transfer, not the benchmark server's uncompressed transfer.
 
 | Framework | Files | Raw | Gzip |
 | --- | ---: | ---: | ---: |
-| Lumi | 17 | 179.9 KiB | 42.6 KiB |
+| Lumi | 17 | 182.6 KiB | 43.3 KiB |
 | React | 4 | 233.0 KiB | 72.4 KiB |
 | Vue | 4 | 104.1 KiB | 38.3 KiB |
 | Angular | 3 | 164.6 KiB | 54.3 KiB |
@@ -35,9 +35,9 @@ Values below 1.00× are lower than Lumi; values above 1.00× are higher.
 | Framework | Cold load | Route update | Filter update | Gzip assets |
 | --- | ---: | ---: | ---: | ---: |
 | Lumi | 1.00× | 1.00× | 1.00× | 1.00× |
-| React | 0.31× | 0.39× | 0.07× | 1.70× |
-| Vue | 0.30× | 0.32× | 0.05× | 0.90× |
-| Angular | 0.85× | 0.41× | 1.80× | 1.27× |
+| React | 0.35× | 1.02× | 0.50× | 1.67× |
+| Vue | 0.34× | 0.87× | 0.29× | 0.88× |
+| Angular | 0.73× | 1.00× | 7.24× | 1.25× |
 
 ## Stress validation
 
@@ -47,19 +47,19 @@ same overview state after warmup and after the complete stress run.
 
 | Framework | Route updates | Filter updates | DOM delta range | Median heap delta |
 | --- | ---: | ---: | ---: | ---: |
-| Lumi | 1000 | 1500 | 0 to 0 | +184.8 KiB |
-| React | 1000 | 1500 | 0 to 0 | +370.6 KiB |
+| Lumi | 1000 | 1500 | 0 to 0 | +185.6 KiB |
+| React | 1000 | 1500 | 0 to 0 | +379.5 KiB |
 | Vue | 1000 | 1500 | 0 to 0 | +299.1 KiB |
-| Angular | 1000 | 1500 | 0 to 0 | +554.0 KiB |
+| Angular | 1000 | 1500 | 0 to 0 | +539.6 KiB |
 
 ## Reading the result
 
 - Vue recorded the lowest median cold-load time
-  (7.5 ms).
+  (10.3 ms).
 - Vue recorded the lowest median route-update time
-  (0.440 ms/update).
+  (0.600 ms/update).
 - Vue recorded the lowest median project-filter time
-  (0.043 ms/update).
+  (0.064 ms/update).
 - Vue requested the smallest initial compressed asset set
   (38.3 KiB).
 
@@ -83,8 +83,9 @@ application code splitting.
   with reduced motion enabled.
 - Cold load is `PerformanceNavigationTiming.loadEventEnd`. Update timings are
   measured inside the page with `performance.now()`.
-- Long tasks use the browser's 50 ms Long Tasks API threshold. Heap deltas are
-  measured after forced garbage collection and indicate retained memory for
-  this workload, not a proven leak.
+- Tasks >50 ms use the browser's Long Tasks API. Zero means that no individual
+  main-thread task crossed the 50 ms threshold, not that the run was incomplete.
+  Heap deltas are measured after forced garbage collection and indicate retained
+  memory for this workload, not a proven leak.
 - Full samples, exact dependency versions, and environment metadata are
   available in the adjacent JSON report.

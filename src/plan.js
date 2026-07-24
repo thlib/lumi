@@ -8,6 +8,7 @@
  */
 
 import {
+  createElementQuery,
   elementPath,
   importElementTree,
   queryElements,
@@ -32,6 +33,10 @@ class CardinalityRequired extends Error {
 
 /**
  * @typedef {string | number | boolean} TextValue
+ */
+
+/**
+ * @typedef {ReturnType<typeof createElementQuery>} ElementQuery
  */
 
 /**
@@ -306,7 +311,13 @@ function connectScalarDomBindings(
 
   return {
     prepare(data) {
-      const staging = analyzeStaging(root, runtimes, ownedSubtrees)
+      const liveQuery = createElementQuery(root)
+      const staging = analyzeStaging(
+        root,
+        runtimes,
+        ownedSubtrees,
+        liveQuery,
+      )
 
       if (!staging.required) {
         return prepareDirectUpdate(
@@ -316,6 +327,7 @@ function connectScalarDomBindings(
           staging.elementsByRuntime,
           data,
           trustedTypes,
+          liveQuery,
         )
       }
 
@@ -444,7 +456,7 @@ function connectScalarDomBindings(
         }
       }
 
-      return preparedDomUpdate(root, operations, ownedSubtrees)
+      return preparedDomUpdate(root, operations, ownedSubtrees, liveQuery)
     },
 
     destroy: noOperation,
@@ -462,6 +474,7 @@ function connectScalarDomBindings(
  * @param {ReadonlyArray<ReadonlyArray<Element>>} elementsByRuntime
  * @param {Data} data
  * @param {TrustedTypesFactory | null} trustedTypes
+ * @param {ElementQuery} liveQuery
  * @returns {import('./types.js').PreparedUpdate}
  */
 function prepareDirectUpdate(
@@ -471,6 +484,7 @@ function prepareDirectUpdate(
   elementsByRuntime,
   data,
   trustedTypes,
+  liveQuery,
 ) {
   /** @type {Array<DomOperation<Data>>} */
   const operations = []
@@ -517,7 +531,7 @@ function prepareDirectUpdate(
     }
   }
 
-  return preparedDomUpdate(root, operations, ownedSubtrees)
+  return preparedDomUpdate(root, operations, ownedSubtrees, liveQuery)
 }
 
 /**
@@ -528,17 +542,19 @@ function prepareDirectUpdate(
  * @param {Element} root
  * @param {ReadonlyArray<DomBindingRuntime<Data>>} runtimes
  * @param {ReadonlyArray<Element>} ownedSubtrees
+ * @param {ElementQuery} liveQuery
  * @returns {{
  *   required: boolean,
  *   elementsByRuntime: ReadonlyArray<ReadonlyArray<Element>>
  * }}
  */
-function analyzeStaging(root, runtimes, ownedSubtrees) {
+function analyzeStaging(root, runtimes, ownedSubtrees, liveQuery) {
   const elementsByRuntime = runtimes.map(runtime => {
     return queryOwnedElements(
       root,
       runtime.descriptor.selector,
       ownedSubtrees,
+      liveQuery,
     )
   })
   let hasMatchedStructure = false
@@ -631,11 +647,15 @@ function validateDirectStructuralTarget(
  * @param {Element} root
  * @param {ReadonlyArray<DomOperation<Data>>} operations
  * @param {ReadonlyArray<Element>} ownedSubtrees
+ * @param {ElementQuery} liveQuery
  * @returns {import('./types.js').PreparedUpdate}
  */
-function preparedDomUpdate(root, operations, ownedSubtrees) {
+function preparedDomUpdate(root, operations, ownedSubtrees, liveQuery) {
   return {
     commit() {
+      // Custom binding commits run between preparation and this DOM commit.
+      // Refresh once in case one changed the component's shadow topology.
+      liveQuery.invalidate()
       /** @type {Array<ParentCacheRecord<Data>>} */
       const parentCacheRecords = []
 
@@ -644,6 +664,7 @@ function preparedDomUpdate(root, operations, ownedSubtrees) {
           root,
           operation.runtime.descriptor.selector,
           ownedSubtrees,
+          liveQuery,
         )
 
         if (operation.type === 'single') {
@@ -661,11 +682,14 @@ function preparedDomUpdate(root, operations, ownedSubtrees) {
             element,
             operation.value,
           )
-          applyLiveValue(
+          const changed = applyLiveValue(
             operation.runtime,
             element,
             operation.value,
           )
+          if (changed) {
+            liveQuery.invalidate()
+          }
           continue
         }
 
@@ -685,11 +709,14 @@ function preparedDomUpdate(root, operations, ownedSubtrees) {
               element,
               operation.values[index],
             )
-            applyLiveValue(
+            const changed = applyLiveValue(
               operation.runtime,
               element,
               operation.values[index],
             )
+            if (changed) {
+              liveQuery.invalidate()
+            }
           }
         }
       }
@@ -1123,10 +1150,11 @@ function applyPlannedValue(
  * @param {DomBindingRuntime<Data>} runtime
  * @param {Element} element
  * @param {unknown} value
+ * @returns {boolean} Whether the live DOM was changed.
  */
 function applyLiveValue(runtime, element, value) {
   if (isNoValue(value)) {
-    return
+    return false
   }
 
   const descriptor = runtime.descriptor
@@ -1135,22 +1163,25 @@ function applyLiveValue(runtime, element, value) {
     case 'bind':
       if (element.textContent !== value) {
         element.textContent = /** @type {string} */ (value)
+        return true
       }
-      return
+      return false
     case 'property': {
       const name = requiredName(descriptor)
       const current = Reflect.get(element, name)
       const projectedValue = projectedCacheValue(runtime, value)
       const previous = runtime.values.get(element)
 
-      if (
+      const shouldWrite = (
         !Object.is(current, projectedValue)
         && !(
           previous !== undefined
           && Object.is(previous.projectedValue, projectedValue)
           && Object.is(previous.domValue, current)
         )
-      ) {
+      )
+
+      if (shouldWrite) {
         setProperty(element, name, value)
       }
 
@@ -1158,24 +1189,28 @@ function applyLiveValue(runtime, element, value) {
         projectedValue,
         domValue: Reflect.get(element, name),
       })
-      return
+      return shouldWrite
     }
     case 'attribute':
-      setAttributeValue(element, requiredName(descriptor), value)
-      return
-    case 'class':
-      element.classList.toggle(
-        requiredName(descriptor),
-        /** @type {boolean} */ (value),
-      )
-      return
+      return setAttributeValue(element, requiredName(descriptor), value)
+    case 'class': {
+      const name = requiredName(descriptor)
+      const next = /** @type {boolean} */ (value)
+
+      if (element.classList.contains(name) === next) {
+        return false
+      }
+
+      element.classList.toggle(name, next)
+      return true
+    }
     case 'style': {
       const styledElement = asStyledElement(element)
       const name = requiredName(descriptor)
       const current = styledElement.style.getPropertyValue(name)
 
       if (current === value) {
-        return
+        return false
       }
 
       if (value === '') {
@@ -1183,6 +1218,7 @@ function applyLiveValue(runtime, element, value) {
       } else {
         styledElement.style.setProperty(name, /** @type {string} */ (value))
       }
+      return true
     }
   }
 }
@@ -1204,6 +1240,7 @@ function setProperty(element, name, value) {
  * @param {Element} element
  * @param {string} name
  * @param {unknown} value
+ * @returns {boolean} Whether the attribute was changed.
  */
 function setAttributeValue(element, name, value) {
   const next = /** @type {string | false} */ (value)
@@ -1212,7 +1249,7 @@ function setAttributeValue(element, name, value) {
     : false
 
   if (current === next) {
-    return
+    return false
   }
 
   if (next === false) {
@@ -1220,6 +1257,8 @@ function setAttributeValue(element, name, value) {
   } else {
     element.setAttribute(name, next)
   }
+
+  return true
 }
 
 /**
@@ -1317,10 +1356,15 @@ function pairElementChildren(
  * @param {Element} root
  * @param {string} selector
  * @param {ReadonlyArray<Element>} ownedSubtrees
+ * @param {ElementQuery} [query]
  * @returns {Element[]}
  */
-function queryOwnedElements(root, selector, ownedSubtrees) {
-  return queryElements(root, selector).filter(element => {
+function queryOwnedElements(root, selector, ownedSubtrees, query) {
+  const elements = query === undefined
+    ? queryElements(root, selector)
+    : query.find(selector)
+
+  return elements.filter(element => {
     return !ownedSubtrees.some(owned => {
       return owned !== element
         && shadowIncludingContains(owned, element)

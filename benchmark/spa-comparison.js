@@ -704,7 +704,7 @@ Chromium ${browserVersion}. Lower timing and size values are better.
 Load, FCP, and update timing cells show the median, with p95 in parentheses,
 across ${options.samples} cache-disabled samples.
 
-| Framework | Cold load ms | FCP ms | Route ms/update | Filter ms/update | Long tasks count / ms | Initial DOM nodes | DOM node delta |
+| Framework | Cold load ms | FCP ms | Route ms/update | Filter ms/update | Tasks >50 ms count / total ms | Initial DOM nodes | DOM node delta |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${resultRows}
 
@@ -773,9 +773,10 @@ application code splitting.
   with reduced motion enabled.
 - Cold load is \`PerformanceNavigationTiming.loadEventEnd\`. Update timings are
   measured inside the page with \`performance.now()\`.
-- Long tasks use the browser's 50 ms Long Tasks API threshold. Heap deltas are
-  measured after forced garbage collection and indicate retained memory for
-  this workload, not a proven leak.
+- Tasks >50 ms use the browser's Long Tasks API. Zero means that no individual
+  main-thread task crossed the 50 ms threshold, not that the run was incomplete.
+  Heap deltas are measured after forced garbage collection and indicate retained
+  memory for this workload, not a proven leak.
 - Full samples, exact dependency versions, and environment metadata are
   available in the adjacent JSON report.
 `

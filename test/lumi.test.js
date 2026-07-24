@@ -442,6 +442,99 @@ test('mounts child components into open shadow roots', () => {
   )
 })
 
+test('discovers an open shadow root attached between updates', () => {
+  const { document } = createDocument()
+  const mounted = component({
+    template: createTemplate(
+      document,
+      '<section><div class="host"></div></section>',
+    ),
+    bindings: [bind('.value', data => data.value)],
+  }).mount(document.body)
+
+  mounted.update({ value: 'Before shadow' })
+
+  const host = /** @type {HTMLElement} */ (
+    mounted.root.querySelector('.host')
+  )
+  const shadow = host.attachShadow({ mode: 'open' })
+  const output = document.createElement('output')
+  output.className = 'value'
+  shadow.append(output)
+
+  mounted.update({ value: 'After shadow' })
+
+  assert.equal(output.textContent, 'After shadow')
+})
+
+test('rechecks shadow topology after a live setter changes it', () => {
+  const { document, window } = createDocument()
+
+  class ShadowMaker extends window.HTMLElement {
+    /** @param {boolean} active */
+    set active(active) {
+      if (active && this.shadowRoot === null) {
+        const shadow = this.attachShadow({ mode: 'open' })
+        shadow.innerHTML = '<output class="value">Created</output>'
+      }
+    }
+  }
+
+  window.customElements.define('shadow-maker', ShadowMaker)
+  const mounted = component({
+    template: createTemplate(document, `
+      <section>
+        <shadow-maker></shadow-maker>
+        <output class="value">Default</output>
+      </section>
+    `),
+    bindings: [
+      prop('shadow-maker', () => true, 'active'),
+      bind('.value', () => 'Updated'),
+    ],
+  }).mount(document.body)
+
+  assert.throws(
+    () => mounted.update({}),
+    /DOM changed while committing selector "\.value"/,
+  )
+})
+
+test('checks light DOM shadow topology once per update phase', () => {
+  const { document } = createDocument()
+  const mounted = component({
+    template: createTemplate(document, `
+      <section>
+        <output class="first">Default</output>
+        <output class="second">Default</output>
+      </section>
+    `),
+    bindings: [
+      bind('.first', data => data.first),
+      bind('.second', data => data.second),
+    ],
+  }).mount(document.body)
+  const nativeQuery = mounted.root.querySelectorAll
+  let topologyChecks = 0
+
+  /** @param {string} selector */
+  mounted.root.querySelectorAll = function querySelectorAll(selector) {
+    if (selector === '*') {
+      topologyChecks += 1
+    }
+
+    return nativeQuery.call(this, selector)
+  }
+
+  mounted.update({ first: 'First', second: 'Second' })
+  topologyChecks = 0
+  mounted.update({ first: 'First', second: 'Second' })
+
+  assert.equal(topologyChecks, 2)
+  assert.equal(mounted.root.querySelector('.first')?.textContent, 'First')
+  assert.equal(mounted.root.querySelector('.second')?.textContent, 'Second')
+})
+
 test('passes the planned matching element to scalar projections', () => {
   const { document } = createDocument()
   const template = createTemplate(

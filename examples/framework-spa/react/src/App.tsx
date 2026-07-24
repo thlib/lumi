@@ -49,7 +49,9 @@ function App() {
 
   return (
     <div className={`app-shell${navOpen ? ' nav-open' : ''}`}>
-      <Header navOpen={navOpen} toggleNav={() => setNavOpen(open => !open)} />
+      <div className="topbar-slot">
+        <Header navOpen={navOpen} toggleNav={() => setNavOpen(open => !open)} />
+      </div>
       <aside className="sidebar">
         <Navigation
           route={route}

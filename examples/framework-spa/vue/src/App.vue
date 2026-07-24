@@ -92,20 +92,22 @@ onBeforeUnmount(() => {
 
 <template>
   <div :class="['app-shell', {'nav-open': navOpen}]">
-    <header class="topbar">
-      <div class="topbar__start">
-        <button class="icon-button menu-button" type="button" aria-label="Open navigation" aria-controls="primary-navigation" :aria-expanded="navOpen" @click="navOpen = !navOpen">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
-        </button>
-        <a class="brand" href="#/overview" aria-label="Luminate overview">
-          <svg class="brand__mark" viewBox="0 0 36 36" aria-hidden="true"><path d="M18 3l3.6 11.4L33 18l-11.4 3.6L18 33l-3.6-11.4L3 18l11.4-3.6L18 3Z" /><circle cx="18" cy="18" r="3.8" /></svg>
-          <span>luminate</span>
-        </a>
-        <span class="topbar__divider" aria-hidden="true" />
-        <div class="workspace-switcher"><span class="workspace-avatar">N</span><span>Luminate</span></div>
-      </div>
-      <div class="topbar__end"><a class="user-menu" href="#/teams/freddy-fraggin"><span class="user-avatar">FF</span><span class="user-name">Freddy Fraggin</span></a></div>
-    </header>
+    <div class="topbar-slot">
+      <header class="topbar">
+        <div class="topbar__start">
+          <button class="icon-button menu-button" type="button" aria-label="Open navigation" aria-controls="primary-navigation" :aria-expanded="navOpen" @click="navOpen = !navOpen">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+          </button>
+          <a class="brand" href="#/overview" aria-label="Luminate overview">
+            <svg class="brand__mark" viewBox="0 0 36 36" aria-hidden="true"><path d="M18 3l3.6 11.4L33 18l-11.4 3.6L18 33l-3.6-11.4L3 18l11.4-3.6L18 3Z" /><circle cx="18" cy="18" r="3.8" /></svg>
+            <span>luminate</span>
+          </a>
+          <span class="topbar__divider" aria-hidden="true" />
+          <div class="workspace-switcher"><span class="workspace-avatar">N</span><span>Luminate</span></div>
+        </div>
+        <div class="topbar__end"><a class="user-menu" href="#/teams/freddy-fraggin"><span class="user-avatar">FF</span><span class="user-name">Freddy Fraggin</span></a></div>
+      </header>
+    </div>
 
     <aside class="sidebar">
       <nav class="navigation" id="primary-navigation" aria-label="Primary navigation">

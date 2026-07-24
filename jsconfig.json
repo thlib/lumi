@@ -23,5 +23,8 @@
     "src/**/*.js",
     "test/**/*.js",
     "type-test/**/*"
+  ],
+  "exclude": [
+    "examples/framework-spa/**/dist/**"
   ]
 }

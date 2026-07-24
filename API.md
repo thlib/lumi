@@ -231,7 +231,7 @@ the corresponding native element type. Complex selectors safely fall back to
 | Binding | Projection result | DOM effect |
 | --- | --- | --- |
 | `bind(selector, project)` | text value, nested arrays, or nullish | Assigns text, repeats the matched element positionally, or does nothing for nullish |
-| `prop(selector, project, name)` | any non-nullish value, or nullish | Assigns the native property with `Reflect.set`, or does nothing for nullish |
+| `prop(selector, project, name)` | any non-nullish value, TrustedHTML for `innerHTML`/`outerHTML`, or nullish | Assigns the native property with `Reflect.set`, or does nothing for nullish |
 | `attr(selector, name, project)` | string, number, boolean, or nullish | Removes on `false`, creates an empty attribute on `true`, sets text, or does nothing for nullish |
 | `classToggle(selector, name, project)` | boolean or nullish | Toggles only the named class, or does nothing for nullish |
 | `style(selector, name, project)` | string or nullish | Sets one inline property, removes it for an empty string, or does nothing for nullish |
@@ -244,12 +244,12 @@ binding, `undefined` and `null` perform no DOM operation and leave the
 corresponding state unchanged. Other invalid values throw a `TypeError` before
 the update makes any DOM changes.
 
-`prop` intentionally does not impose a generic value restriction. Native and
-custom properties may legitimately accept objects and arrays, and the
-property's setter remains responsible for accepting or coercing any
-non-nullish value. Nullish values retain the existing property as described
-above. Applications that require a narrower property contract should validate
-it in the projection.
+Except for HTML injection sinks, `prop` intentionally does not impose a
+generic value restriction. Native and custom properties may legitimately
+accept objects and arrays, and the property's setter remains responsible for
+accepting or coercing any non-nullish value. Nullish values retain the existing
+property as described above. Applications that require a narrower property
+contract should validate it in the projection.
 
 Bindings do not replace an element's complete class or style attribute. This
 allows HTML, CSS, other bindings, and explicitly separate code to own other
@@ -259,11 +259,30 @@ Generic property and attribute bindings reject native event handler names such
 as `onclick`. Attach behavior with `event()` or the browser's
 `addEventListener()`. They also reject `srcdoc`.
 
-Other native properties, including `innerHTML` and `outerHTML`, remain
-available through `prop()`. Applications must establish trust or sanitize
-untrusted markup before assigning `innerHTML`. Replacing the mounted component
-root itself through `outerHTML` is rejected because it would invalidate the
-mounted component boundary.
+`innerHTML` and `outerHTML` remain available through `prop()`, but their
+projections must return a genuine `TrustedHTML` object. Lumi authenticates the
+value with `trustedTypes.isHTML()` from the mounted document's realm during
+preparation and passes the same object to the native property setter. Ordinary
+strings and lookalike objects are rejected before any live DOM write. If that
+realm does not expose the Trusted Types API, these property bindings fail
+closed.
+
+The application owns the policy and any required sanitization:
+
+```js
+const markupPolicy = trustedTypes.createPolicy('application-markup', {
+  createHTML: value => sanitizeMarkup(value),
+})
+
+prop(
+  '.preview',
+  data => markupPolicy.createHTML(data.markup),
+  'innerHTML',
+)
+```
+
+Replacing the mounted component root itself through `outerHTML` is still
+rejected because it would invalidate the mounted component boundary.
 
 URL-valued properties and attributes such as `href`, `src`, and `action` remain
 ordinary strings. Safe sanitization requires knowledge of the application's
@@ -483,6 +502,8 @@ An error is thrown when:
 - An update is recursive or targets an unmounted or faulted component.
 - A DOM property cannot be assigned.
 - A generic binding targets an event handler or `srcdoc`.
+- An `innerHTML` or `outerHTML` projection is not genuine `TrustedHTML`, or
+  the mounted document cannot authenticate it.
 
 If application projection code throws, Lumi rethrows an error that identifies
 the binding kind, selector, and one-based matched position. The original

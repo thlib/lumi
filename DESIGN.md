@@ -624,12 +624,13 @@ contains characters that resemble markup or placeholders.
 
 Native event handler properties and attributes are rejected because event
 handling remains separate. `srcdoc` remains rejected. Otherwise `prop()`
-preserves the native property surface, including `innerHTML` and `outerHTML`. The
-application must supply already trusted or sanitized markup before assigning
-`innerHTML`. A `data-html` name has no meaning unless application code injects
-that convention. URL trust remains an application boundary because a correct
-policy depends on whether a URL is navigation, media, or an executable
-resource.
+preserves the native property surface. `innerHTML` and `outerHTML` require a
+genuine `TrustedHTML` value authenticated in the mounted document's realm;
+strings and lookalike objects fail during preparation. The application owns
+the Trusted Types policy and any sanitization it performs. A `data-html` name
+has no meaning unless application code injects that convention. URL trust
+remains an application boundary because a correct policy depends on whether a
+URL is navigation, media, or an executable resource.
 
 ## No imposed template language
 
@@ -785,7 +786,7 @@ These require prototypes and measurements:
 - Browser support targets and the features worth shimming.
 - Optional batching details within the synchronous commit phase.
 - Style-isolation options.
-- Trusted Types and sanitization integration for `innerHTML` property bindings.
+- Sanitization policy recommendations beyond the TrustedHTML boundary.
 - Development diagnostics, cleanup, and error containment.
 
 Each answer must pass the same test: does it remove difficult DOM manipulation

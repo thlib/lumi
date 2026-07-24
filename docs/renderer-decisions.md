@@ -68,13 +68,14 @@ URL, and resource bindings. Vue labels its raw HTML path unsafe, and React
 requires the explicit `dangerouslySetInnerHTML` shape.
 
 Generic bindings reject native event handler names and `srcdoc`. Event
-handlers remain application-owned native listeners. `prop()` exposes the
-native property surface, including structural properties. It does not sanitize
-markup, so trust and sanitization remain at the application boundary.
-Replacing a mounted component root through `outerHTML` is rejected because it
-would destroy the persistent boundary. A partial URL sanitizer would be unsafe
-because the correct policy depends on the element and resource context.
-Applications must validate untrusted URLs at their data boundary.
+handlers remain application-owned native listeners. `prop()` exposes native
+structural properties, but `innerHTML` and `outerHTML` accept only genuine
+`TrustedHTML` values authenticated by the mounted document. Lumi does not
+create a policy or sanitize markup; those decisions remain at the application
+boundary. Replacing a mounted component root through `outerHTML` is rejected
+because it would destroy the persistent boundary. A partial URL sanitizer
+would be unsafe because the correct policy depends on the element and resource
+context. Applications must validate untrusted URLs at their data boundary.
 
 Sources:
 

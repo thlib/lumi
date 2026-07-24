@@ -21,7 +21,78 @@ import * as publicApi from '../src/index.js'
  */
 function createDocument() {
   const { window } = new JSDOM()
+  installTestTrustedTypes(window)
   return { document: window.document, window }
+}
+
+/**
+ * jsdom does not implement Trusted Types. This test-only factory preserves
+ * the API's nominal check: only values created by one of its policies pass
+ * isHTML(), so ordinary objects and strings cannot impersonate TrustedHTML.
+ *
+ * @param {import('jsdom').DOMWindow} window
+ */
+function installTestTrustedTypes(window) {
+  const trustedValues = new WeakSet()
+
+  class TestTrustedHTML {
+    /** @param {string} value */
+    constructor(value) {
+      this.value = value
+      trustedValues.add(this)
+      Object.freeze(this)
+    }
+
+    toString() {
+      return this.value
+    }
+
+    toJSON() {
+      return this.value
+    }
+  }
+
+  Reflect.set(window, 'trustedTypes', {
+    /** @param {unknown} value */
+    isHTML(value) {
+      return (
+        typeof value === 'object'
+        && value !== null
+        && trustedValues.has(value)
+      )
+    },
+
+    /**
+     * @param {string} _name
+     * @param {{createHTML: (value: string) => string}} options
+     */
+    createPolicy(_name, options) {
+      return {
+        /** @param {string} value */
+        createHTML(value) {
+          return new TestTrustedHTML(String(options.createHTML(value)))
+        },
+      }
+    },
+  })
+}
+
+/**
+ * Creates test markup through the same policy boundary application code uses
+ * in a browser.
+ *
+ * @param {Document} document
+ * @param {string} markup
+ * @returns {object}
+ */
+function trustedHTML(document, markup) {
+  const factory = Reflect.get(document.defaultView ?? {}, 'trustedTypes')
+  const createPolicy = Reflect.get(factory, 'createPolicy')
+  const policy = Reflect.apply(createPolicy, factory, [
+    'lumi-test',
+    { createHTML: (/** @type {string} */ value) => value },
+  ])
+  return Reflect.apply(Reflect.get(policy, 'createHTML'), policy, [markup])
 }
 
 /**
@@ -235,7 +306,10 @@ test('renders scalar bindings through open shadow roots', () => {
     bindings: [
       prop(
         '.counter',
-        () => '<output class="value">Planned</output>',
+        () => trustedHTML(
+          document,
+          '<output class="value">Planned</output>',
+        ),
         'innerHTML',
       ),
       bind('.value', data => data.count),
@@ -836,7 +910,9 @@ test('applies scalar bindings to every initial selector match', () => {
       bind('.copy', (data, element) => dataFor(data, element).text),
       prop(
         '.markup',
-        (data, element) => dataFor(data, element).markup,
+        (data, element) => {
+          return trustedHTML(document, dataFor(data, element).markup)
+        },
         'innerHTML',
       ),
       prop('.state', (data, element) => dataFor(data, element).value, 'lumiValue'),
@@ -894,7 +970,11 @@ test('resolves descendant bindings after parent structure regardless of declarat
         projectedElement = element
         return `${element.getAttribute('data-format')}: ${data.name}`
       }),
-      prop('.person', data => data.markup, 'innerHTML'),
+      prop(
+        '.person',
+        data => trustedHTML(document, data.markup),
+        'innerHTML',
+      ),
     ],
   })
 
@@ -952,13 +1032,19 @@ test('resolves structurally created bindings inside array occurrences', () => {
       prop(
         '.host',
         data => data.items.map(item => {
-          return `<${item.format} class="late">Raw</${item.format}>`
+          return trustedHTML(
+            document,
+            `<${item.format} class="late">Raw</${item.format}>`,
+          )
         }),
         'innerHTML',
       ),
       prop(
         '.outside-host',
-        () => '<h1 class="outside-late">Raw headline</h1>',
+        () => trustedHTML(
+          document,
+          '<h1 class="outside-late">Raw headline</h1>',
+        ),
         'innerHTML',
       ),
     ],
@@ -1102,7 +1188,11 @@ test('orders structural properties before descendant selectors', () => {
       bind('.person .name', (data, element) => {
         return `${element.getAttribute('data-prefix')}: ${data.name}`
       }),
-      prop('.person', data => data.markup, 'innerHTML'),
+      prop(
+        '.person',
+        data => trustedHTML(document, data.markup),
+        'innerHTML',
+      ),
     ],
   })
 
@@ -1131,7 +1221,11 @@ test('keeps live parent structure unchanged when a planned descendant fails', ()
         }
         return data.name
       }),
-      prop('.person', data => data.markup, 'innerHTML'),
+      prop(
+        '.person',
+        data => trustedHTML(document, data.markup),
+        'innerHTML',
+      ),
     ],
   })
   const before = mounted.root.querySelector('.name')
@@ -1195,10 +1289,13 @@ test('allows application code to inject JSONPath projections', () => {
       prop(
         '[data-html]',
         (data, element) => {
-          return jsonPath(
+          const markup = jsonPath(
             data,
             element.getAttribute('data-html') ?? undefined,
           )
+          return typeof markup === 'string'
+            ? trustedHTML(document, markup)
+            : markup
         },
         'innerHTML',
       ),
@@ -1254,7 +1351,13 @@ test('does not repeat normalized innerHTML property writes', () => {
   const template = createTemplate(document, '<div></div>')
   const mounted = component({
     template,
-    bindings: [prop('div', data => data.markup, 'innerHTML')],
+    bindings: [
+      prop(
+        'div',
+        data => trustedHTML(document, data.markup),
+        'innerHTML',
+      ),
+    ],
   }).mount(document.createElement('div'))
   const innerHtml = Object.getOwnPropertyDescriptor(
     document.defaultView?.Element.prototype,
@@ -1394,7 +1497,7 @@ test('does not construct custom elements merely to prepare scalar updates', () =
       bind('.copy', data => data.copy),
       prop(
         'planning-probe',
-        () => '<span class="copy"></span>',
+        () => trustedHTML(document, '<span class="copy"></span>'),
         'innerHTML',
       ),
     ],
@@ -1502,7 +1605,11 @@ test('rejects parent content writes that would replace a child subtree', () => {
   const mounted = component({
     template: parentTemplate,
     bindings: [
-      prop('.shell', () => '<p>Replacement</p>', 'innerHTML'),
+      prop(
+        '.shell',
+        () => trustedHTML(document, '<p>Replacement</p>'),
+        'innerHTML',
+      ),
       child(
         '.profile-slot',
         component({ template: childTemplate }),
@@ -1519,17 +1626,136 @@ test('rejects parent content writes that would replace a child subtree', () => {
   assert.strictEqual(mounted.root.querySelector('.name'), childRoot)
 })
 
-test('allows markup properties in generic property bindings', () => {
+test('accepts genuine TrustedHTML for innerHTML property bindings', () => {
   const { document } = createDocument()
   const template = createTemplate(document, '<div></div>')
   const mounted = component({
     template,
-    bindings: [prop('div', data => data.markup, 'innerHTML')],
+    bindings: [
+      prop(
+        'div',
+        data => trustedHTML(document, data.markup),
+        'innerHTML',
+      ),
+    ],
   }).mount(document.createElement('div'))
 
   mounted.update({ markup: '<strong>Ready</strong>' })
 
   assert.equal(mounted.root.innerHTML, '<strong>Ready</strong>')
+})
+
+test('rejects strings and forged objects for TrustedHTML properties', () => {
+  const { document } = createDocument()
+  const template = createTemplate(
+    document,
+    '<section><div class="markup">Initial</div></section>',
+  )
+  const mounted = component({
+    template,
+    bindings: [prop('.markup', data => data.markup, 'innerHTML')],
+  }).mount(document.createElement('div'))
+
+  assert.throws(
+    () => mounted.update({ markup: '<strong>Unsafe</strong>' }),
+    /property "innerHTML" projection must return TrustedHTML; received type string/,
+  )
+  assert.equal(
+    mounted.root.querySelector('.markup')?.textContent,
+    'Initial',
+  )
+
+  assert.throws(
+    () => mounted.update({
+      markup: {
+        toString() {
+          return '<strong>Forged</strong>'
+        },
+      },
+    }),
+    /property "innerHTML" projection must return TrustedHTML; received type object/,
+  )
+  assert.equal(
+    mounted.root.querySelector('.markup')?.textContent,
+    'Initial',
+  )
+
+  mounted.update({
+    markup: trustedHTML(document, '<strong>Trusted</strong>'),
+  })
+  assert.equal(
+    mounted.root.querySelector('.markup')?.innerHTML,
+    '<strong>Trusted</strong>',
+  )
+})
+
+test('accepts genuine TrustedHTML for a non-root outerHTML binding', () => {
+  const { document } = createDocument()
+  const template = createTemplate(
+    document,
+    '<section><p class="replace">Initial</p></section>',
+  )
+  const mounted = component({
+    template,
+    bindings: [prop(
+      '.replace',
+      data => data.markup,
+      'outerHTML',
+    )],
+  }).mount(document.createElement('div'))
+
+  mounted.update({
+    markup: trustedHTML(
+      document,
+      '<article class="replacement">Trusted</article>',
+    ),
+  })
+
+  assert.equal(mounted.root.querySelector('.replace'), null)
+  assert.equal(
+    mounted.root.querySelector('.replacement')?.textContent,
+    'Trusted',
+  )
+})
+
+test('bind works without the Trusted Types API or an HTML property sink', () => {
+  const { document, window } = createDocument()
+  const template = createTemplate(
+    document,
+    '<ul><li class="item">Default</li></ul>',
+  )
+  Reflect.deleteProperty(window, 'trustedTypes')
+  const mounted = component({
+    template,
+    bindings: [bind('.item', data => data.items)],
+  }).mount(document.createElement('div'))
+
+  mounted.update({ items: ['Ada', 'Grace'] })
+
+  assert.deepEqual(
+    Array.from(
+      mounted.root.querySelectorAll('.item'),
+      element => element.textContent,
+    ),
+    ['Ada', 'Grace'],
+  )
+})
+
+test('fails closed when TrustedHTML cannot be authenticated', () => {
+  const { document, window } = createDocument()
+  const markup = trustedHTML(document, '<strong>Trusted elsewhere</strong>')
+  const template = createTemplate(document, '<div></div>')
+  Reflect.deleteProperty(window, 'trustedTypes')
+  const mounted = component({
+    template,
+    bindings: [prop('div', () => markup, 'innerHTML')],
+  }).mount(document.createElement('div'))
+
+  assert.throws(
+    () => mounted.update({}),
+    /requires TrustedHTML.*does not expose the Trusted Types API/,
+  )
+  assert.equal(mounted.root.innerHTML, '')
 })
 
 test('keeps iframe documents and native handlers out of generic bindings', () => {
@@ -1679,7 +1905,16 @@ test('rejects incompatible values and treats nullish projections as no-ops', () 
     template,
     bindings: [
       bind('.copy', data => unchecked(data.text)),
-      prop('.markup', data => unchecked(data.html), 'innerHTML'),
+      prop(
+        '.markup',
+        data => {
+          const markup = unchecked(data.html)
+          return typeof markup === 'string'
+            ? trustedHTML(document, markup)
+            : markup
+        },
+        'innerHTML',
+      ),
       attr('.control', 'title', data => unchecked(data.title)),
       classToggle('.control', 'active', data => unchecked(data.active)),
       style('.control', 'color', data => unchecked(data.color)),
@@ -1979,7 +2214,13 @@ test('rejects invalid templates and stale renders', () => {
 
   const outerHtml = component({
     template: missingTargetTemplate,
-    bindings: [prop('p', () => '<p>Replacement</p>', 'outerHTML')],
+    bindings: [
+      prop(
+        'p',
+        () => trustedHTML(document, '<p>Replacement</p>'),
+        'outerHTML',
+      ),
+    ],
   }).mount(target)
   const outerRoot = outerHtml.root
   assert.throws(

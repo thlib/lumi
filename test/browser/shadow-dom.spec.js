@@ -9,6 +9,19 @@ test.beforeEach(async ({ page }) => {
 test('bindings plan and render through an open shadow root', async ({
   page,
 }) => {
+  const supportsTrustedTypes = await page.evaluate(() => {
+    const factory = Reflect.get(window, 'trustedTypes')
+    return (
+      typeof factory === 'object'
+      && factory !== null
+      && typeof Reflect.get(factory, 'createPolicy') === 'function'
+    )
+  })
+  test.skip(
+    !supportsTrustedTypes,
+    'TrustedHTML property bindings require the Trusted Types API',
+  )
+
   const result = await page.evaluate(async () => {
     let constructions = 0
 
@@ -29,6 +42,15 @@ test('bindings plan and render through an open shadow root', async ({
     const { bind, component, prop } = /** @type {typeof import('../../src/index.js')} */ (
       await import(String('/src/index.js'))
     )
+    const factory = Reflect.get(window, 'trustedTypes')
+    const policy = Reflect.apply(
+      Reflect.get(factory, 'createPolicy'),
+      factory,
+      [
+        'lumi-shadow-test',
+        { createHTML: (/** @type {string} */ value) => value },
+      ],
+    )
     const template = document.createElement('template')
     template.innerHTML = '<shadow-contract></shadow-contract>'
     const mounted = component({
@@ -36,7 +58,11 @@ test('bindings plan and render through an open shadow root', async ({
       bindings: [
         prop(
           '.shell',
-          () => '<output class="value">Planned</output>',
+          () => Reflect.apply(
+            Reflect.get(policy, 'createHTML'),
+            policy,
+            ['<output class="value">Planned</output>'],
+          ),
           'innerHTML',
         ),
         bind('.value', data => data),

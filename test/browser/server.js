@@ -12,10 +12,11 @@ const types = new Map([
 ])
 
 createServer(async (request, response) => {
-  const pathname = new URL(
+  const url = new URL(
     request.url ?? '/',
     'http://127.0.0.1',
-  ).pathname
+  )
+  const pathname = url.pathname
   const file = resolve(root, `.${pathname}`)
 
   if (file !== root && !file.startsWith(`${root}${sep}`)) {
@@ -31,9 +32,19 @@ createServer(async (request, response) => {
       return
     }
 
-    response.writeHead(200, {
+    const headers = {
       'content-type': types.get(extname(file)) ?? 'application/octet-stream',
-    })
+    }
+
+    if (url.searchParams.has('trusted-types')) {
+      Reflect.set(
+        headers,
+        'content-security-policy',
+        "require-trusted-types-for 'script'; trusted-types lumi-browser-test",
+      )
+    }
+
+    response.writeHead(200, headers)
     createReadStream(file).pipe(response)
   } catch {
     response.writeHead(404).end()

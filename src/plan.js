@@ -35,6 +35,14 @@ class CardinalityRequired extends Error {
  */
 
 /**
+ * The Trusted Types capability Lumi needs to authenticate TrustedHTML.
+ * Some TypeScript DOM libraries do not yet declare this browser API.
+ *
+ * @typedef {object} TrustedTypesFactory
+ * @property {(value: unknown) => boolean} isHTML
+ */
+
+/**
  * @typedef {'bind' | 'property' | 'attribute' | 'class' | 'style'} DomBindingKind
  */
 
@@ -169,6 +177,7 @@ export function getOwnedDomSubtrees(connected) {
  * @returns {import('./types.js').ConnectedBinding<Data>}
  */
 export function connectDomBindings(root, descriptors, ownedSubtrees = []) {
+  const trustedTypes = trustedTypesFactory(root)
   /** @type {Array<DomBindingRuntime<Data>>} */
   const runtimes = descriptors.map((descriptor, index) => ({
     descriptor,
@@ -186,7 +195,12 @@ export function connectDomBindings(root, descriptors, ownedSubtrees = []) {
       'Lumi owned subtree left its component boundary',
     )
   })
-  const scalar = connectScalarDomBindings(root, runtimes, ownedSubtrees)
+  const scalar = connectScalarDomBindings(
+    root,
+    runtimes,
+    ownedSubtrees,
+    trustedTypes,
+  )
   /** @type {ReturnType<typeof connectCardinalityDomBindings> | null} */
   let cardinality = null
 
@@ -221,7 +235,11 @@ export function connectDomBindings(root, descriptors, ownedSubtrees = []) {
             ),
             ownedSubtreePaths,
             (runtime, projected) => {
-              return normalizeProjectedValue(runtime.descriptor, projected)
+              return normalizeProjectedValue(
+                runtime.descriptor,
+                projected,
+                trustedTypes,
+              )
             },
             (runtime, element, value) => {
               applyLiveValue(runtime, element, value)
@@ -269,9 +287,15 @@ function clearProjectionReplay(runtimes) {
  * @param {Element} root
  * @param {ReadonlyArray<DomBindingRuntime<Data>>} runtimes
  * @param {ReadonlyArray<Element>} ownedSubtrees
+ * @param {TrustedTypesFactory | null} trustedTypes
  * @returns {import('./types.js').ConnectedBinding<Data>}
  */
-function connectScalarDomBindings(root, runtimes, ownedSubtrees) {
+function connectScalarDomBindings(
+  root,
+  runtimes,
+  ownedSubtrees,
+  trustedTypes,
+) {
 
   return {
     prepare(data) {
@@ -284,6 +308,7 @@ function connectScalarDomBindings(root, runtimes, ownedSubtrees) {
           ownedSubtrees,
           staging.elementsByRuntime,
           data,
+          trustedTypes,
         )
       }
 
@@ -341,6 +366,7 @@ function connectScalarDomBindings(root, runtimes, ownedSubtrees) {
           data,
           task.element,
           task.matchIndex,
+          trustedTypes,
         )
         const creationHistory = new Set(
           createdBy.get(task.element) ?? [],
@@ -376,7 +402,13 @@ function connectScalarDomBindings(root, runtimes, ownedSubtrees) {
           plannedOwnedSubtrees,
         )
         const values = elements.map((element, matchIndex) => {
-          return projectValue(runtime, data, element, matchIndex)
+          return projectValue(
+            runtime,
+            data,
+            element,
+            matchIndex,
+            trustedTypes,
+          )
         })
 
         for (let index = 0; index < elements.length; index += 1) {
@@ -422,6 +454,7 @@ function connectScalarDomBindings(root, runtimes, ownedSubtrees) {
  * @param {ReadonlyArray<Element>} ownedSubtrees
  * @param {ReadonlyArray<ReadonlyArray<Element>>} elementsByRuntime
  * @param {Data} data
+ * @param {TrustedTypesFactory | null} trustedTypes
  * @returns {import('./types.js').PreparedUpdate}
  */
 function prepareDirectUpdate(
@@ -430,6 +463,7 @@ function prepareDirectUpdate(
   ownedSubtrees,
   elementsByRuntime,
   data,
+  trustedTypes,
 ) {
   /** @type {Array<DomOperation<Data>>} */
   const operations = []
@@ -443,7 +477,13 @@ function prepareDirectUpdate(
 
     const elements = elementsByRuntime[runtimeIndex] ?? []
     const values = elements.map((element, matchIndex) => {
-      return projectValue(runtime, data, element, matchIndex)
+      return projectValue(
+        runtime,
+        data,
+        element,
+        matchIndex,
+        trustedTypes,
+      )
     })
 
     if (isStructural(runtime.descriptor)) {
@@ -705,7 +745,7 @@ function refreshParentCaches(records) {
     const domValue = Reflect.get(record.element, requiredName(descriptor))
 
     record.runtime.values.set(record.element, {
-      projectedValue: record.value,
+      projectedValue: projectedCacheValue(descriptor, record.value),
       domValue,
     })
   }
@@ -866,14 +906,41 @@ function isStructuralProperty(name) {
 }
 
 /**
+ * @param {string | undefined} name
+ * @returns {boolean}
+ */
+function isTrustedHTMLProperty(name) {
+  return name === 'innerHTML' || name === 'outerHTML'
+}
+
+/**
+ * Keeps the authenticated TrustedHTML object intact for the native setter,
+ * while comparing its immutable string data with the DOM's serialized value.
+ *
+ * @template Data
+ * @param {DomBindingDescriptor<Data>} descriptor
+ * @param {unknown} value
+ * @returns {unknown}
+ */
+function projectedCacheValue(descriptor, value) {
+  return (
+    descriptor.kind === 'property'
+    && isTrustedHTMLProperty(descriptor.name)
+  )
+    ? String(value)
+    : value
+}
+
+/**
  * @template Data
  * @param {DomBindingRuntime<Data>} runtime
  * @param {Data} data
  * @param {Element} element
  * @param {number} matchIndex
+ * @param {TrustedTypesFactory | null} trustedTypes
  * @returns {unknown}
  */
-function projectValue(runtime, data, element, matchIndex) {
+function projectValue(runtime, data, element, matchIndex, trustedTypes) {
   const descriptor = runtime.descriptor
   let projected
 
@@ -889,16 +956,17 @@ function projectValue(runtime, data, element, matchIndex) {
     throw new CardinalityRequired(descriptor.selector)
   }
 
-  return normalizeProjectedValue(descriptor, projected)
+  return normalizeProjectedValue(descriptor, projected, trustedTypes)
 }
 
 /**
  * @template Data
  * @param {DomBindingDescriptor<Data>} descriptor
  * @param {unknown} projected
+ * @param {TrustedTypesFactory | null} trustedTypes
  * @returns {unknown}
  */
-function normalizeProjectedValue(descriptor, projected) {
+function normalizeProjectedValue(descriptor, projected, trustedTypes) {
   if (projected === null || projected === undefined) {
     return noValue
   }
@@ -907,8 +975,14 @@ function normalizeProjectedValue(descriptor, projected) {
     case 'bind':
       assertTextValue(projected, 'bind')
       return String(projected)
-    case 'property':
+    case 'property': {
+      const name = requiredName(descriptor)
+
+      if (isTrustedHTMLProperty(name)) {
+        assertTrustedHTML(projected, trustedTypes, name)
+      }
       return projected
+    }
     case 'attribute':
       assertTextValue(projected, 'attribute')
       return projected === false
@@ -979,15 +1053,16 @@ function applyPlannedValue(
       }
 
       const current = Reflect.get(element, name)
+      const projectedValue = projectedCacheValue(descriptor, value)
       const previous = liveElement === undefined
         ? undefined
         : runtime.values.get(liveElement)
 
       if (
-        Object.is(current, value)
+        Object.is(current, projectedValue)
         || (
           previous !== undefined
-          && Object.is(previous.projectedValue, value)
+          && Object.is(previous.projectedValue, projectedValue)
           && Object.is(previous.domValue, current)
         )
       ) {
@@ -1059,13 +1134,14 @@ function applyLiveValue(runtime, element, value) {
     case 'property': {
       const name = requiredName(descriptor)
       const current = Reflect.get(element, name)
+      const projectedValue = projectedCacheValue(descriptor, value)
       const previous = runtime.values.get(element)
 
       if (
-        !Object.is(current, value)
+        !Object.is(current, projectedValue)
         && !(
           previous !== undefined
-          && Object.is(previous.projectedValue, value)
+          && Object.is(previous.projectedValue, projectedValue)
           && Object.is(previous.domValue, current)
         )
       ) {
@@ -1073,7 +1149,7 @@ function applyLiveValue(runtime, element, value) {
       }
 
       runtime.values.set(element, {
-        projectedValue: value,
+        projectedValue,
         domValue: Reflect.get(element, name),
       })
       return
@@ -1322,6 +1398,62 @@ function changedDuringCommit(selector) {
   return new Error(
     `Lumi DOM changed while committing selector "${selector}"`,
   )
+}
+
+/**
+ * Gets the policy factory from the mounted component's realm. Detached
+ * planning documents have no Window, so the live root is the authoritative
+ * realm for authenticating values used during both planning and commit.
+ *
+ * @param {Element} root
+ * @returns {TrustedTypesFactory | null}
+ */
+function trustedTypesFactory(root) {
+  const view = root.ownerDocument.defaultView
+
+  if (view === null) {
+    return null
+  }
+
+  const factory = Reflect.get(view, 'trustedTypes')
+
+  if (typeof factory !== 'object' || factory === null) {
+    return null
+  }
+
+  const isHTML = Reflect.get(factory, 'isHTML')
+
+  if (typeof isHTML !== 'function') {
+    return null
+  }
+
+  return {
+    isHTML(value) {
+      return Reflect.apply(isHTML, factory, [value]) === true
+    },
+  }
+}
+
+/**
+ * @param {unknown} value
+ * @param {TrustedTypesFactory | null} trustedTypes
+ * @param {string} name
+ */
+function assertTrustedHTML(value, trustedTypes, name) {
+  if (trustedTypes === null) {
+    throw new TypeError(
+      `Lumi property "${name}" requires TrustedHTML, `
+      + 'but the mounted document does not expose the Trusted Types API',
+    )
+  }
+
+  if (!trustedTypes.isHTML(value)) {
+    throw invalidProjectionValue(
+      `property "${name}"`,
+      'TrustedHTML',
+      value,
+    )
+  }
 }
 
 /**

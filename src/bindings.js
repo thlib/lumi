@@ -163,6 +163,8 @@ export function event(selector, type, handle, options = false) {
  * value on every render. A nullish projection performs no DOM operation.
  *
  * Native event handlers and srcdoc are not supported by generic bindings.
+ * innerHTML and outerHTML projections must return a genuine TrustedHTML value
+ * created by a policy in a browser that implements the Trusted Types API.
  *
  * @template Data
  * @template Value
@@ -171,7 +173,8 @@ export function event(selector, type, handle, options = false) {
  * @param {ScalarProjection<Data, Value | null | undefined, SelectorElement<Selector>>} project
  * @param {string} name
  * @returns {import('./types.js').Binding<Data>}
- * @throws {TypeError} When name is an event handler or srcdoc.
+ * @throws {TypeError} When name is an event handler or srcdoc, or an
+ * innerHTML/outerHTML projection does not return TrustedHTML.
  */
 export function prop(selector, project, name) {
   assertSafeBindingName('property', name)

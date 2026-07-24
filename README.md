@@ -47,20 +47,43 @@ At the application boundary, one page has one update operation.
 Nested components participate in that update rather than becoming
 independently scheduled applications.
 
-## Why not React, Vue, or Angular?
+## What broader approaches get wrong
 
-React, Vue, and Angular already provide declarative UI rendering, but rendering
-is part of a broader framework-specific model. That model commonly includes a
-template or component syntax, reactive state or change detection, scheduled
-updates, component lifecycles, and framework tooling.
+When an application only needs declarative DOM updates, broader approaches
+commonly add unnecessary machinery:
 
-This separation isolates the rendering capability.
+- Encoding HTML inside JavaScript strings, tagged values, or object structures
+  hides document structure from native HTML tools and requires another
+  mechanism to turn it back into DOM.
+- Inventing a template language for expressions JavaScript already handles
+  adds another syntax to learn, analyze, debug, and keep compatible.
+- Inventing a file extension for code existing tools should already understand
+  makes specialized editor and build support a condition of working with the
+  source.
+- Replacing JavaScript functions, modules, composition, and control flow with
+  special syntax and conventions prevents ordinary language tools and
+  techniques from being used directly.
+- Requiring specialized compilers and parsers to produce browser-readable code
+  makes a build pipeline necessary for a capability the browser already has.
+- Coupling DOM rendering to renderer-owned reactive state or change detection
+  makes the application adopt a state model merely to synchronize the DOM.
+- Hiding update timing behind automatic observation, dependency tracking, or
+  scheduling makes rendering work indirect and harder to reason about, test,
+  and measure.
+- Coupling component boundaries to independently scheduled state and
+  lifecycles turns one page update into coordination between separate runtime
+  boundaries.
+- Maintaining a parallel model of browser properties and attributes to infer
+  the intended DOM operation duplicates an evolving browser contract and can
+  make the resulting operation ambiguous.
+- Requiring a broader authoring and runtime model merely to update existing DOM
+  declaratively increases conceptual cost and ties otherwise independent
+  application concerns to the renderer.
 
-The application does not adopt a framework's state, scheduling, template, or
-lifecycle model to obtain efficient DOM updates. React, Vue, and Angular remain
-the better fit when those broader models and ecosystems are wanted. The
-narrower approach applies when the browser and application should retain those
-responsibilities.
+These choices can be useful when the complete model is wanted. The mistake is
+requiring that model merely to obtain efficient declarative rendering. Lumi
+isolates that rendering capability while leaving the browser and application
+in control of the surrounding responsibilities.
 
 ## Principles
 

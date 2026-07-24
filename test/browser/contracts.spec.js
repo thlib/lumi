@@ -6,6 +6,83 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/test/browser/fixture.html')
 })
 
+test('bind and TrustedHTML properties work with Trusted Types enforced', async ({
+  page,
+}) => {
+  await page.goto('/test/browser/fixture.html?trusted-types')
+  const supportsTrustedTypes = await page.evaluate(() => {
+    const factory = Reflect.get(window, 'trustedTypes')
+    return (
+      typeof factory === 'object'
+      && factory !== null
+      && typeof Reflect.get(factory, 'createPolicy') === 'function'
+    )
+  })
+  test.skip(
+    !supportsTrustedTypes,
+    'This browser does not implement Trusted Types enforcement',
+  )
+
+  const result = await page.evaluate(async () => {
+    const { bind, component, prop } = /** @type {typeof import('../../src/index.js')} */ (
+      await import(String('/src/index.js'))
+    )
+    const factory = Reflect.get(window, 'trustedTypes')
+    const policy = Reflect.apply(
+      Reflect.get(factory, 'createPolicy'),
+      factory,
+      [
+        'lumi-browser-test',
+        { createHTML: (/** @type {string} */ value) => value },
+      ],
+    )
+    const template = /** @type {HTMLTemplateElement | null} */ (
+      document.querySelector('#trusted-types-template')
+    )
+    const mounted = component({
+      template,
+      bindings: [
+        bind('output', data => data.text),
+        prop('.markup', data => data.markup, 'innerHTML'),
+      ],
+    }).mount(document.querySelector('#test-root'))
+    const createHTML = Reflect.get(policy, 'createHTML')
+
+    mounted.update({
+      text: 'Bound safely',
+      markup: Reflect.apply(
+        createHTML,
+        policy,
+        ['<strong>Trusted safely</strong>'],
+      ),
+    })
+
+    let unsafeError = ''
+
+    try {
+      mounted.update({
+        text: 'Must not commit',
+        markup: '<em>Untrusted</em>',
+      })
+    } catch (error) {
+      unsafeError = error instanceof Error ? error.message : String(error)
+    }
+
+    return {
+      text: mounted.root.querySelector('output')?.textContent,
+      markup: mounted.root.querySelector('.markup')?.innerHTML,
+      unsafeError,
+    }
+  })
+
+  expect(result).toEqual({
+    text: 'Bound safely',
+    markup: '<strong>Trusted safely</strong>',
+    unsafeError: 'Lumi property "innerHTML" projection must return '
+      + 'TrustedHTML; received type string',
+  })
+})
+
 test('an unrelated update preserves an unbound input value and focus', async ({
   page,
 }) => {

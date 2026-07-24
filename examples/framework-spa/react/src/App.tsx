@@ -21,7 +21,7 @@ import {
   type ProjectFilter,
   type Route,
   type Toast,
-} from '../../shared/data'
+} from '../../data'
 
 function App() {
   normalizeHash()

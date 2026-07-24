@@ -1,3 +1,4 @@
+// Static content and routing helpers shared by the framework implementations.
 export type Route = 'overview' | 'projects' | 'activity' | 'teams'
 export type ProjectFilter = 'all' | 'active' | 'planning'
 

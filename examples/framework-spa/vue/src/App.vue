@@ -13,7 +13,7 @@ import {
   routeFromHash,
   type ProjectFilter,
   type Toast,
-} from '../../shared/data'
+} from '../../data'
 
 normalizeHash()
 

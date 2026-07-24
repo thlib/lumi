@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type {Activity} from '../../../shared/data'
+import type {Activity} from '../../../data'
 
 withDefaults(defineProps<{
   items: readonly Activity[]

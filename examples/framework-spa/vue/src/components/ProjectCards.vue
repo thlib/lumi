@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type {Project} from '../../../shared/data'
+import type {Project} from '../../../data'
 
 withDefaults(defineProps<{
   items: readonly Project[]

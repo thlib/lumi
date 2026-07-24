@@ -20,7 +20,7 @@ import {
   type ProjectFilter,
   type Route,
   type Toast,
-} from '../../../shared/data'
+} from '../../../data'
 
 @Component({
   selector: 'app-root',

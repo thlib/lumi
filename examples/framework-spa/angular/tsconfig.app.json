@@ -5,5 +5,5 @@
     "types": []
   },
   "files": ["src/main.ts"],
-  "include": ["src/**/*.d.ts", "../shared/data.ts"]
+  "include": ["src/**/*.d.ts", "../data.ts"]
 }

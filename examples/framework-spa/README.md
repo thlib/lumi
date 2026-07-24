@@ -7,7 +7,7 @@ These three applications reproduce the result and interactions of
 - [`vue`](./vue/) — Vue single-file components and Composition API
 - [`angular`](./angular/) — Angular standalone components and signals
 
-They share only static demo data and the visual stylesheet in [`shared`](./shared/).
+They share only [`data.ts`](./data.ts) and [`spa.css`](./spa.css).
 None imports Lumi, `@thlib/lumi`, or anything from the repository's `src`
 directory.
 

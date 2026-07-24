@@ -14,7 +14,7 @@ pnpm test
 pnpm run benchmark
 pnpm run test:package
 pnpm exec playwright install chromium firefox
-pnpm run test:browser -- --project=chromium --project=firefox
+pnpm run test:browser --project=chromium --project=firefox
 ```
 
 `pnpm run benchmark` is a small, repeatable Node/jsdom performance baseline for

@@ -212,7 +212,7 @@ Run the JSDOM unit suite and the portable browser contracts with:
 ```sh
 pnpm test
 pnpm exec playwright install chromium firefox
-pnpm run test:browser -- --project=chromium --project=firefox
+pnpm run test:browser --project=chromium --project=firefox
 ```
 
 ## Status

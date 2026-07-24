@@ -32,12 +32,13 @@ try {
     },
   )
 
-  /** @type {Array<{
+  const jsonStart = packOutput.indexOf('{\n  "name":')
+  assert.notEqual(jsonStart, -1, 'pnpm pack did not return JSON output')
+  /** @type {{
    *   filename: string,
    *   files: Array<{path: string}>
-   * }>} */
-  const packResult = JSON.parse(packOutput)
-  const packed = packResult[0]
+   * }} */
+  const packed = JSON.parse(packOutput.slice(jsonStart))
   assert.ok(packed, 'pnpm pack did not describe a package')
 
   const declarationFiles = packed.files
@@ -68,7 +69,7 @@ try {
       '--ignore-scripts',
       '--store-dir',
       pnpmStore,
-      join(packDirectory, packed.filename),
+      packed.filename,
     ],
     {
       cwd: temporary,

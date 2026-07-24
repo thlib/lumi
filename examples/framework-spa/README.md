@@ -40,5 +40,5 @@ change, and initial asset size in headless Chromium. It writes a readable report
 to `benchmark/results/spa-performance.md` and full samples to the adjacent JSON
 file.
 
-Use `pnpm run benchmark:spa -- --help` for shorter smoke runs, custom cycle
+Use `pnpm run benchmark:spa --help` for shorter smoke runs, custom cycle
 counts, output paths, or `--skip-build`.

@@ -861,35 +861,15 @@ function summarize(values) {
 }
 
 /**
- * Reads pnpm's lockfile when present, with package-lock.json compatibility for
- * an existing application bundle that has not been migrated yet.
- *
  * @param {string} directory
  * @param {string} dependencyName
  */
 async function readDependencyVersion(directory, dependencyName) {
-  try {
-    const lockfile = await readFile(
-      resolve(directory, 'pnpm-lock.yaml'),
-      'utf8',
-    )
-    return readPnpmDependencyVersion(lockfile, dependencyName)
-  } catch (error) {
-    if (
-      typeof error !== 'object'
-      || error === null
-      || !('code' in error)
-      || error.code !== 'ENOENT'
-    ) {
-      throw error
-    }
-  }
-
-  const packageLock = JSON.parse(await readFile(
-    resolve(directory, 'package-lock.json'),
+  const lockfile = await readFile(
+    resolve(directory, 'pnpm-lock.yaml'),
     'utf8',
-  ))
-  return packageLock.packages[`node_modules/${dependencyName}`]?.version
+  )
+  return readPnpmDependencyVersion(lockfile, dependencyName)
 }
 
 /**
@@ -1143,7 +1123,7 @@ function parsePositiveInteger(name, value) {
 }
 
 function printHelp() {
-  console.log(`Usage: pnpm run benchmark:spa -- [options]
+  console.log(`Usage: pnpm run benchmark:spa [options]
 
 Options:
   --samples=N          Cache-disabled samples per framework (default: 5)

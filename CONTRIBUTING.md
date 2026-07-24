@@ -11,10 +11,15 @@ Lumi requires Node.js 22 or newer.
 npm ci
 npm run lint
 npm test
+npm run benchmark
 npm run test:package
 npx playwright install chromium firefox
 npm run test:browser -- --project=chromium --project=firefox
 ```
+
+`npm run benchmark` is a small, repeatable Node/jsdom performance baseline for
+scalar updates and positional-list growth. Use it to compare local changes on
+the same machine; its timings are not cross-machine targets.
 
 Changes to behavior should include a focused contract test. Changes to the
 public API should also update `README.md`, `API.md`, the TypeScript consumer

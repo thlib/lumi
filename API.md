@@ -484,6 +484,10 @@ An error is thrown when:
 - A DOM property cannot be assigned.
 - A generic binding targets an event handler or `srcdoc`.
 
+If application projection code throws, Lumi rethrows an error that identifies
+the binding kind, selector, and one-based matched position. The original
+thrown value is available as its `cause`.
+
 Selector syntax errors remain native `DOMException`s from the browser.
 
 ## Browser requirements

@@ -1596,6 +1596,44 @@ test('does not commit scalar writes when preparation fails', () => {
   assert.equal(second?.textContent, 'After second')
 })
 
+test('adds binding context when a projection throws', () => {
+  const { document } = createDocument()
+  const template = createTemplate(document, `
+    <section>
+      <output class="value"></output>
+      <output class="value"></output>
+    </section>
+  `)
+  const failure = new TypeError('Value is unavailable')
+  const mounted = component({
+    template,
+    bindings: [
+      bind('.value', (_data, element) => {
+        if (element.previousElementSibling !== null) {
+          throw failure
+        }
+        return 'First value'
+      }),
+    ],
+  }).mount(document.createElement('div'))
+
+  /** @type {unknown} */
+  let error
+
+  try {
+    mounted.update({})
+  } catch (caught) {
+    error = caught
+  }
+
+  assert.ok(error instanceof Error)
+  assert.match(
+    error.message,
+    /Lumi bind projection for "\.value" at matched position 2 failed: Value is unavailable/,
+  )
+  assert.equal(error.cause, failure)
+})
+
 test('rejects incompatible values and treats nullish projections as no-ops', () => {
   const { document } = createDocument()
   const template = createTemplate(document, `

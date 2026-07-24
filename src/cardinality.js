@@ -17,6 +17,7 @@ import {
   shadowIncludingParent,
 } from './dom.js'
 import { isNoValue } from './internal/no-value.js'
+import { projectionError } from './internal/projection-error.js'
 
 /**
  * @typedef {string | number | boolean} TextValue
@@ -550,7 +551,11 @@ function prepareRegion(spec, data, coordinate, normalize) {
  */
 function projectValue(runtime, data, element, matchIndex) {
   if (!Object.hasOwn(runtime.replay, matchIndex)) {
-    return runtime.descriptor.project(data, element)
+    try {
+      return runtime.descriptor.project(data, element)
+    } catch (error) {
+      throw projectionError(runtime.descriptor, matchIndex, error)
+    }
   }
 
   const projected = runtime.replay[matchIndex]

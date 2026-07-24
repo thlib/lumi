@@ -16,6 +16,7 @@ import {
 } from './dom.js'
 import { connectCardinalityDomBindings } from './cardinality.js'
 import { isNoValue, noValue } from './internal/no-value.js'
+import { projectionError } from './internal/projection-error.js'
 
 const domBindingDescriptor = Symbol('Lumi DOM binding descriptor')
 const ownedDomSubtrees = Symbol('Lumi owned DOM subtrees')
@@ -874,7 +875,14 @@ function isStructuralProperty(name) {
  */
 function projectValue(runtime, data, element, matchIndex) {
   const descriptor = runtime.descriptor
-  const projected = descriptor.project(data, element)
+  let projected
+
+  try {
+    projected = descriptor.project(data, element)
+  } catch (error) {
+    throw projectionError(descriptor, matchIndex, error)
+  }
+
   runtime.replay[matchIndex] = projected
 
   if (descriptor.kind === 'bind' && Array.isArray(projected)) {

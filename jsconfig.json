@@ -17,6 +17,7 @@
     "target": "ES2022"
   },
   "include": [
+    "benchmark/**/*.js",
     "examples/**/*.js",
     "scripts/**/*.js",
     "src/**/*.js",

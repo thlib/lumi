@@ -20,4 +20,7 @@ npm run dev
 ```
 
 Use `npm run build` in an application directory to create its production
-bundle.
+bundle. The production bundles are committed so the repository-wide static
+server can also open the applications at `/examples/framework-spa/react/`,
+`/examples/framework-spa/vue/`, and `/examples/framework-spa/angular/`.
+Rebuild the corresponding application after changing its source.

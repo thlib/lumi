@@ -63,6 +63,7 @@ try {
     'dist/dom.d.ts',
     'dist/index.d.ts',
     'dist/internal/no-value.d.ts',
+    'dist/internal/projection-error.d.ts',
     'dist/plan.d.ts',
     'dist/types.d.ts',
   ])

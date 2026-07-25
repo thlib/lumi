@@ -115,6 +115,12 @@ component template. Array repetition deliberately preserves identity by
 position: Lumi does not inspect `key`, `id`, object identity, or any other
 application value to infer keyed identity.
 
+Projections always receive the whole presentation snapshot, including inside a
+repeated element. Cardinality comes from a positional coordinate applied to
+each projection's returned value.
+[How array cardinality works](./docs/cardinality-explained.md) walks through
+that mechanism.
+
 The supported package surface is the functions and types exported from
 `@thlib/lumi`. Its public functions and lifecycle are documented in
 [API.md](./API.md). Other package modules and lifecycle shapes are renderer

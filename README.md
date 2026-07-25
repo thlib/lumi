@@ -90,8 +90,7 @@ in control of the surrounding responsibilities.
 - Do not impose a template language. Templates are HTML, styles are CSS, and
   rendering rules are ordinary JavaScript or TypeScript. Independent tools may
   add their own binding conventions without changing the core API.
-- Require no build step and run as browser-readable JavaScript while its
-  JSDoc types and shipped TypeScript declarations provide static type checking.
+- Ship standards-bases JavaScript that works directly in modern browsers and ordinary bundlers.
 - Keep rendering explicit. There are no signals, proxies, watchers, dependency
   tracking, or automatic rerendering.
 - Keep application data separate from presentation and DOM manipulation.

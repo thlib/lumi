@@ -14,9 +14,6 @@ importers:
       '@types/jsdom':
         specifier: ^27.0.0
         version: 27.0.0
-      esbuild:
-        specifier: ^0.28.1
-        version: 0.28.1
       jsdom:
         specifier: ^27.1.0
         version: 27.4.0

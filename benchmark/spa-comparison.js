@@ -102,7 +102,7 @@ const frameworks = Object.freeze([
     label: 'Lumi',
     packageFile: resolve(root, 'package.json'),
     buildDirectory: null,
-    publicRoot: resolve(root, 'examples/spa/dist'),
+    publicRoot: resolve(root, 'examples/spa'),
   },
   {
     id: 'react',
@@ -773,8 +773,8 @@ application code splitting.
 
 ## Methodology
 
-- Production React, Vue, Angular, and minified Lumi bundles are rebuilt
-  unless \`--skip-build\` is passed.
+- Production React, Vue, and Angular bundles are rebuilt unless
+  \`--skip-build\` is passed. Lumi is served as its native ES modules.
 - Framework order rotates between samples. Browser HTTP cache is disabled.
 - Every sample runs two unmeasured route cycles and one filter cycle to warm
   JIT and scheduler paths.
@@ -987,17 +987,14 @@ function createTaskTrace(session, thresholdMs) {
 
 function buildApplications() {
   for (const framework of frameworks) {
-    console.log(`Building ${framework.label} production application`)
-    const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
-    const buildScript = framework.id === 'lumi' ? 'build:spa' : 'build'
-    const buildDirectory = framework.id === 'lumi'
-      ? root
-      : framework.buildDirectory
-    if (buildDirectory === null) {
+    if (framework.buildDirectory === null) {
       continue
     }
-    const build = spawnSync(pnpm, ['run', buildScript], {
-      cwd: buildDirectory,
+
+    console.log(`Building ${framework.label} production application`)
+    const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+    const build = spawnSync(pnpm, ['run', 'build'], {
+      cwd: framework.buildDirectory,
       encoding: 'utf8',
       stdio: 'inherit',
     })

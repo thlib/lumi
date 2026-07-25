@@ -44,7 +44,6 @@
     "clean:types": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build:types": "pnpm run clean:types && tsc -p tsconfig.build.json",
     "lint": "pnpm run build:types && tsc -p jsconfig.json",
-    "build:spa": "node scripts/build-spa.js",
     "benchmark": "node benchmark/performance-baseline.js",
     "benchmark:spa": "node benchmark/spa-comparison.js",
     "test": "node --test test/*.test.js",
@@ -58,7 +57,6 @@
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@types/jsdom": "^27.0.0",
-    "esbuild": "^0.28.1",
     "jsdom": "^27.1.0",
     "typescript": "^7.0.2"
   }

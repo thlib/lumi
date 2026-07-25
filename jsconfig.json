@@ -25,7 +25,6 @@
     "type-test/**/*"
   ],
   "exclude": [
-    "examples/spa/dist/**",
     "examples/framework-spa/**/dist/**"
   ]
 }

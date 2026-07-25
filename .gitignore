@@ -1,5 +1,7 @@
 node_modules/
 dist/
+!examples/spa/dist/
+!examples/spa/dist/**
 !examples/framework-spa/*/dist/
 !examples/framework-spa/*/dist/**
 test-results/

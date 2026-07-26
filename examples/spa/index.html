@@ -10,7 +10,7 @@
     >
     <title>Overview · Luminate</title>
     <link rel="stylesheet" href="./spa.css">
-    <script type="module" src="./spa.js"></script>
+    <script type="module" src="./app.js"></script>
   </head>
   <body>
     <div id="app"></div>
@@ -37,39 +37,47 @@
     </template>
 
     <script type="module">
-      import {child, classToggle, component, on} from '../../src/index.js'
-      import {define} from './demo-components.js'
-      import {update} from './page.js'
+      import {
+        child,
+        classToggle,
+        component,
+        define,
+        on,
+        resolve,
+        update,
+      } from './app.js'
 
-      define('appShell', ({resolve, present}) => {
-        present(data => ({
-          route: data.route,
-          navOpen: data.navOpen,
-        }))
+      define('appShell', () => {
+        const header = resolve('header')
+        const navigation = resolve('navigation')
 
-        return component({
-          template: document.querySelector('#app-shell-template'),
-          bindings: [
-            classToggle(
-              '.app-shell',
-              'nav-open',
-              data => data.appShell.navOpen,
-            ),
-            on('[data-action="close-nav"]', 'click', () => {
-              update(data => ({...data, navOpen: false}))
-            }),
-            child(
-              '[data-header-slot]',
-              resolve('header'),
-              data => data.header,
-            ),
-            child(
-              '[data-navigation-slot]',
-              resolve('navigation'),
-              data => data.navigation,
-            ),
-          ],
-        })
+        return {
+          present: data => ({
+            navOpen: data.navOpen,
+            header: header.present(data),
+            navigation: navigation.present(data),
+          }),
+
+          component: component({
+            template: document.querySelector('#app-shell-template'),
+            bindings: [
+              classToggle('.app-shell', 'nav-open', data => data.navOpen),
+              on('[data-action="close-nav"]', 'click', () => {
+                update(data => ({...data, navOpen: false}))
+              }),
+              child(
+                '[data-header-slot]',
+                header.component,
+                data => data.header,
+              ),
+              child(
+                '[data-navigation-slot]',
+                navigation.component,
+                data => data.navigation,
+              ),
+            ],
+          }),
+        }
       })
     </script>
 
@@ -114,19 +122,17 @@
     </template>
 
     <script type="module">
-      import {attr, component, on} from '../../src/index.js'
-      import {bindData, define} from './demo-components.js'
-      import {update} from './page.js'
+      import {attr, bindData, component, define, on, update} from './app.js'
 
-      define('header', ({present}) => {
-        present(data => ({
+      define('header', () => ({
+        present: data => ({
           workspace: 'Luminate',
           userName: 'Freddy Fraggin',
           userInitials: 'FF',
           navOpen: data.navOpen,
-        }))
+        }),
 
-        return component({
+        component: component({
           template: document.querySelector('#header-template'),
           bindings: [
             bindData(),
@@ -139,8 +145,8 @@
               update(data => ({...data, navOpen: !data.navOpen}))
             }),
           ],
-        })
-      })
+        }),
+      }))
     </script>
 
     <template id="navigation-template">
@@ -184,17 +190,15 @@
     </template>
 
     <script type="module">
-      import {attr, component, on} from '../../src/index.js'
-      import {bindData, define} from './demo-components.js'
-      import {update} from './page.js'
+      import {attr, bindData, component, define, on, update} from './app.js'
 
-      define('navigation', ({present}) => {
-        present(data => ({
+      define('navigation', () => ({
+        present: data => ({
           route: data.route,
           projectCount: data.projects.length,
-        }))
+        }),
 
-        return component({
+        component: component({
           template: document.querySelector('#navigation-template'),
           bindings: [
             bindData(),
@@ -204,28 +208,15 @@
               }
             }),
             attr(
-              '[data-route="overview"]',
+              '[data-route]',
               'aria-current',
-              data => data.route === 'overview' ? 'page' : false,
-            ),
-            attr(
-              '[data-route="projects"]',
-              'aria-current',
-              data => data.route === 'projects' ? 'page' : false,
-            ),
-            attr(
-              '[data-route="activity"]',
-              'aria-current',
-              data => data.route === 'activity' ? 'page' : false,
-            ),
-            attr(
-              '[data-route="teams"]',
-              'aria-current',
-              data => data.route === 'teams' ? 'page' : false,
+              (data, element) => {
+                return element.dataset.route === data.route ? 'page' : false
+              },
             ),
           ],
-        })
-      })
+        }),
+      }))
     </script>
 
     <template id="teams-template">
@@ -433,118 +424,127 @@
     </template>
 
     <script type="module">
-      import {attr, component, on, prop, style} from '../../src/index.js'
-      import {bindData, define} from './demo-components.js'
-      import {update} from './page.js'
-      import {emailValidationMessage} from './validation.js'
+      import {
+        attr,
+        bindData,
+        component,
+        define,
+        emailValidationMessage,
+        on,
+        prop,
+        style,
+        update,
+      } from './app.js'
 
-      define('teams', ({present}) => {
+      define('teams', () => {
         let nextToastId = 1
         const toastTimers = new Map()
 
-        present(data => {
-          const selectedMember = data.members.find(member => {
-            return member.id === data.selectedMemberId
-          })
+        return {
+          present: data => {
+            const selectedMember = data.members.find(member => {
+              return member.id === data.selectedMemberId
+            })
 
-          return {
-            toasts: data.toasts,
-            memberCount: `${data.members.length} members`,
-            members: data.members,
-            hasSelectedMember: selectedMember !== undefined,
-            selectedMember: selectedMember ?? data.members[0],
-          }
-        })
+            return {
+              toasts: data.toasts,
+              memberCount: `${data.members.length} members`,
+              members: data.members,
+              hasSelectedMember: selectedMember !== undefined,
+              selectedMember: selectedMember ?? data.members[0],
+            }
+          },
 
-        return component({
-          template: document.querySelector('#teams-template'),
-          bindings: [
-            bindData(),
-            on('[data-invite-email]', 'input', (_event, element) => {
-              if (
-                element instanceof HTMLInputElement
-                && element.hasAttribute('aria-invalid')
-              ) {
-                showEmailError(element, emailValidationMessage(element))
-              }
-            }),
-            on('[data-demo-form]', 'submit', (event, element) => {
-              event.preventDefault()
+          component: component({
+            template: document.querySelector('#teams-template'),
+            bindings: [
+              bindData(),
+              on('[data-invite-email]', 'input', (_event, element) => {
+                if (
+                  element instanceof HTMLInputElement
+                  && element.hasAttribute('aria-invalid')
+                ) {
+                  showEmailError(element, emailValidationMessage(element))
+                }
+              }),
+              on('[data-demo-form]', 'submit', (event, element) => {
+                event.preventDefault()
 
-              if (
-                element.hasAttribute('data-invite-form')
-                && !validateInviteForm(element)
-              ) {
-                return
-              }
+                if (
+                  element.hasAttribute('data-invite-form')
+                  && !validateInviteForm(element)
+                ) {
+                  return
+                }
 
-              const toast = {
-                id: `demo-toast-${nextToastId++}`,
-                message: 'No server for demo',
-              }
+                const toast = {
+                  id: `demo-toast-${nextToastId++}`,
+                  message: 'No server for demo',
+                }
 
-              update(data => ({...data, toasts: [...data.toasts, toast]}))
+                update(data => ({...data, toasts: [...data.toasts, toast]}))
 
-              const timer = window.setTimeout(() => {
-                toastTimers.delete(toast.id)
+                const timer = window.setTimeout(() => {
+                  toastTimers.delete(toast.id)
+                  update(data => ({
+                    ...data,
+                    toasts: data.toasts.filter(item => item.id !== toast.id),
+                  }))
+                }, 3200)
+                toastTimers.set(toast.id, timer)
+              }),
+              on('[data-demo-toast]', 'click', (_event, element) => {
+                const id = element.getAttribute('data-toast-id')
+
+                if (id === null || id === undefined) {
+                  return
+                }
+
+                window.clearTimeout(toastTimers.get(id))
+                toastTimers.delete(id)
                 update(data => ({
                   ...data,
-                  toasts: data.toasts.filter(item => item.id !== toast.id),
+                  toasts: data.toasts.filter(item => item.id !== id),
                 }))
-              }, 3200)
-              toastTimers.set(toast.id, timer)
-            }),
-            on('[data-demo-toast]', 'click', (_event, element) => {
-              const id = element.getAttribute('data-toast-id')
-
-              if (id === null || id === undefined) {
-                return
-              }
-
-              window.clearTimeout(toastTimers.get(id))
-              toastTimers.delete(id)
-              update(data => ({
-                ...data,
-                toasts: data.toasts.filter(item => item.id !== id),
-              }))
-            }),
-            prop(
-              '[data-team-directory]',
-              data => data.hasSelectedMember,
-              'hidden',
-            ),
-            prop(
-              '[data-member-profile]',
-              data => !data.hasSelectedMember,
-              'hidden',
-            ),
-            attr(
-              '[data-demo-toast]',
-              'data-toast-id',
-              data => data.toasts.map(toast => toast.id),
-            ),
-            attr(
-              '[data-member-link]',
-              'href',
-              data => data.members.map(member => `#/teams/${member.id}`),
-            ),
-            attr(
-              '[data-member-email]',
-              'href',
-              data => `mailto:${data.selectedMember.email}`,
-            ),
-            style(
-              '[data-member-avatar]',
-              'background-color',
-              data => data.members.map(member => member.tone),
-            ),
-            style(
-              '[data-profile-avatar]',
-              'background-color',
-              data => data.selectedMember.tone,
-            ),
-          ],
-        })
+              }),
+              prop(
+                '[data-team-directory]',
+                data => data.hasSelectedMember,
+                'hidden',
+              ),
+              prop(
+                '[data-member-profile]',
+                data => !data.hasSelectedMember,
+                'hidden',
+              ),
+              attr(
+                '[data-demo-toast]',
+                'data-toast-id',
+                data => data.toasts.map(toast => toast.id),
+              ),
+              attr(
+                '[data-member-link]',
+                'href',
+                data => data.members.map(member => `#/teams/${member.id}`),
+              ),
+              attr(
+                '[data-member-email]',
+                'href',
+                data => `mailto:${data.selectedMember.email}`,
+              ),
+              style(
+                '[data-member-avatar]',
+                'background-color',
+                data => data.members.map(member => member.tone),
+              ),
+              style(
+                '[data-profile-avatar]',
+                'background-color',
+                data => data.selectedMember.tone,
+              ),
+            ],
+          }),
+        }
 
         /**
          * @param {Element} form
@@ -717,52 +717,33 @@
     <script type="module">
       import {
         attr,
-        bind,
+        bindData,
+        bindProjectCards,
         classToggle,
         component,
+        define,
         style,
-      } from '../../src/index.js'
-      import {bindData, define} from './demo-components.js'
+      } from './app.js'
 
-      define('overview', ({present}) => {
-        present(data => ({
+      define('overview', () => ({
+        present: data => ({
           title: 'Good morning, Freddy',
           date: 'Friday, July 24',
           metrics: data.metrics,
           projects: data.projects.slice(0, 3),
           activities: data.activities.slice(0, 3),
-        }))
+        }),
 
-        return component({
+        component: component({
           template: document.querySelector('#overview-template'),
           bindings: [
             bindData(),
+            ...bindProjectCards(),
             classToggle(
               '.metric-card',
               'metric-card--positive',
               data => data.metrics.map(metric => {
                 return metric.direction === 'positive'
-              }),
-            ),
-            style(
-              '[data-project-accent]',
-              'background-color',
-              data => data.projects.map(project => project.accent),
-            ),
-            style(
-              '[data-project-progress-bar]',
-              'width',
-              data => data.projects.map(project => `${project.progress}%`),
-            ),
-            bind(
-              '[data-project-progress]',
-              data => data.projects.map(project => `${project.progress}%`),
-            ),
-            classToggle(
-              '[data-project-status]',
-              'status--planning',
-              data => data.projects.map(project => {
-                return project.status === 'Planning'
               }),
             ),
             style(
@@ -778,8 +759,8 @@
               }),
             ),
           ],
-        })
-      })
+        }),
+      }))
     </script>
 
     <template id="projects-template">
@@ -835,17 +816,16 @@
     <script type="module">
       import {
         attr,
-        bind,
-        classToggle,
+        bindData,
+        bindProjectCards,
         component,
+        define,
         on,
-        style,
-      } from '../../src/index.js'
-      import {bindData, define} from './demo-components.js'
-      import {update} from './page.js'
+        update,
+      } from './app.js'
 
-      define('projects', ({present}) => {
-        present(data => {
+      define('projects', () => ({
+        present: data => {
           const projects = data.projects.filter(project => {
             return data.filter === 'all'
               || project.status.toLowerCase() === data.filter
@@ -857,12 +837,13 @@
             projects,
             summary: `${projects.length} ${suffix} shown`,
           }
-        })
+        },
 
-        return component({
+        component: component({
           template: document.querySelector('#projects-template'),
           bindings: [
             bindData(),
+            ...bindProjectCards(),
             on('[data-filter]', 'click', (_event, element) => {
               const filter = element.dataset.filter
 
@@ -874,45 +855,14 @@
                 update(data => ({...data, filter}))
               }
             }),
-            bind(
-              '[data-project-progress]',
-              data => data.projects.map(project => `${project.progress}%`),
-            ),
-            style(
-              '[data-project-accent]',
-              'background-color',
-              data => data.projects.map(project => project.accent),
-            ),
-            style(
-              '[data-project-progress-bar]',
-              'width',
-              data => data.projects.map(project => `${project.progress}%`),
-            ),
-            classToggle(
-              '[data-project-status]',
-              'status--planning',
-              data => data.projects.map(project => {
-                return project.status === 'Planning'
-              }),
-            ),
             attr(
-              '[data-filter="all"]',
+              '[data-filter]',
               'aria-pressed',
-              data => String(data.filter === 'all'),
-            ),
-            attr(
-              '[data-filter="active"]',
-              'aria-pressed',
-              data => String(data.filter === 'active'),
-            ),
-            attr(
-              '[data-filter="planning"]',
-              'aria-pressed',
-              data => String(data.filter === 'planning'),
+              (data, element) => String(element.dataset.filter === data.filter),
             ),
           ],
-        })
-      })
+        }),
+      }))
     </script>
 
     <template id="activity-page-template">
@@ -982,16 +932,15 @@
     </template>
 
     <script type="module">
-      import {attr, component, style} from '../../src/index.js'
-      import {bindData, define} from './demo-components.js'
+      import {attr, bindData, component, define, style} from './app.js'
 
-      define('activityPage', ({present}) => {
-        present(data => ({
+      define('activityPage', () => ({
+        present: data => ({
           count: `${data.activities.length} updates`,
           activities: data.activities,
-        }))
+        }),
 
-        return component({
+        component: component({
           template: document.querySelector('#activity-page-template'),
           bindings: [
             bindData(),
@@ -1008,8 +957,8 @@
               }),
             ),
           ],
-        })
-      })
+        }),
+      }))
     </script>
   </body>
 </html>

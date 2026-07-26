@@ -65,7 +65,7 @@ bind('output', () => null)
 bind('output', () => undefined)
 
 // @ts-expect-error attribute projections must return text-compatible primitives.
-attr('output', 'title', () => ['invalid'])
+attr('output', 'title', () => ({ invalid: true }))
 attr('output', 'title', () => null)
 
 // @ts-expect-error class projections must return booleans.
@@ -75,6 +75,11 @@ classToggle('output', 'active', () => undefined)
 // @ts-expect-error style projections must return strings.
 style('output', 'color', () => 1)
 style('output', 'color', () => null)
+
+// Inside a repeated region, every binding may return one value per occurrence.
+attr('output', 'title', () => ['first', 'second'])
+classToggle('output', 'active', () => [true, false])
+style('output', 'color', () => ['red', 'blue'])
 
 // Property bindings intentionally preserve arbitrary inferred value types.
 prop('output', () => ({ mode: 'compact' }), 'lumiConfig')

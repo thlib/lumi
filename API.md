@@ -240,11 +240,13 @@ the corresponding native element type. Complex selectors safely fall back to
 
 These declared projection results are validated during preparation. Scalar
 `bind` and `attr` values must be strings, numbers, or booleans; `style`
-requires strings; and `classToggle` requires a boolean. A `bind`
-projection may additionally return arrays as described below. For every scalar
-binding, `undefined` and `null` perform no DOM operation and leave the
-corresponding state unchanged. Other invalid values throw a `TypeError` before
-the update makes any DOM changes.
+requires strings; and `classToggle` requires a boolean. A `bind` projection may
+additionally return arrays to repeat its element, as described below, and any
+binding inside a repeated region may return one parallel array entry per
+occurrence. Each resolved entry is validated as the scalar value above. For
+every scalar binding, `undefined` and `null` perform no DOM operation and leave
+the corresponding state unchanged. Other invalid values throw a `TypeError`
+before the update makes any DOM changes.
 
 Except for HTML injection sinks, `prop` intentionally does not impose a
 generic value restriction. Native and custom properties may legitimately

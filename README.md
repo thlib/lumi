@@ -186,9 +186,15 @@ details, and methodology. The [benchmark source](./benchmark/spa-comparison.js)
 and [raw samples](./benchmark/results/spa-performance.json) are also available.
 Run it locally with `pnpm benchmark:spa`.
 
+Every template in the SPA declares its behavior in a `<script type="module">`
+beside it, and each of those scripts imports from one entry, `app.js`. Running
+from source, that entry is a native module graph; `pnpm run build:spa` bundles
+the same entry into `examples/spa/dist/` without changing a template or a
+script, and the benchmark serves that build.
+
 The SPA's `demo-components.js` module contains ordinary JavaScript
-orchestration utilities owned by that demo, including its `define`, `resolve`,
-`present`, and `connect` functions. They are not Lumi APIs; another SPA using
+orchestration utilities owned by that demo: `define`, `resolve`, `bindData`,
+and its `data-bind` path convention. They are not Lumi APIs, another SPA using
 Lumi could organize its application with different utilities or a framework.
 
 ## Application binding conventions

@@ -113,7 +113,7 @@ export function prop(selector, project, name) {
  * @template {string} [Selector=string]
  * @param {Selector} selector
  * @param {string} name
- * @param {ScalarProjection<Data, TextValue | null | undefined, SelectorElement<Selector>>} project
+ * @param {ScalarProjection<Data, TextValue | null | undefined | ReadonlyArray<unknown>, SelectorElement<Selector>>} project
  * @returns {import('./types.js').Binding<Data>}
  * @throws {TypeError} When name is an event handler or srcdoc, or a projection
  * returns a non-text value.
@@ -139,7 +139,7 @@ export function attr(selector, name, project) {
  * @template {string} [Selector=string]
  * @param {Selector} selector
  * @param {string} name
- * @param {ScalarProjection<Data, boolean | null | undefined, SelectorElement<Selector>>} project
+ * @param {ScalarProjection<Data, boolean | null | undefined | ReadonlyArray<unknown>, SelectorElement<Selector>>} project
  * @returns {import('./types.js').Binding<Data>}
  * @throws {TypeError} When a projection does not return a boolean.
  */
@@ -162,7 +162,7 @@ export function classToggle(selector, name, project) {
  * @template {string} [Selector=string]
  * @param {Selector} selector
  * @param {string} name
- * @param {ScalarProjection<Data, string | null | undefined, SelectorElement<Selector>>} project
+ * @param {ScalarProjection<Data, string | null | undefined | ReadonlyArray<unknown>, SelectorElement<Selector>>} project
  * @returns {import('./types.js').Binding<Data>}
  * @throws {TypeError} When a projection does not return a string.
  */

@@ -1,7 +1,6 @@
 // @ts-check
 
 import {bind} from '../../src/index.js'
-import {jsonPath} from './plain.js'
 
 /**
  * Demo-owned component orchestration.
@@ -9,27 +8,64 @@ import {jsonPath} from './plain.js'
  * These utilities are ordinary application JavaScript, not Lumi APIs. Another
  * application using Lumi can organize its components with different utilities
  * or with a framework.
+ *
+ * A definition pairs one Lumi component with the projection that turns
+ * application data into the snapshot that component renders. Definitions run
+ * on first use, so a component may resolve a child that a later script in the
+ * document defines.
  */
-
-/** @typedef {import('../../src/types.js').Component<any>} RegisteredComponent */
-/** @typedef {(name: string) => RegisteredComponent} Resolver */
 
 /**
- * @typedef {object} DefinitionContext
- * @property {Resolver} resolve
- * @property {<Data, Presentation>(
- *   presenter: (data: Data) => Presentation,
- * ) => void} present
+ * @template [Data=any]
+ * @typedef {{
+ *   component: import('../../src/types.js').Component<any>,
+ *   present: (data: Data) => any,
+ * }} Definition
  */
 
-/** @type {Map<string, (data: unknown) => unknown>} */
-const presenters = new Map()
+/** @type {Map<string, () => Definition>} */
+const definitions = new Map()
 
-/** @type {Map<string, (context: DefinitionContext) => RegisteredComponent>} */
-const factories = new Map()
+/** @type {Map<string, Definition>} */
+const resolved = new Map()
 
-/** @type {Map<string, RegisteredComponent>} */
-const components = new Map()
+/**
+ * Declares one named component definition.
+ *
+ * @param {string} name
+ * @param {() => Definition} define_
+ */
+export function define(name, define_) {
+  if (definitions.has(name)) {
+    throw new Error(`Component "${name}" is already defined`)
+  }
+
+  definitions.set(name, define_)
+}
+
+/**
+ * Returns one defined component, creating it on first use.
+ *
+ * @param {string} name
+ * @returns {Definition}
+ */
+export function resolve(name) {
+  const existing = resolved.get(name)
+
+  if (existing !== undefined) {
+    return existing
+  }
+
+  const define_ = definitions.get(name)
+
+  if (define_ === undefined) {
+    throw new Error(`Component "${name}" is not defined`)
+  }
+
+  const definition = define_()
+  resolved.set(name, definition)
+  return definition
+}
 
 /**
  * Creates the application-owned data-path binding used by each component.
@@ -40,95 +76,72 @@ const components = new Map()
 export function bindData() {
   return bind(
     '[data-bind]',
-    (data, element) => {
-      return jsonPath(
-        data,
-        element.getAttribute('data-bind') ?? undefined,
-      )
-    },
+    (data, element) => dataPath(data, element.getAttribute('data-bind')),
   )
 }
 
+/** @type {Map<string, string[]>} */
+const segmentsByPath = new Map()
+
 /**
- * Defines a component and its optional presentation hook. Native behavior is
- * declared by the component itself with Lumi's on() binding.
+ * Resolves one application-owned data path against a snapshot. Named members
+ * distribute through arrays, so `$.projects.name` produces one name per
+ * project. Lumi receives only the resulting JavaScript values and does not
+ * interpret this convention.
  *
- * @param {string} name
- * @param {(context: DefinitionContext) => RegisteredComponent} factory
+ * @template Value
+ * @param {unknown} data
+ * @param {string | null} path
+ * @returns {Value}
  */
-export function define(name, factory) {
-  if (factories.has(name)) {
-    throw new Error(`Component "${name}" is already defined`)
+export function dataPath(data, path) {
+  if (path === null) {
+    throw new TypeError('A data path is required')
   }
 
-  factories.set(name, factory)
+  let segments = segmentsByPath.get(path)
+
+  if (segments === undefined) {
+    segments = compilePath(path)
+    segmentsByPath.set(path, segments)
+  }
+
+  let value = data
+
+  for (const segment of segments) {
+    value = selectMember(value, segment)
+  }
+
+  return /** @type {Value} */ (value)
 }
 
 /**
- * Resolves one registered component, including its child dependencies.
- *
- * @param {string} name
- * @returns {RegisteredComponent}
+ * @param {string} path
+ * @returns {string[]}
  */
-export function resolve(name) {
-  const existing = components.get(name)
+function compilePath(path) {
+  const segments = path.split('.')
 
-  if (existing !== undefined) {
-    return existing
+  if (segments.shift() !== '$' || segments.includes('')) {
+    throw new TypeError(`"${path}" is not a supported data path`)
   }
 
-  const factory = factories.get(name)
-
-  if (factory === undefined) {
-    throw new Error(`Component "${name}" is not defined`)
-  }
-
-  const resolved = factory(Object.freeze({
-    resolve,
-
-    present(presenter) {
-      registerPresenter(name, presenter)
-    },
-  }))
-  components.set(name, resolved)
-  return resolved
+  return segments
 }
 
 /**
- * @template Data
- * @template Presentation
- * @param {string} name
- * @param {(data: Data) => Presentation} presenter
- */
-function registerPresenter(name, presenter) {
-  if (presenters.has(name)) {
-    throw new Error(`Component presenter "${name}" is already registered`)
-  }
-
-  presenters.set(
-    name,
-    data => presenter(/** @type {Data} */ (data)),
-  )
-}
-
-/**
- * Presents one registered component from application data.
- *
- * Selecting presentations here keeps application scheduling outside Lumi:
- * independently mounted components are presented only when the application
- * chooses to update them.
- *
- * @template Data
- * @param {string} name
- * @param {Data} data
+ * @param {unknown} value
+ * @param {string} segment
  * @returns {unknown}
  */
-export function present(name, data) {
-  const presenter = presenters.get(name)
-
-  if (presenter === undefined) {
-    throw new Error(`Component presenter "${name}" is not registered`)
+function selectMember(value, segment) {
+  if (Array.isArray(value)) {
+    return value.map(item => selectMember(item, segment))
   }
 
-  return presenter(data)
+  return typeof value === 'object'
+    && value !== null
+    && Object.hasOwn(value, segment)
+    ? Reflect.get(value, segment)
+    : undefined
 }

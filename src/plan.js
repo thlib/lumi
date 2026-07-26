@@ -688,7 +688,7 @@ function preparedDomUpdate(root, operations, ownedSubtrees, liveQuery) {
             operation.value,
           )
           if (changed) {
-            liveQuery.invalidate()
+            liveQuery.recheck(element)
           }
           continue
         }
@@ -715,7 +715,7 @@ function preparedDomUpdate(root, operations, ownedSubtrees, liveQuery) {
               operation.values[index],
             )
             if (changed) {
-              liveQuery.invalidate()
+              liveQuery.recheck(element)
             }
           }
         }

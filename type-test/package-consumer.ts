@@ -67,7 +67,10 @@ mounted.update({ count: '1', label: 'Count', disabled: false })
 bind('output', () => ({ count: 1 }))
 
 // @ts-expect-error attribute bindings accept only text-compatible primitives.
-attr('output', 'title', () => ['invalid'])
+attr('output', 'title', () => ({ invalid: true }))
+
+// One value per repeated occurrence remains available to every binding.
+attr('output', 'title', () => ['first', 'second'])
 
 // @ts-expect-error class bindings require boolean projections.
 classToggle('output', 'active', () => 'true')

@@ -1,11 +1,11 @@
 // @ts-check
 
-import {present, resolve} from './demo-components.js'
+import {resolve} from './demo-components.js'
 
 /** @typedef {'overview' | 'projects' | 'activity' | 'teams'} Route */
 /** @typedef {{route: Route} & Record<string, unknown>} ApplicationData */
 /** @typedef {import('../../src/types.js').MountedComponent<any>} Mounted */
-/** @typedef {import('../../src/types.js').Component<any>} Component */
+/** @typedef {import('./demo-components.js').Definition} Definition */
 
 const pageNames = Object.freeze({
   overview: 'overview',
@@ -29,10 +29,11 @@ const pageNames = Object.freeze({
  * }}
  */
 export function mountApplication(target) {
-  const shell = resolve('appShell').mount(target)
-  const pageSlot = shell.root.querySelector('[data-page-slot]')
-  /** @type {Record<Route, Component>} */
-  const pages = /** @type {Record<Route, Component>} */ ({})
+  const shell = resolve('appShell')
+  const mountedShell = shell.component.mount(target)
+  const pageSlot = mountedShell.root.querySelector('[data-page-slot]')
+  /** @type {Record<Route, Definition>} */
+  const pages = /** @type {Record<Route, Definition>} */ ({})
   /** @type {Partial<Record<Route, Mounted>>} */
   const mountedPages = {}
   /** @type {Route | undefined} */
@@ -50,47 +51,44 @@ export function mountApplication(target) {
       pages[route] = resolve(pageNames[route])
     }
   } catch (error) {
-    shell.unmount()
+    mountedShell.unmount()
     throw error
   }
 
   let isMounted = true
 
   return Object.freeze({
-    root: shell.root,
+    root: mountedShell.root,
 
     update(data) {
       if (!isMounted) {
         throw new Error('Cannot update an unmounted application')
       }
 
-      const route = data.route
-      const page = pages[route]
+      const page = pages[data.route]
 
       if (page === undefined) {
-        throw new Error(`Page "${route}" is not defined`)
+        throw new Error(`Page "${data.route}" is not defined`)
       }
 
       // Calculate every selected presentation before mutating any component.
-      const pagePresentation = present(pageNames[route], data)
-      const shellPresentation = {
-        appShell: present('appShell', data),
-        header: present('header', data),
-        navigation: present('navigation', data),
-      }
+      // Each definition presents its own children, so one page update is two
+      // presentations regardless of how deeply components nest.
+      const pagePresentation = page.present(data)
+      const shellPresentation = shell.present(data)
 
-      let activePage = mountedPages[route]
+      let activePage = mountedPages[data.route]
 
       if (activePage === undefined) {
-        activePage = page.mount(pageSlot)
-        mountedPages[route] = activePage
-      } else if (activeRoute !== route) {
+        activePage = page.component.mount(pageSlot)
+        mountedPages[data.route] = activePage
+      } else if (activeRoute !== data.route) {
         pageSlot.replaceChildren(activePage.root)
       }
-      activeRoute = route
+      activeRoute = data.route
 
       activePage.update(pagePresentation)
-      shell.update(shellPresentation)
+      mountedShell.update(shellPresentation)
     },
 
     unmount() {
@@ -99,7 +97,7 @@ export function mountApplication(target) {
       }
 
       unmountAll(Object.values(mountedPages))
-      shell.unmount()
+      mountedShell.unmount()
       isMounted = false
     },
   })

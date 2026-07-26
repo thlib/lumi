@@ -52,6 +52,7 @@ export function queryElements(root, selector) {
  * @returns {{
  *   find: (selector: string) => Element[],
  *   invalidate: () => void,
+ *   recheck: (element: Element) => void,
  * }}
  */
 export function createElementQuery(root) {
@@ -69,6 +70,17 @@ export function createElementQuery(root) {
 
     invalidate() {
       hasOpenShadowRoot = null
+    },
+
+    // A write reaches the element it targets, so only that subtree can gain
+    // a shadow host during a commit. Rechecking it is cheaper than discarding
+    // a component-wide result that a single write cannot invalidate.
+    recheck(element) {
+      if (hasOpenShadowRoot !== false) {
+        return
+      }
+
+      hasOpenShadowRoot = containsOpenShadowRoot(element)
     },
   }
 }
@@ -123,20 +135,39 @@ function queryElementTree(scope, selector, matches, hasOpenShadowRoot) {
  * @param {Element | ShadowRoot} scope
  */
 function containsOpenShadowRoot(scope) {
-  if (
-    scope.nodeType === 1
-    && /** @type {Element} */ (scope).shadowRoot !== null
-  ) {
-    return true
+  if (scope.nodeType === 1) {
+    const element = /** @type {Element} */ (scope)
+
+    if (element.shadowRoot !== null) {
+      return true
+    }
+
+    if (element.childElementCount === 0) {
+      return false
+    }
   }
 
-  for (const element of scope.querySelectorAll('*')) {
-    if (element.shadowRoot !== null) {
+  // Walking avoids materializing a node list for a check that usually stops
+  // at the first host, or finds none at all.
+  const walker = elementWalker(scope)
+
+  while (walker.nextNode() !== null) {
+    if (/** @type {Element} */ (walker.currentNode).shadowRoot !== null) {
       return true
     }
   }
 
   return false
+}
+
+/**
+ * Walks the element descendants of one tree, excluding the scope itself.
+ *
+ * @param {Element | ShadowRoot | DocumentFragment} scope
+ * @returns {TreeWalker}
+ */
+export function elementWalker(scope) {
+  return scope.ownerDocument.createTreeWalker(scope, 1 /* SHOW_ELEMENT */)
 }
 
 /**
@@ -333,7 +364,13 @@ export function elementAtPath(root, path, errorMessage) {
  */
 export function importElementTree(document, source) {
   const imported = /** @type {Element} */ (document.importNode(source, true))
-  copyOpenShadowTrees(document, source, imported)
+
+  // importNode() already copies the light DOM. Pairing the two trees is only
+  // needed to reattach open shadow roots, which most components never have.
+  if (containsOpenShadowRoot(source)) {
+    copyOpenShadowTrees(document, source, imported)
+  }
+
   return imported
 }
 

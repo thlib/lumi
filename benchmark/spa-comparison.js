@@ -22,6 +22,7 @@ const root = resolve(import.meta.dirname, '..')
  *   label: string,
  *   packageFile: string,
  *   buildDirectory: string | null,
+ *   buildScript?: string,
  *   publicRoot: string,
  * }} Framework
  *
@@ -101,8 +102,9 @@ const frameworks = Object.freeze([
     id: 'lumi',
     label: 'Lumi',
     packageFile: resolve(root, 'package.json'),
-    buildDirectory: null,
-    publicRoot: resolve(root, 'examples/spa'),
+    buildDirectory: root,
+    buildScript: 'build:spa',
+    publicRoot: resolve(root, 'examples/spa/dist'),
   },
   {
     id: 'react',
@@ -773,8 +775,9 @@ application code splitting.
 
 ## Methodology
 
-- Production React, Vue, and Angular bundles are rebuilt unless
-  \`--skip-build\` is passed. Lumi is served as its native ES modules.
+- Every application is served from a production build, rebuilt unless
+  \`--skip-build\` is passed. Lumi's example is bundled and minified with
+  esbuild from the same unbundled source the repository serves directly.
 - Framework order rotates between samples. Browser HTTP cache is disabled.
 - Every sample runs two unmeasured route cycles and one filter cycle to warm
   JIT and scheduler paths.
@@ -993,7 +996,7 @@ function buildApplications() {
 
     console.log(`Building ${framework.label} production application`)
     const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
-    const build = spawnSync(pnpm, ['run', 'build'], {
+    const build = spawnSync(pnpm, ['run', framework.buildScript ?? 'build'], {
       cwd: framework.buildDirectory,
       encoding: 'utf8',
       stdio: 'inherit',
@@ -1069,10 +1072,6 @@ function mapUrlToFile(pathname) {
       ? 'index.html'
       : match[2]
     return resolveInside(framework.publicRoot, relative)
-  }
-
-  if (decoded.startsWith('/src/')) {
-    return resolveInside(root, decoded.slice(1))
   }
 
   return null

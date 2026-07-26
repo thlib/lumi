@@ -31,9 +31,17 @@ test('the SPA example drives its behavior through Lumi event bindings', async ({
   await page.locator('[data-action="close-nav"]').click()
   await expect(shell).not.toHaveClass(/nav-open/)
 
-  // navigation: routing between pages
+  // navigation: routing between pages, marking only the active link
   await page.locator('[data-route="projects"]').click()
   await expect(page.locator('#projects-title')).toBeVisible()
+  await expect(page.locator('[data-route="projects"]')).toHaveAttribute(
+    'aria-current',
+    'page',
+  )
+  await expect(page.locator('[data-route="overview"]')).not.toHaveAttribute(
+    'aria-current',
+    'page',
+  )
 
   // projects: filter buttons repeat rows and update the summary
   const summary = page.locator('[data-bind="$.summary"]').first()
@@ -45,8 +53,19 @@ test('the SPA example drives its behavior through Lumi event bindings', async ({
     'true',
   )
 
-  // teams: submit validation, toast creation, and toast dismissal
+  // teams: a member link opens that member's profile
   await page.locator('[data-route="teams"]').click()
+  await page.locator('[data-member-link]').first().click()
+  const profile = page.locator('[data-member-profile]')
+  await expect(profile).toBeVisible()
+  await expect(page.locator('[data-team-directory]')).toBeHidden()
+  await expect(profile.locator('[data-member-email]')).toHaveAttribute(
+    'href',
+    /^mailto:/,
+  )
+
+  // teams: submit validation, toast creation, and toast dismissal
+  await profile.locator('.back-link').click()
   const inviteForm = page.locator('[data-invite-form]')
   await expect(inviteForm).toBeVisible()
 

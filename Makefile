@@ -8,8 +8,8 @@ PNPM ?= pnpm
 BROWSERS ?= chromium firefox
 PORT ?= 8008
 
-.PHONY: help install build types bundle size lint test test-browser \
-	test-package browsers check bench bench-spa serve clean
+.PHONY: help install build types bundle spa size lint test test-browser \
+	test-package browsers check bench spa-bench serve clean
 
 help: ## List the available targets
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage: make <target>\n\n"} \
@@ -27,6 +27,9 @@ types: ## Emit only the TypeScript declarations
 
 bundle: ## Emit only the minified browser bundle
 	$(PNPM) run build:bundle
+
+spa: ## Build the SPA example into examples/spa/dist
+	$(PNPM) run build:spa
 
 size: bundle ## Report the browser bundle size, raw and gzipped
 	@printf 'dist/lumi.js  %s bytes raw  %s bytes gzipped\n' \

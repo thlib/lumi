@@ -5,7 +5,7 @@ import test from 'node:test'
 import { JSDOM } from 'jsdom'
 import {bind, component} from '../src/index.js'
 import {mountApplication} from '../examples/spa/application.js'
-import {define} from '../examples/spa/demo-components.js'
+import {define, resolve} from '../examples/spa/demo-components.js'
 import { emailValidationMessage } from '../examples/spa/validation.js'
 
 test('describes the invite email validity state', () => {
@@ -101,21 +101,28 @@ test('keeps only the active SPA page connected to the document', () => {
   define('header', definition('header'))
   define('navigation', definition('navigation'))
 
-  define('appShell', ({resolve, present}) => {
-    resolve('header')
-    resolve('navigation')
-    present(data => {
-      countPresentation('appShell')
-      return {route: data.route}
-    })
+  define('appShell', () => {
+    const header = resolve('header')
+    const navigation = resolve('navigation')
 
-    return component({
-      template: createTemplate(document, `
-        <div class="app-shell">
-          <div data-page-slot></div>
-        </div>
-      `),
-    })
+    return {
+      present(data) {
+        countPresentation('appShell')
+        return {
+          route: data.route,
+          header: header.present(data),
+          navigation: navigation.present(data),
+        }
+      },
+
+      component: component({
+        template: createTemplate(document, `
+          <div class="app-shell">
+            <div data-page-slot></div>
+          </div>
+        `),
+      }),
+    }
   })
 
   define('overview', definition('overview'))
@@ -164,25 +171,23 @@ test('keeps only the active SPA page connected to the document', () => {
 
   /**
    * @param {string} name
-   * @returns {(context: {
-   *   present: (presenter: (data: any) => unknown) => void,
-   * }) => import('../src/types.js').Component<any>}
+   * @returns {() => import('../examples/spa/demo-components.js').Definition}
    */
   function definition(name) {
-    return ({present}) => {
-      present(data => {
+    return () => ({
+      present(data) {
         countPresentation(name)
         return `${name}: ${data.value}`
-      })
+      },
 
-      return component({
+      component: component({
         template: createTemplate(
           document,
           `<section data-page="${name}">Not presented</section>`,
         ),
         bindings: [bind('[data-page]', data => data)],
-      })
-    }
+      }),
+    })
   }
 
   /** @param {string} name */

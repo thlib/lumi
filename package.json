@@ -48,6 +48,7 @@
     "build": "pnpm run build:types && pnpm run build:bundle",
     "build:types": "pnpm run clean && tsc -p tsconfig.build.json",
     "build:bundle": "esbuild src/index.js --bundle --format=esm --target=es2022 --minify --sourcemap --legal-comments=none --banner:js=\"/*! @thlib/lumi | Apache-2.0 | https://github.com/thlib/lumi */\" --outfile=dist/lumi.js",
+    "build:spa": "node scripts/build-spa.js",
     "lint": "pnpm run build:types && tsc -p jsconfig.json",
     "benchmark": "node benchmark/performance-baseline.js",
     "benchmark:spa": "node benchmark/spa-comparison.js",

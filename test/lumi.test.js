@@ -514,25 +514,30 @@ test('checks light DOM shadow topology once per update phase', () => {
       bind('.second', data => data.second),
     ],
   }).mount(document.body)
-  const nativeQuery = mounted.root.querySelectorAll
+  const nativeCreateTreeWalker = document.createTreeWalker
   let topologyChecks = 0
 
-  /** @param {string} selector */
-  mounted.root.querySelectorAll = function querySelectorAll(selector) {
-    if (selector === '*') {
+  /** @param {Node} scope @param {number} [whatToShow] */
+  document.createTreeWalker = function createTreeWalker(scope, whatToShow) {
+    if (scope === mounted.root) {
       topologyChecks += 1
     }
 
-    return nativeQuery.call(this, selector)
+    return nativeCreateTreeWalker.call(this, scope, whatToShow)
   }
 
   mounted.update({ first: 'First', second: 'Second' })
   topologyChecks = 0
-  mounted.update({ first: 'First', second: 'Second' })
+  // Text writes cannot introduce a shadow host, so committing them does not
+  // cost another topology check.
+  mounted.update({ first: 'Changed', second: 'Also changed' })
 
   assert.equal(topologyChecks, 2)
-  assert.equal(mounted.root.querySelector('.first')?.textContent, 'First')
-  assert.equal(mounted.root.querySelector('.second')?.textContent, 'Second')
+  assert.equal(mounted.root.querySelector('.first')?.textContent, 'Changed')
+  assert.equal(
+    mounted.root.querySelector('.second')?.textContent,
+    'Also changed',
+  )
 })
 
 test('passes the planned matching element to scalar projections', () => {

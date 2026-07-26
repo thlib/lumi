@@ -9,6 +9,7 @@
  */
 
 import {
+  elementWalker,
   isInsideOwnedSubtree,
   queryElements,
   queryOwnedElements,
@@ -610,8 +611,14 @@ function collectShadowBoundaries(scope, boundaries, ownedSubtrees) {
 
   // Native traversal keeps the common shadow-free component cheap; only a
   // discovered shadow root costs another pass.
-  for (const element of scope.querySelectorAll('*')) {
-    collectShadowBoundary(element, boundaries, ownedSubtrees)
+  const walker = elementWalker(scope)
+
+  while (walker.nextNode() !== null) {
+    collectShadowBoundary(
+      /** @type {Element} */ (walker.currentNode),
+      boundaries,
+      ownedSubtrees,
+    )
   }
 }
 

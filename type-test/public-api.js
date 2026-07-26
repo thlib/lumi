@@ -5,7 +5,7 @@ import {
   bind,
   classToggle,
   component,
-  event,
+  on,
   prop,
   style,
 } from '../src/index.js'
@@ -30,14 +30,32 @@ const options = {
     bind('output', data => data.count),
     prop('output', data => data.count, 'value'),
     attr('output', 'aria-label', data => data.count),
-    event('output', 'click', (nativeEvent, output) => {
+    on('output', 'click', (nativeEvent, output) => {
       const click = /** @type {MouseEvent} */ (nativeEvent)
       const control = /** @type {HTMLOutputElement} */ (output)
       void click
       void control
     }),
+    on('video', 'ended', () => {}, {
+      at: 'elements',
+      capture: true,
+      passive: true,
+      freq: 'once',
+    }),
   ],
 }
+
+// @ts-expect-error the native once option is replaced by freq.
+on('output', 'click', () => {}, { once: true })
+
+// @ts-expect-error freq accepts only the declared frequencies.
+on('output', 'click', () => {}, { freq: 'sometimes' })
+
+// @ts-expect-error unsupported event options are rejected.
+on('output', 'click', () => {}, { prevent: true })
+
+// @ts-expect-error at accepts only the declared binding locations.
+on('output', 'click', () => {}, { at: 'document' })
 
 // @ts-expect-error bind projections must return text values or arrays.
 bind('output', () => ({ count: 1 }))

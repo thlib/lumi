@@ -99,9 +99,8 @@ React delegates a broad event set at a root. Angular can coalesce multiple
 handlers for one element and event. Vue stores stable invokers and includes a
 timestamp guard for listeners attached during bubbling.
 
-There is no event system. Applications retain direct native listeners or use
-their own small delegation helpers. Persistent component elements let those
-listeners survive renders without framework machinery.
+There is no synthetic event system. `on()` manages only where a native
+listener lives and when it is released.
 
 Sources:
 

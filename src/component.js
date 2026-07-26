@@ -1,6 +1,7 @@
 // @ts-check
 
 import { assertElement, cloneTemplateRoot } from './dom.js'
+import { connectEventBindings, getEventBindingDescriptor } from './events.js'
 import {
   connectDomBindings,
   getDomBindingDescriptor,
@@ -82,6 +83,8 @@ function connectComponent(root, bindings) {
   const domBindings = []
   /** @type {number | undefined} */
   let domBindingIndex
+  /** @type {Array<import('./events.js').EventBindingDescriptor>} */
+  const eventBindings = []
   /** @type {Element[]} */
   const ownedSubtrees = []
 
@@ -164,6 +167,13 @@ function connectComponent(root, bindings) {
 
   try {
     for (const binding of bindings) {
+      const eventDescriptor = getEventBindingDescriptor(binding)
+
+      if (eventDescriptor !== null) {
+        eventBindings.push(eventDescriptor)
+        continue
+      }
+
       const descriptor = getDomBindingDescriptor(binding)
 
       if (descriptor !== null) {
@@ -182,6 +192,12 @@ function connectComponent(root, bindings) {
         0,
         connectDomBindings(root, domBindings, ownedSubtrees),
       )
+    }
+
+    if (eventBindings.length > 0) {
+      // Managed listeners follow the committed DOM, so the event manager
+      // commits last and releases its listeners first on unmount.
+      connected.push(connectEventBindings(root, eventBindings, ownedSubtrees))
     }
   } catch (error) {
     destroyConnected(connected)

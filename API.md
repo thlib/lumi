@@ -11,13 +11,15 @@ The supported module is `@thlib/lumi`. It exports:
 
 - `component`
 - `bind`
-- `event`
+- `on`
 - `prop`
 - `attr`
 - `classToggle`
 - `style`
 - `child`
-- The `Component`, `ComponentOptions`, and `MountedComponent` TypeScript types
+- The `Component`, `ComponentOptions`, and `MountedComponent` TypeScript
+  types, plus `EventBindingOptions`, `EventBindingLocation`, and
+  `EventBindingFrequency`
 
 `component()` returns a definition with `mount()`. A mounted component exposes
 only `root`, `update()`, and `unmount()`.
@@ -33,7 +35,7 @@ application APIs.
 import {
   bind,
   component,
-  event,
+  on,
   prop,
 } from '@thlib/lumi'
 import {jsonPath} from './plain.js'
@@ -64,7 +66,7 @@ const counter = component({
       (data, element) => jsonPath(data, element.dataset.disabled),
       'disabled',
     ),
-    event('[data-action="increment"]', 'click', () => {
+    on('[data-action="increment"]', 'click', () => {
       actualData = {
         ...actualData,
         count: actualData.count + 1,
@@ -256,7 +258,7 @@ allows HTML, CSS, other bindings, and explicitly separate code to own other
 parts of the same element.
 
 Generic property and attribute bindings reject native event handler names such
-as `onclick`. Attach behavior with `event()` or the browser's
+as `onclick`. Attach behavior with `on()` or the browser's
 `addEventListener()`. They also reject `srcdoc`.
 
 `innerHTML` and `outerHTML` remain available through `prop()`, but their
@@ -294,33 +296,147 @@ matching element in the prepared DOM view for that update. Applications can
 inspect it to inject their own metadata conventions; HTML attribute
 interpretation is not built in.
 
-## `event(selector, type, handle, options?)`
+## `on(selector, type, handler, options?)`
 
-`event` installs one native listener on the persistent component root when it
-mounts and removes that listener when it unmounts. Events are delegated to the
-closest matching element in their composed path:
+`on` declares one native event relationship inside Lumi-owned DOM. Lumi owns
+listener placement and cleanup; the browser owns event behavior. Like every
+other binding, the declaration names the DOM it owns first.
 
 ```js
-event('[data-action="save"]', 'click', (nativeEvent, button) => {
+on('[data-action="save"]', 'click', (nativeEvent, button) => {
   nativeEvent.preventDefault()
   save(button.getAttribute('data-id'))
 })
 ```
 
-The handler receives the native event and the matching element. Bare tag
-selectors provide the corresponding element type in TypeScript, and known
-native event names provide their specific event type.
+The handler receives the original native event and the matched element. Bare
+tag selectors provide the corresponding element type in TypeScript, and known
+native event names provide their specific event type. The return value is
+ignored, so cancellation stays explicit.
 
-Delegation means one stable handler continues to cover matching elements
-created or repeated by later updates. It also means the event must bubble to
-the component root, unless capture is enabled in `options`. The optional
-boolean or `AddEventListenerOptions` value is passed directly to
-`addEventListener()` and used again for cleanup.
+The options object defaults to:
 
-The selector is scoped to the component's current DOM, includes the component
-root itself, and follows open Shadow DOM in the same way as scalar bindings.
-There is no synthetic event object, dynamic function lookup, or automatic
-update: the application handler owns its state transition and calls
+```js
+{
+  at: 'component',
+  capture: false,
+  passive: false,
+  freq: 'always',
+}
+```
+
+`capture` and `passive` are applied to the native listener Lumi registers.
+
+### `at: 'component'`
+
+The default routes matching events through the component's own event
+boundaries. One managed listener keeps covering matching elements created,
+repeated, or moved by later updates, and no listener has to be reconnected
+when repeated elements change.
+
+Lumi reads the event's composed path, restricts it to DOM the component owns,
+excludes DOM owned internally by nested Lumi components, and invokes each
+matching binding once with the closest matching path element. The mounted
+component root participates in matching.
+
+Compatible declarations share one logical router. The grouping key is the
+component event boundary, event type, `capture`, and `passive`; `once` is
+binding state rather than part of the key.
+
+```js
+bindings: [
+  on('.save', 'click', save),
+  on('.delete', 'click', remove),
+  on('[data-track]', 'click', track),
+]
+```
+
+Bindings sharing a router run in their declaration order. Because they are
+callbacks inside one native listener, `stopImmediatePropagation()` does not
+suppress a sibling binding dispatched by the same router; `preventDefault()`
+and `stopPropagation()` keep their native behavior. Code that needs exactly
+independent native listeners should combine the behavior in one handler or use
+`at: 'elements'`.
+
+`event.currentTarget` is the routing boundary and is never rewritten, because
+that would require a wrapped event object. Use the handler's second argument
+for the matched element.
+
+### `at: 'elements'`
+
+```js
+on('video', 'ended', finishPlayback, {
+  at: 'elements',
+})
+```
+
+maintains native listeners on every matching Lumi-owned element. The plural is
+intentional: a selector may match zero, one, or many elements, and that set is
+reconciled after mount and after every successful update. Newly matching
+elements gain listeners, elements that stop matching lose them, and removed
+elements are released along with Lumi's references to them. A failed
+preparation cannot change listener membership.
+
+This is the correct choice when the event does not bubble, when
+`event.currentTarget` must be the matching element, or when native
+target-listener ordering and `stopImmediatePropagation()` behavior matter.
+
+Lumi never translates one event type into another and never silently selects
+capture for a non-bubbling type. `on('input', 'focus', handler)` is not
+rewritten as `focusin`. In development, a component declaration for a
+well-known non-bubbling type produces a warning suggesting `{at: 'elements'}`
+or `{capture: true}`; custom event names remain valid because a `CustomEvent`
+chooses its own `bubbles` value.
+
+### `freq`
+
+How often a declaration may run is an enum rather than a boolean, and it
+replaces the native `once` listener option:
+
+```js
+on('video', 'ended', finishPlayback, {
+  at: 'elements',
+  freq: 'once',
+})
+```
+
+`'always'` is the default. `'once'` means the declaration may invoke its
+handler at most once during the lifetime of this mounted component — not once
+per matching element, native listener, render, or reattachment. Lumi consumes
+the binding immediately before invoking the handler, so reentrant dispatch
+cannot reach it again and a throwing handler stays consumed. Consuming an
+element binding removes its listeners from every matching element; consuming a
+component binding removes only its own route from the shared router. A new
+mount of the same declaration starts a fresh once lifetime.
+
+Lumi never passes a native `once` to a shared router, which would remove the
+whole router after one event, and never relies on per-element native `once`,
+which would mean once per element instead of once per declaration.
+
+### Lifecycle and boundaries
+
+Selectors are scoped to the component's current DOM, include the component
+root, and follow open Shadow DOM in the same way as scalar bindings. A
+component may own more than one event tree, so Lumi maintains compatible
+routers in reachable open shadow roots too, and still invokes a binding at
+most once per native event. Closed shadow roots stay encapsulated.
+
+Parent selectors do not match inside a child component's owned subtree; the
+child mount container itself remains available to the parent. Unmount
+disconnects every router, removes every element listener, and releases the
+handler, element, and once state. A handler may unmount its own component,
+after which the remaining bindings of that component are not invoked.
+
+A routed handler that throws is reported through the host's uncaught-error
+reporting rather than aborting the other bindings sharing its router. Element
+listeners keep native listener error behavior.
+
+Lumi manages events only on DOM it owns. `window`, `document`, media queries,
+and sockets remain ordinary `addEventListener()` subscriptions owned by the
+application.
+
+There is no synthetic event object, event pooling, dynamic function lookup, or
+automatic update: the application handler owns its state transition and calls
 `mounted.update()` when needed.
 
 ## Array-valued bind projections
@@ -504,6 +620,18 @@ An error is thrown when:
 - A generic binding targets an event handler or `srcdoc`.
 - An `innerHTML` or `outerHTML` projection is not genuine `TrustedHTML`, or
   the mounted document cannot authenticate it.
+- An event declaration has a non-string type or selector, a handler that is
+  not callable, options that are not an object, an unsupported option name, or
+  an invalid `at`, `capture`, `passive`, or `freq` value. The message
+  identifies the event type, the selector, and the invalid property:
+
+  ```text
+  Invalid Lumi event binding for "ended" on "video": options.at must be
+  "component" or "elements"
+  ```
+
+An event selector is validated when the component connects, even when it
+currently has no matches, so an invalid declaration fails mount atomically.
 
 If application projection code throws, Lumi rethrows an error that identifies
 the binding kind, selector, and one-based matched position. The original

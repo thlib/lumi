@@ -165,6 +165,43 @@ function visitScopedElement(
 }
 
 /**
+ * Resolves a selector without crossing child component boundaries.
+ * The owning container itself remains available because it belongs to the
+ * component that declared the child.
+ *
+ * @param {Element} root
+ * @param {string} selector
+ * @param {ReadonlyArray<Element>} ownedSubtrees
+ * @param {{find: (selector: string) => Element[]}} [query]
+ * @returns {Element[]}
+ */
+export function queryOwnedElements(root, selector, ownedSubtrees, query) {
+  const elements = query === undefined
+    ? queryElements(root, selector)
+    : query.find(selector)
+
+  if (ownedSubtrees.length === 0) {
+    return elements
+  }
+
+  return elements.filter(element => !isInsideOwnedSubtree(element, ownedSubtrees))
+}
+
+/**
+ * Returns whether an element belongs to a nested component's owned DOM rather
+ * than to the component that declared the child.
+ *
+ * @param {Element} element
+ * @param {ReadonlyArray<Element>} ownedSubtrees
+ * @returns {boolean}
+ */
+export function isInsideOwnedSubtree(element, ownedSubtrees) {
+  return ownedSubtrees.some(owned => {
+    return owned !== element && shadowIncludingContains(owned, element)
+  })
+}
+
+/**
  * Returns the parent element across an open ShadowRoot boundary.
  *
  * @param {Element} element

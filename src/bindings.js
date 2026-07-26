@@ -1,11 +1,8 @@
 // @ts-check
 
-import { findElement, queryElements } from './dom.js'
+import { findElement } from './dom.js'
 import { prepareMounted } from './component.js'
 import { claimDomSubtree, createDomBinding } from './plan.js'
-
-const noOperation = () => {}
-const noOperationUpdate = Object.freeze({ commit: noOperation })
 
 /**
  * @typedef {string | number | boolean} TextValue
@@ -19,29 +16,8 @@ const noOperationUpdate = Object.freeze({ commit: noOperation })
  */
 
 /**
- * Resolves a bare HTML, SVG, or MathML tag selector to the same element type
- * exposed by the DOM query APIs. Complex selectors safely fall back to
- * Element.
- *
  * @template {string} Selector
- * @typedef {Selector extends keyof HTMLElementTagNameMap
- *   ? HTMLElementTagNameMap[Selector]
- *   : Selector extends keyof SVGElementTagNameMap
- *     ? SVGElementTagNameMap[Selector]
- *     : Selector extends keyof MathMLElementTagNameMap
- *       ? MathMLElementTagNameMap[Selector]
- *       : Selector extends keyof HTMLElementDeprecatedTagNameMap
- *         ? HTMLElementDeprecatedTagNameMap[Selector]
- *         : Element} SelectorElement
- */
-
-/**
- * Resolves a known native event name to its specific event type.
- *
- * @template {string} Type
- * @typedef {Type extends keyof GlobalEventHandlersEventMap
- *   ? GlobalEventHandlersEventMap[Type]
- *   : Event} NativeEvent
+ * @typedef {import('./types.js').SelectorElement<Selector>} SelectorElement
  */
 
 /**
@@ -55,7 +31,7 @@ function assertSafeBindingName(kind, name) {
 
   if (normalizedName.startsWith('on')) {
     throw new TypeError(
-      `Lumi ${kind} binding "${name}" is an event handler; use event()`,
+      `Lumi ${kind} binding "${name}" is an event handler; use on()`,
     )
   }
 
@@ -93,69 +69,6 @@ export function bind(selector, project) {
       /** @type {unknown} */ (project)
     ),
   })
-}
-
-/**
- * Delegates one native event to the closest matching element inside the
- * component boundary. Delegation keeps the handler active for matching
- * elements created by later structural updates.
- *
- * The listener is installed when the component mounts and removed when it
- * unmounts. Native listener options are passed through unchanged.
- *
- * @template Data
- * @template {string} [Selector=string]
- * @template {string} [Type=string]
- * @param {Selector} selector
- * @param {Type} type
- * @param {(event: NativeEvent<Type>, element: SelectorElement<Selector>) => void} handle
- * @param {boolean | AddEventListenerOptions} [options]
- * @returns {import('./types.js').Binding<Data>}
- */
-export function event(selector, type, handle, options = false) {
-  return {
-    connect(root) {
-      // Validate the selector during connection, including when it currently
-      // has no matches, so mount remains atomic.
-      queryElements(root, selector)
-
-      /** @param {Event} nativeEvent */
-      const listener = nativeEvent => {
-        const matches = new Set(queryElements(root, selector))
-
-        for (const target of nativeEvent.composedPath()) {
-          if (
-            typeof target === 'object'
-            && target !== null
-            && 'nodeType' in target
-            && target.nodeType === 1
-            && matches.has(/** @type {Element} */ (target))
-          ) {
-            handle(
-              /** @type {NativeEvent<Type>} */ (nativeEvent),
-              /** @type {SelectorElement<Selector>} */ (target),
-            )
-            return
-          }
-
-          if (target === root) {
-            return
-          }
-        }
-      }
-
-      root.addEventListener(type, listener, options)
-
-      return {
-        prepare() {
-          return noOperationUpdate
-        },
-        destroy() {
-          root.removeEventListener(type, listener, options)
-        },
-      }
-    },
-  }
 }
 
 /**

@@ -241,7 +241,7 @@ const counter = component({
       (data, element) => jsonPath(data, element.dataset.disabled),
       'disabled',
     ),
-    event('[data-action="increment"]', 'click', () => {
+    on('[data-action="increment"]', 'click', () => {
       const count = actualData.count + 1
       actualData = {
         ...actualData,
@@ -250,7 +250,7 @@ const counter = component({
       }
       counter.update(presentCounter(actualData))
     }),
-    event('[data-action="decrement"]', 'click', () => {
+    on('[data-action="decrement"]', 'click', () => {
       const count = Math.max(0, actualData.count - 1)
       actualData = {
         ...actualData,
@@ -265,7 +265,7 @@ const counter = component({
 counter.update(presentCounter(actualData))
 ```
 
-The `event` declarations manage native delegated listeners at the component
+The `on` declarations manage native listeners at the component
 boundary. The application handlers still decide the next actual data and call
 `update()` explicitly; Lumi does not synthesize events or state transitions.
 
@@ -542,16 +542,41 @@ A button is a real `<button>`. A form is a real `<form>`. Their keyboard
 behavior, accessibility, default actions, validation, and bubbling come from
 the browser.
 
-`event(selector, type, handle, options?)` manages a native listener on the
-persistent component root. It delegates through the event's composed path and
-removes the listener on unmount. The native event, capture, bubbling,
-cancellation, listener options, and default actions remain intact; there is
-no synthetic event system.
+`on(selector, type, handler, options?)` declares one native event
+relationship inside Lumi-owned DOM. Lumi owns listener placement and cleanup;
+the browser owns event behavior. The native event object, capture, bubbling,
+cancellation, listener options, default actions, and Shadow DOM behavior
+remain intact; there is no synthetic event system.
 
-Delegation lets one listener keep working for matching elements created by
-later structural updates. Events must bubble to the component root unless the
-listener uses capture. Application code may still use `addEventListener()`
-directly when delegation or component-managed cleanup is not appropriate.
+The default, `{at: 'component'}`, routes the event through the component's own
+event boundaries. Compatible declarations — same boundary, type, `capture`,
+and `passive` — share one logical router, and one managed listener keeps
+working for matching elements created by later structural updates. Lumi
+restricts the event's composed path to DOM the component owns, excludes DOM
+owned by nested components, and passes the closest matching element to the
+handler. `event.currentTarget` remains the routing boundary rather than a
+rewritten value, because rewriting it would require a wrapped event.
+
+`{at: 'elements'}` instead maintains native listeners on every matching
+element and reconciles that set after each successful update. It is the
+explicit answer for non-bubbling events, exact target-listener semantics, and
+`event.currentTarget` on the matched element. Lumi never rewrites an event
+type or silently promotes a declaration to capture to make a non-bubbling
+event reachable; a development warning names the two explicit choices instead.
+
+How often a declaration runs is an enum rather than a boolean.
+`{freq: 'once'}` states that one declaration may run at most once for the
+lifetime of a mounted component, independent of how many elements match or how
+often they are recreated. That lifetime belongs to the Lumi binding, not to an
+incidental native listener, so Lumi does not pass a native `once` to a shared
+router or rely on per-element native `once`. Keeping it an enum leaves room
+for a later per-element frequency without reinterpreting existing
+declarations.
+
+Application code may still use `addEventListener()` directly when component
+routing or component-managed cleanup is not appropriate. Lumi manages events
+only on DOM it owns; `window`, `document`, media queries, and sockets stay
+application concerns with application-owned cleanup.
 
 A template may expose an application-owned hook:
 

@@ -1,7 +1,7 @@
 // @ts-check
 
 import {bind} from '../../src/index.js'
-import {jsonPath, on as delegate} from './plain.js'
+import {jsonPath} from './plain.js'
 
 /**
  * Demo-owned component orchestration.
@@ -20,12 +20,6 @@ import {jsonPath, on as delegate} from './plain.js'
  * @property {<Data, Presentation>(
  *   presenter: (data: Data) => Presentation,
  * ) => void} present
- * @property {(
- *   type: string,
- *   selector: string,
- *   handle: (event: Event, element: Element) => void,
- *   options?: boolean | AddEventListenerOptions,
- * ) => void} on
  */
 
 /** @type {Map<string, (data: unknown) => unknown>} */
@@ -36,9 +30,6 @@ const factories = new Map()
 
 /** @type {Map<string, RegisteredComponent>} */
 const components = new Map()
-
-/** @type {Array<(root: Element) => void | (() => void)>} */
-const connections = []
 
 /**
  * Creates the application-owned data-path binding used by each component.
@@ -59,7 +50,8 @@ export function bindData() {
 }
 
 /**
- * Defines a component and its optional presentation and behavior hooks.
+ * Defines a component and its optional presentation hook. Native behavior is
+ * declared by the component itself with Lumi's on() binding.
  *
  * @param {string} name
  * @param {(context: DefinitionContext) => RegisteredComponent} factory
@@ -96,12 +88,6 @@ export function resolve(name) {
 
     present(presenter) {
       registerPresenter(name, presenter)
-    },
-
-    on(type, selector, handle, options) {
-      connections.push(
-        root => delegate(root, type, selector, handle, options),
-      )
     },
   }))
   components.set(name, resolved)
@@ -145,42 +131,4 @@ export function present(name, data) {
   }
 
   return presenter(data)
-}
-
-/**
- * Connects all registered application behavior at one native event boundary.
- *
- * @param {Element} root
- * @returns {() => void}
- */
-export function connect(root) {
-  /** @type {Array<void | (() => void)>} */
-  const disconnect = []
-
-  try {
-    for (const connect of connections) {
-      disconnect.push(connect(root))
-    }
-  } catch (error) {
-    disconnectAll(disconnect)
-    throw error
-  }
-
-  let isConnected = true
-
-  return () => {
-    if (!isConnected) {
-      return
-    }
-
-    disconnectAll(disconnect)
-    isConnected = false
-  }
-}
-
-/** @param {Array<void | (() => void)>} disconnect */
-function disconnectAll(disconnect) {
-  for (const handle of disconnect.reverse()) {
-    handle?.()
-  }
 }

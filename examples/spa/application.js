@@ -1,6 +1,6 @@
 // @ts-check
 
-import {connect, present, resolve} from './demo-components.js'
+import {present, resolve} from './demo-components.js'
 
 /** @typedef {'overview' | 'projects' | 'activity' | 'teams'} Route */
 /** @typedef {{route: Route} & Record<string, unknown>} ApplicationData */
@@ -37,8 +37,6 @@ export function mountApplication(target) {
   const mountedPages = {}
   /** @type {Route | undefined} */
   let activeRoute
-  /** @type {undefined | (() => void)} */
-  let disconnect
 
   try {
     if (pageSlot === null) {
@@ -46,12 +44,11 @@ export function mountApplication(target) {
     }
 
     for (const route of /** @type {Route[]} */ (Object.keys(pageNames))) {
-      // Resolve every definition before connecting the shared delegated event
-      // boundary, without cloning inactive templates into the document.
+      // Resolve every definition up front, without cloning inactive templates
+      // into the document. Each component owns its own event declarations, so
+      // mounting a page connects and releases its listeners with it.
       pages[route] = resolve(pageNames[route])
     }
-
-    disconnect = connect(shell.root)
   } catch (error) {
     shell.unmount()
     throw error
@@ -101,7 +98,6 @@ export function mountApplication(target) {
         return
       }
 
-      disconnect?.()
       unmountAll(Object.values(mountedPages))
       shell.unmount()
       isMounted = false

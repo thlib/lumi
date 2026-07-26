@@ -7,3 +7,26 @@
   - **`null`, `undefined`, or other primitives** throw a `TypeError`.
     Arrays must also be dense — a hole (`[1, , 3]`) throws
     ([:489](../src/cardinality.js#L489)).
+- publish to npm
+  - ## Install
+
+  ```sh
+  npm install @thlib/lumi
+  ```
+
+  The package entry is unbundled ES module source. Bundlers tree-shake and
+  minify it alongside the rest of an application, and stack traces through Lumi
+  stay readable.
+
+  Without a build step, load the browser bundle from a CDN:
+
+  ```html
+  <script type="module">
+    import {bind, component, on, prop} from 'https://cdn.jsdelivr.net/npm/@thlib/lumi@0.1.0/dist/lumi.js'
+  </script>
+  ```
+
+  `dist/lumi.js` is a single minified ES module of about 10 kB gzipped, so one
+  request replaces the module graph. Its sourcemap resolves against the
+  published source, so devtools still show original code. Pin a version: an
+  unpinned CDN URL follows the latest release.

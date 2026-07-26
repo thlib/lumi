@@ -107,8 +107,9 @@ dependencies.
 
 It currently supports template mounting, scalar bindings, positional
 repetition from array projections, nested components, and bindings through
-open Shadow DOM. Managed event bindings delegate native events without
-introducing a synthetic event system.
+open Shadow DOM. Managed event bindings route native events at the component
+boundary, or follow matching elements when a binding declares
+`{at: 'elements'}`, without introducing a synthetic event system.
 
 Mounting replaces the target's existing contents with a fresh clone of the
 component template. Array repetition deliberately preserves identity by
@@ -236,8 +237,7 @@ pnpm run test:browser --project=chromium --project=firefox
 
 The implementation is experimental. Its public API may change while the design
 is validated. Lumi follows Semantic Versioning; before 1.0, breaking public API
-changes may be released in a minor version and are documented in
-[CHANGELOG.md](./CHANGELOG.md).
+changes may be released in a minor version.
 
 The complete architecture, boundaries, event model, intentional exclusions,
 acceptance criteria, and open questions are documented in

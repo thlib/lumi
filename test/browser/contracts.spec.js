@@ -373,3 +373,98 @@ test('a preparation failure leaves the live form and focus unchanged', async ({
     return document.querySelector('form') === Reflect.get(window, 'liveForm')
   })).toBe(true)
 })
+
+test('element bindings observe native non-bubbling events', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { component, on } = /** @type {typeof import('../../src/index.js')} */ (
+      await import(String('/src/index.js'))
+    )
+    const template = document.createElement('template')
+    template.innerHTML = `
+      <form>
+        <input class="first" name="first">
+        <input class="second" name="second">
+        <div class="viewport"></div>
+      </form>
+    `
+    /** @type {string[]} */
+    const focused = []
+    /** @type {boolean | null} */
+    let passiveCancelled = null
+    const mounted = component({
+      template,
+      bindings: [
+        on('input', 'focus', event => {
+          focused.push(/** @type {Element} */ (event.currentTarget).className)
+        }, { at: 'elements' }),
+        on('.viewport', 'wheel', event => {
+          event.preventDefault()
+          passiveCancelled = event.defaultPrevented
+        }, { passive: true }),
+      ],
+    }).mount(document.querySelector('#test-root'))
+
+    const first = /** @type {HTMLInputElement} */ (
+      mounted.root.querySelector('.first')
+    )
+    const second = /** @type {HTMLInputElement} */ (
+      mounted.root.querySelector('.second')
+    )
+
+    first.focus()
+    second.focus()
+    mounted.root.querySelector('.viewport')?.dispatchEvent(new WheelEvent('wheel', {
+      bubbles: true,
+      cancelable: true,
+    }))
+    mounted.unmount()
+
+    // A detached element must not carry a Lumi listener back into the page.
+    document.body.append(first)
+    first.focus()
+
+    return { focused, passiveCancelled }
+  })
+
+  // focus does not bubble, so only element attachment observes it, and a
+  // passive listener cannot cancel its event.
+  expect(result).toEqual({
+    focused: ['first', 'second'],
+    passiveCancelled: false,
+  })
+})
+
+test('binding-level once consumes one declaration for the mounted component', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { bind, component, on } = /** @type {typeof import('../../src/index.js')} */ (
+      await import(String('/src/index.js'))
+    )
+    const template = document.createElement('template')
+    template.innerHTML = '<ul><li class="row"><button type="button">Go</button></li></ul>'
+    /** @type {string[]} */
+    const order = []
+    const mounted = component({
+      template,
+      bindings: [
+        bind('.row', (/** @type {{rows: object[]}} */ data) => data.rows),
+        on('button', 'click', () => order.push('once'), { freq: 'once' }),
+        on('button', 'click', () => order.push('always')),
+      ],
+    }).mount(document.querySelector('#test-root'))
+
+    mounted.update({ rows: [{}, {}] })
+
+    for (const button of mounted.root.querySelectorAll('button')) {
+      button.click()
+    }
+
+    mounted.update({ rows: [{}, {}, {}] })
+    mounted.root.querySelectorAll('button')[2]?.click()
+
+    return order
+  })
+
+  expect(result).toEqual(['once', 'always', 'always', 'always'])
+})

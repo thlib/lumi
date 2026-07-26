@@ -87,7 +87,7 @@ test('bindings plan and render through an open shadow root', async ({
   })
 })
 
-test('events delegate through open shadow roots and clean up', async ({
+test('events route through open shadow roots and clean up', async ({
   page,
 }) => {
   const result = await page.evaluate(async () => {
@@ -102,7 +102,7 @@ test('events delegate through open shadow roots and clean up', async ({
     }
 
     customElements.define('shadow-event-contract', ShadowEventContract)
-    const { component, event } = /** @type {typeof import('../../src/index.js')} */ (
+    const { component, on } = /** @type {typeof import('../../src/index.js')} */ (
       await import(String('/src/index.js'))
     )
     const template = document.createElement('template')
@@ -112,7 +112,7 @@ test('events delegate through open shadow roots and clean up', async ({
     const mounted = component({
       template,
       bindings: [
-        event('.action', 'click', (nativeEvent, element) => {
+        on('.action', 'click', (nativeEvent, element) => {
           handled.push({
             type: nativeEvent.type,
             tag: element.localName,

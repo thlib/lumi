@@ -9,7 +9,7 @@ import {
   child,
   classToggle,
   component,
-  event,
+  on,
   prop,
   style,
   bind,
@@ -136,7 +136,7 @@ test('exposes only the APIs used by Lumi applications', () => {
     'child',
     'classToggle',
     'component',
-    'event',
+    'on',
     'prop',
     'style',
   ])
@@ -155,7 +155,7 @@ test('delegates native events and removes handlers on unmount', () => {
   const mounted = component({
     template,
     bindings: [
-      event('.action', 'click', (nativeEvent, element) => {
+      on('.action', 'click', (nativeEvent, element) => {
         handled.push([nativeEvent, element])
       }),
     ],
@@ -194,7 +194,7 @@ test('event handlers follow elements repeated by bind', () => {
     template,
     bindings: [
       bind('.item', data => data.items),
-      event('.item button', 'click', (_nativeEvent, element) => {
+      on('.item button', 'click', (_nativeEvent, element) => {
         handled.push(element)
       }),
     ],
@@ -1916,11 +1916,11 @@ test('fails closed when TrustedHTML cannot be authenticated', () => {
 test('keeps iframe documents and native handlers out of generic bindings', () => {
   assert.throws(
     () => prop('button', () => () => {}, 'onclick'),
-    /use event\(\)/,
+    /use on\(\)/,
   )
   assert.throws(
     () => attr('button', 'onclick', () => 'run()'),
-    /use event\(\)/,
+    /use on\(\)/,
   )
   assert.throws(
     () => attr('iframe', 'srcdoc', () => '<script>run()</script>'),

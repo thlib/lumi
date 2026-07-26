@@ -12,7 +12,7 @@ import {
   elementPath,
   importElementTree,
   queryElements,
-  shadowIncludingContains,
+  queryOwnedElements,
   shadowIncludingParent,
 } from './dom.js'
 import { connectCardinalityDomBindings } from './cardinality.js'
@@ -1347,29 +1347,6 @@ function pairElementChildren(
       )
     }
   }
-}
-
-/**
- * Resolves a selector without crossing child component boundaries.
- * The owning container itself remains available for non-structural bindings.
- *
- * @param {Element} root
- * @param {string} selector
- * @param {ReadonlyArray<Element>} ownedSubtrees
- * @param {ElementQuery} [query]
- * @returns {Element[]}
- */
-function queryOwnedElements(root, selector, ownedSubtrees, query) {
-  const elements = query === undefined
-    ? queryElements(root, selector)
-    : query.find(selector)
-
-  return elements.filter(element => {
-    return !ownedSubtrees.some(owned => {
-      return owned !== element
-        && shadowIncludingContains(owned, element)
-    })
-  })
 }
 
 /**

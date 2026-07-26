@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Lumi counter</title>
     <script type="module">
-      import {bind, component, event, prop} from '../../src/index.js'
+      import {bind, component, on, prop} from '../../src/index.js'
       import {jsonPath} from './plain.js'
 
       let data = {
@@ -32,7 +32,7 @@
             data => data.count <= 0,
             'disabled',
           ),
-          event('[data-increment]', 'click', () => {
+          on('[data-increment]', 'click', () => {
             const count = data.count + 1
             data = {
               ...data,
@@ -41,7 +41,7 @@
             }
             counter.update(data)
           }),
-          event('[data-decrement]', 'click', () => {
+          on('[data-decrement]', 'click', () => {
             const count = Math.max(0, data.count - 1)
             data = {
               ...data,

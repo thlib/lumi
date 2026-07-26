@@ -29,9 +29,12 @@
       "types": "./dist/index.d.ts",
       "import": "./src/index.js",
       "default": "./src/index.js"
-    }
+    },
+    "./dist/lumi.js": "./dist/lumi.js"
   },
   "types": "./dist/index.d.ts",
+  "jsdelivr": "./dist/lumi.js",
+  "unpkg": "./dist/lumi.js",
   "files": [
     "src",
     "dist",
@@ -41,15 +44,17 @@
     "DESIGN.md"
   ],
   "scripts": {
-    "clean:types": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build:types": "pnpm run clean:types && tsc -p tsconfig.build.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "pnpm run build:types && pnpm run build:bundle",
+    "build:types": "pnpm run clean && tsc -p tsconfig.build.json",
+    "build:bundle": "esbuild src/index.js --bundle --format=esm --target=es2022 --minify --sourcemap --legal-comments=none --banner:js=\"/*! @thlib/lumi | Apache-2.0 | https://github.com/thlib/lumi */\" --outfile=dist/lumi.js",
     "lint": "pnpm run build:types && tsc -p jsconfig.json",
     "benchmark": "node benchmark/performance-baseline.js",
     "benchmark:spa": "node benchmark/spa-comparison.js",
     "test": "node --test test/*.test.js",
     "test:browser": "playwright test",
     "test:package": "node scripts/test-package.js",
-    "prepack": "pnpm run build:types"
+    "prepack": "pnpm run build"
   },
   "engines": {
     "node": ">=22"
@@ -57,6 +62,7 @@
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@types/jsdom": "^27.0.0",
+    "esbuild": "^0.28.1",
     "jsdom": "^27.1.0",
     "typescript": "^7.0.2"
   }

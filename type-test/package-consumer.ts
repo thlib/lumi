@@ -4,11 +4,12 @@ import {
   child,
   classToggle,
   component,
-  event,
+  on,
   prop,
   style,
   type Component,
   type ComponentOptions,
+  type EventBindingOptions,
   type MountedComponent,
 } from '@thlib/lumi'
 
@@ -21,6 +22,11 @@ type CounterData = {
 const template = document.createElement('template')
 template.innerHTML = '<output></output>'
 
+const mediaOptions: EventBindingOptions = {
+  at: 'elements',
+  freq: 'once',
+}
+
 const options: ComponentOptions<CounterData> = {
   template,
   bindings: [
@@ -32,14 +38,18 @@ const options: ComponentOptions<CounterData> = {
     attr('output', 'aria-label', data => data.label),
     classToggle('output', 'disabled', data => data.disabled),
     style('output', 'opacity', data => data.disabled ? '0.5' : '1'),
-    event('button', 'click', (nativeEvent, button) => {
+    on('button', 'click', (nativeEvent, button) => {
       const click: MouseEvent = nativeEvent
       const control: HTMLButtonElement = button
       void click
       void control
     }),
+    on('video', 'ended', () => {}, mediaOptions),
   ],
 }
+
+// @ts-expect-error the native once option is replaced by freq.
+on('button', 'click', () => {}, { once: true })
 
 const definition: Component<CounterData> = component(options)
 const mounted: MountedComponent<CounterData> = definition.mount(document.body)

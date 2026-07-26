@@ -52,7 +52,7 @@ check: lint test test-package test-browser ## Run everything CI runs
 bench: ## Run the Node rendering baseline
 	$(PNPM) run benchmark
 
-bench-spa: ## Run the SPA comparison benchmark
+spa-bench: ## Run the SPA comparison benchmark
 	$(PNPM) run benchmark:spa
 
 serve: ## Serve the repository on port 8008 to browse examples/

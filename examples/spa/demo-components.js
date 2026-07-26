@@ -1,7 +1,5 @@
 // @ts-check
 
-import {bind} from '../../src/index.js'
-
 /**
  * Demo-owned component orchestration.
  *
@@ -65,83 +63,4 @@ export function resolve(name) {
   const definition = define_()
   resolved.set(name, definition)
   return definition
-}
-
-/**
- * Creates the application-owned data-path binding used by each component.
- *
- * @template Data
- * @returns {import('../../src/types.js').Binding<Data>}
- */
-export function bindData() {
-  return bind(
-    '[data-bind]',
-    (data, element) => dataPath(data, element.getAttribute('data-bind')),
-  )
-}
-
-/** @type {Map<string, string[]>} */
-const segmentsByPath = new Map()
-
-/**
- * Resolves one application-owned data path against a snapshot. Named members
- * distribute through arrays, so `$.projects.name` produces one name per
- * project. Lumi receives only the resulting JavaScript values and does not
- * interpret this convention.
- *
- * @template Value
- * @param {unknown} data
- * @param {string | null} path
- * @returns {Value}
- */
-export function dataPath(data, path) {
-  if (path === null) {
-    throw new TypeError('A data path is required')
-  }
-
-  let segments = segmentsByPath.get(path)
-
-  if (segments === undefined) {
-    segments = compilePath(path)
-    segmentsByPath.set(path, segments)
-  }
-
-  let value = data
-
-  for (const segment of segments) {
-    value = selectMember(value, segment)
-  }
-
-  return /** @type {Value} */ (value)
-}
-
-/**
- * @param {string} path
- * @returns {string[]}
- */
-function compilePath(path) {
-  const segments = path.split('.')
-
-  if (segments.shift() !== '$' || segments.includes('')) {
-    throw new TypeError(`"${path}" is not a supported data path`)
-  }
-
-  return segments
-}
-
-/**
- * @param {unknown} value
- * @param {string} segment
- * @returns {unknown}
- */
-function selectMember(value, segment) {
-  if (Array.isArray(value)) {
-    return value.map(item => selectMember(item, segment))
-  }
-
-  return typeof value === 'object'
-    && value !== null
-    && Object.hasOwn(value, segment)
-    ? Reflect.get(value, segment)
-    : undefined
 }

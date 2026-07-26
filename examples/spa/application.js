@@ -31,7 +31,7 @@ const pageNames = Object.freeze({
 export function mountApplication(target) {
   const shell = resolve('appShell')
   const mountedShell = shell.component.mount(target)
-  const pageSlot = mountedShell.root.querySelector('[data-page-slot]')
+  const pageSlot = mountedShell.root.querySelector('main')
   /** @type {Record<Route, Definition>} */
   const pages = /** @type {Record<Route, Definition>} */ ({})
   /** @type {Partial<Record<Route, Mounted>>} */

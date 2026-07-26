@@ -1,23 +1,18 @@
 <script setup lang="ts">
 import type {Activity} from '../../../data'
 
-withDefaults(defineProps<{
-  items: readonly Activity[]
-  compact?: boolean
-}>(), {
-  compact: false,
-})
+defineProps<{items: readonly Activity[]}>()
 </script>
 
 <template>
-  <ol :class="['activity-list', {'activity-list--compact': compact}]">
+  <ol class="activity-list">
     <li v-for="activity in items" :key="activity.id" class="activity-item">
-      <span class="activity-avatar" :style="{backgroundColor: activity.tone}">
+      <span class="avatar" :style="{backgroundColor: activity.tone}">
         {{ activity.initials }}
       </span>
-      <div class="activity-item__copy">
+      <div class="copy">
         <p>
-          <a class="person-link" :href="`#/teams/${activity.personId}`">{{ activity.person }}</a>
+          <a class="person" :href="`#/teams/${activity.personId}`">{{ activity.person }}</a>
           {{ ' ' }}<span>{{ activity.action }}</span>
           {{ ' ' }}<b>{{ activity.target }}</b>
         </p>

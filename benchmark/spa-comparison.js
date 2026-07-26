@@ -400,7 +400,7 @@ async function runSample(browser, url, options) {
          */
         async function setFilter(value, expectedCards) {
           const button = Array.from(
-            document.querySelectorAll('.filter-group button'),
+            document.querySelectorAll('[aria-label="Filter projects"] button'),
           ).find(candidate => {
             return candidate.textContent?.trim().toLowerCase() === value
           })
@@ -408,7 +408,7 @@ async function runSample(browser, url, options) {
           if (!(button instanceof HTMLButtonElement)) {
             throw new Error(`Could not find the "${value}" filter`)
           }
-          const projectPage = button.closest('.page')
+          const projectPage = button.closest('#projects')
           if (projectPage === null) {
             throw new Error('The project filter is outside its page')
           }

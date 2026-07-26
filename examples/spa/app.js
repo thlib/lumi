@@ -23,8 +23,7 @@ export {
   style,
 } from '../../src/index.js'
 
-export {bindData, define, resolve} from './demo-components.js'
-export {bindProjectCards} from './project-card.js'
+export {define, resolve} from './demo-components.js'
 export {update} from './page.js'
 export {emailValidationMessage} from './validation.js'
 

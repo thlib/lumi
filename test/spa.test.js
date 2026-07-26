@@ -117,8 +117,8 @@ test('keeps only the active SPA page connected to the document', () => {
 
       component: component({
         template: createTemplate(document, `
-          <div class="app-shell">
-            <div data-page-slot></div>
+          <div id="shell">
+            <main></main>
           </div>
         `),
       }),
@@ -196,9 +196,7 @@ test('keeps only the active SPA page connected to the document', () => {
   }
 
   function pageSlot() {
-    const slot = application.root.querySelector(
-      '[data-page-slot]',
-    )
+    const slot = application.root.querySelector('main')
 
     assert.ok(slot instanceof window.HTMLElement)
     return slot

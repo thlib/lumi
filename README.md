@@ -193,9 +193,9 @@ the same entry into `examples/spa/dist/` without changing a template or a
 script, and the benchmark serves that build.
 
 The SPA's `demo-components.js` module contains ordinary JavaScript
-orchestration utilities owned by that demo: `define`, `resolve`, `bindData`,
-and its `data-bind` path convention. They are not Lumi APIs, another SPA using
-Lumi could organize its application with different utilities or a framework.
+orchestration utilities owned by that demo: `define` and `resolve`. They are
+not Lumi APIs, another SPA using Lumi could organize its application with
+different utilities or a framework.
 
 ## Application binding conventions
 
@@ -209,7 +209,7 @@ import {bind, component} from '@thlib/lumi'
 function bindFields() {
   return bind(
     '[data-field]',
-    (data, element) => data[element.dataset.field],
+    (data, el) => data[el.dataset.field],
   )
 }
 

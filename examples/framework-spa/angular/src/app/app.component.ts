@@ -97,9 +97,9 @@ export class AppComponent {
     this.filter.set(filter)
   }
 
-  submitInvite(event: SubmitEvent): void {
-    event.preventDefault()
-    const form = event.currentTarget as HTMLFormElement
+  submitInvite(e: SubmitEvent): void {
+    e.preventDefault()
+    const form = e.currentTarget as HTMLFormElement
     const input = form.elements.namedItem('email') as HTMLInputElement
     input.value = input.value.trim()
     const message = this.validationMessage(input)
@@ -112,20 +112,20 @@ export class AppComponent {
     this.showToast()
   }
 
-  submitDemo(event: SubmitEvent): void {
-    event.preventDefault()
+  submitDemo(e: SubmitEvent): void {
+    e.preventDefault()
     this.showToast()
   }
 
-  updateEmailError(event: Event): void {
+  updateEmailError(e: Event): void {
     if (this.emailError() !== '') {
-      this.emailError.set(this.validationMessage(event.currentTarget as HTMLInputElement))
+      this.emailError.set(this.validationMessage(e.currentTarget as HTMLInputElement))
     }
   }
 
   showToast(): void {
     const toast = {
-      id: `demo-toast-${this.nextToastId++}`,
+      id: `toast-${this.nextToastId++}`,
       message: 'No server for demo',
     }
     this.toasts.update(items => [...items, toast])

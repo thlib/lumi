@@ -1,20 +1,15 @@
 <script setup lang="ts">
 import type {Project} from '../../../data'
 
-withDefaults(defineProps<{
-  items: readonly Project[]
-  overview?: boolean
-}>(), {
-  overview: false,
-})
+defineProps<{items: readonly Project[]}>()
 </script>
 
 <template>
-  <div :class="['project-grid', {'project-grid--overview': overview}]">
+  <div class="project-grid">
     <article v-for="project in items" :key="project.id" class="project-card">
-      <div class="project-card__top">
-        <span class="project-accent" :style="{backgroundColor: project.accent}" />
-        <span :class="['status', {'status--planning': project.status === 'Planning'}]">
+      <div class="top">
+        <span class="accent" :style="{backgroundColor: project.accent}" />
+        <span :class="['status', {'planning': project.status === 'Planning'}]">
           {{ project.status }}
         </span>
       </div>
@@ -26,8 +21,8 @@ withDefaults(defineProps<{
       <div class="progress-track">
         <span :style="{width: `${project.progress}%`}" />
       </div>
-      <div class="project-card__footer">
-        <span class="member-stack">{{ project.members }}</span>
+      <div class="footer">
+        <span class="members">{{ project.members }}</span>
         <span>{{ project.due }}</span>
       </div>
     </article>

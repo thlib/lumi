@@ -1,7 +1,7 @@
 // @ts-check
 
 // Static content and routing helpers shared by the Lumi SPA.
-/** @typedef {'overview' | 'projects' | 'activity' | 'teams'} Route */
+/** @typedef {'overview' | 'projects' | 'records' | 'activity' | 'teams'} Route */
 /** @typedef {'all' | 'active' | 'planning'} ProjectFilter */
 
 /**
@@ -74,6 +74,7 @@
 export const routeLabels = Object.freeze({
   overview: 'Overview',
   projects: 'Projects',
+  records: 'Records',
   activity: 'Activity',
   teams: 'Manage teams',
 })
@@ -398,6 +399,7 @@ export function routeFromHash(hash) {
 
   return route === 'overview'
     || route === 'projects'
+    || route === 'records'
     || route === 'activity'
     || route === 'teams'
     ? route
@@ -411,7 +413,7 @@ export function memberFromHash(hash) {
 }
 
 export function normalizeHash() {
-  if (!/^#\/(overview|projects|activity|teams)(?:[/?]|$)/.test(window.location.hash)) {
+  if (!/^#\/(overview|projects|records|activity|teams)(?:[/?]|$)/.test(window.location.hash)) {
     window.history.replaceState(null, '', '#/overview')
   }
 }

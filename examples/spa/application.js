@@ -2,7 +2,7 @@
 
 import {resolve} from './demo-components.js'
 
-/** @typedef {'overview' | 'projects' | 'activity' | 'teams'} Route */
+/** @typedef {'overview' | 'projects' | 'records' | 'activity' | 'teams'} Route */
 /** @typedef {{route: Route} & Record<string, unknown>} ApplicationData */
 /** @typedef {import('../../src/types.js').MountedComponent<any>} Mounted */
 /** @typedef {import('./demo-components.js').Definition} Definition */
@@ -10,6 +10,7 @@ import {resolve} from './demo-components.js'
 const pageNames = Object.freeze({
   overview: 'overview',
   projects: 'projects',
+  records: 'records',
   activity: 'activityPage',
   teams: 'teams',
 })

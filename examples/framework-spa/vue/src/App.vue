@@ -14,6 +14,13 @@ import {
   type ProjectFilter,
   type Toast,
 } from '../../data'
+import {
+  filterLargeRecords,
+  orderLargeRecords,
+  recordFilters,
+  type RecordFilter,
+  type RecordSortDirection,
+} from '../../large-data'
 
 normalizeHash()
 
@@ -21,6 +28,8 @@ const route = ref(routeFromHash(location.hash))
 const memberId = ref(memberFromHash(location.hash))
 const navOpen = ref(false)
 const filter = ref<ProjectFilter>('all')
+const recordFilter = ref<RecordFilter>('all')
+const recordSort = ref<RecordSortDirection>('ascending')
 const toasts = ref<Toast[]>([])
 const emailError = ref('')
 let nextToastId = 1
@@ -30,6 +39,10 @@ const selectedMember = computed(() => members.find(member => member.id === membe
 const visibleProjects = computed(() => projects.filter(project => {
   return filter.value === 'all' || project.status.toLowerCase() === filter.value
 }))
+const visibleRecords = computed(() => orderLargeRecords(
+  filterLargeRecords(recordFilter.value),
+  recordSort.value,
+))
 
 function handleHashChange() {
   route.value = routeFromHash(location.hash)
@@ -121,6 +134,9 @@ onBeforeUnmount(() => {
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h6l2-2h8v14H4v-12Z" /></svg>
             <span>Projects</span><span class="count">{{ projects.length }}</span>
           </a>
+          <a class="link" href="#/records" :aria-current="route === 'records' ? 'page' : undefined" @click="closeIfCurrent('records')">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14M5 12h14M5 19h14" /></svg><span>Records</span>
+          </a>
           <a class="link" href="#/activity" :aria-current="route === 'activity' ? 'page' : undefined" @click="closeIfCurrent('activity')">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-6 4 12 2-6h5" /></svg><span>Activity</span>
           </a>
@@ -172,6 +188,26 @@ onBeforeUnmount(() => {
           <p>{{ visibleProjects.length }} {{ visibleProjects.length === 1 ? 'project' : 'projects' }} shown</p>
         </div>
         <ProjectCards :items="visibleProjects" />
+      </section>
+
+      <section v-else-if="route === 'records'" id="records" aria-labelledby="records-title">
+        <div class="heading"><div><p class="eyebrow">Performance dataset</p><h1 id="records-title">Records</h1><p>Filter and sort a deterministic 20,000-row dataset without virtualization.</p></div></div>
+        <div class="record-toolbar">
+          <div class="filters" aria-label="Filter records">
+            <button v-for="value in recordFilters" :key="value" type="button" :data-record-filter="value" :aria-pressed="recordFilter === value" @click="recordFilter = value">{{ value[0].toUpperCase() + value.slice(1) }}</button>
+          </div>
+          <p class="record-summary">{{ visibleRecords.length.toLocaleString('en-US') }} records shown</p>
+        </div>
+        <div class="record-list-wrap panel">
+          <div class="record-list-header" :aria-sort="recordSort">
+            <button type="button" data-record-sort @click="recordSort = recordSort === 'ascending' ? 'descending' : 'ascending'">
+              Record <span class="record-sort-indicator" aria-hidden="true">{{ recordSort === 'ascending' ? '↑' : '↓' }}</span>
+            </button>
+          </div>
+          <ol class="record-list">
+            <li v-for="record in visibleRecords" :key="record.id" class="record-row">{{ record.label }}</li>
+          </ol>
+        </div>
       </section>
 
       <section v-else-if="route === 'activity'" id="activity" aria-labelledby="activity-title">

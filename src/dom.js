@@ -52,16 +52,24 @@ export function queryElements(root, selector) {
  * @returns {{
  *   find: (selector: string) => Element[],
  *   invalidate: () => void,
+ *   openShadowRoots: () => ReadonlySet<ShadowRoot>,
  *   recheck: (element: Element) => void,
  * }}
  */
 export function createElementQuery(root) {
   /** @type {boolean | null} */
   let hasOpenShadowRoot = null
+  /** @type {Set<ShadowRoot> | null} */
+  let openShadowRoots = null
 
   return {
     find(selector) {
       hasOpenShadowRoot ??= containsOpenShadowRoot(root)
+
+      if (!hasOpenShadowRoot) {
+        openShadowRoots ??= new Set()
+      }
+
       /** @type {Element[]} */
       const elements = []
       queryElementTree(root, selector, elements, hasOpenShadowRoot)
@@ -70,6 +78,16 @@ export function createElementQuery(root) {
 
     invalidate() {
       hasOpenShadowRoot = null
+      openShadowRoots = null
+    },
+
+    openShadowRoots() {
+      if (openShadowRoots === null) {
+        openShadowRoots = collectOpenShadowRoots(root)
+        hasOpenShadowRoot = openShadowRoots.size > 0
+      }
+
+      return openShadowRoots
     },
 
     // A write reaches the element it targets, so only that subtree can gain
@@ -77,11 +95,60 @@ export function createElementQuery(root) {
     // a component-wide result that a single write cannot invalidate.
     recheck(element) {
       if (hasOpenShadowRoot !== false) {
+        openShadowRoots = null
         return
       }
 
       hasOpenShadowRoot = containsOpenShadowRoot(element)
+
+      if (hasOpenShadowRoot) {
+        openShadowRoots = null
+      }
     },
+  }
+}
+
+/**
+ * Collects every reachable open shadow root below one component view.
+ *
+ * @param {Element | ShadowRoot} scope
+ * @returns {Set<ShadowRoot>}
+ */
+function collectOpenShadowRoots(scope) {
+  /** @type {Set<ShadowRoot>} */
+  const roots = new Set()
+
+  if (scope.nodeType === 1) {
+    collectOpenShadowRoot(/** @type {Element} */ (scope), roots)
+  }
+
+  const walker = elementWalker(scope)
+
+  while (walker.nextNode() !== null) {
+    collectOpenShadowRoot(
+      /** @type {Element} */ (walker.currentNode),
+      roots,
+    )
+  }
+
+  return roots
+}
+
+/**
+ * @param {Element} element
+ * @param {Set<ShadowRoot>} roots
+ */
+function collectOpenShadowRoot(element, roots) {
+  const shadowRoot = element.shadowRoot
+
+  if (shadowRoot === null) {
+    return
+  }
+
+  roots.add(shadowRoot)
+
+  for (const nested of collectOpenShadowRoots(shadowRoot)) {
+    roots.add(nested)
   }
 }
 

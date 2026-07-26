@@ -14,6 +14,7 @@ test('the SPA example drives its behavior through Lumi event bindings', async ({
     }
   })
 
+  await page.setViewportSize({width: 800, height: 900})
   await page.goto('/examples/spa/index.html#/overview')
 
   const shell = page.locator('#shell')
@@ -33,6 +34,7 @@ test('the SPA example drives its behavior through Lumi event bindings', async ({
   await expect(shell).not.toHaveClass(/nav-open/)
 
   // navigation: routing between pages, marking only the active link
+  await page.locator('#menu').click()
   await page.locator('#navigation .link[href="#/projects"]').click()
   await expect(page.locator('#projects-title')).toBeVisible()
   await expect(
@@ -52,7 +54,27 @@ test('the SPA example drives its behavior through Lumi event bindings', async ({
     'true',
   )
 
+  // records: the large example renders and filters the complete 20k dataset
+  await page.locator('#menu').click()
+  await page.locator('#navigation .link[href="#/records"]').click()
+  await expect(page.locator('#records-title')).toBeVisible()
+  await expect(page.locator('.record-row')).toHaveCount(20_000)
+  await page.locator('[data-record-filter="alpha"]').click()
+  await expect(page.locator('[data-record-filter="alpha"]')).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await expect(page.locator('.record-row')).toHaveCount(5_000)
+  await expect(page.locator('.record-row').first()).toContainText('record-00001')
+  await page.locator('[data-record-sort]').click()
+  await expect(page.locator('[data-record-header]')).toHaveAttribute(
+    'aria-sort',
+    'descending',
+  )
+  await expect(page.locator('.record-row').first()).toContainText('record-19997')
+
   // teams: a member link opens that member's profile
+  await page.locator('#menu').click()
   await page.locator('#navigation .link[href="#/teams"]').click()
   await page.locator('.member-row .name').first().click()
   const profile = page.locator('#profile')

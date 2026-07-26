@@ -26,6 +26,12 @@ export {
 export {define, resolve} from './demo-components.js'
 export {update} from './page.js'
 export {emailValidationMessage} from './validation.js'
+export {
+  filterLargeRecords,
+  largeRecords,
+  orderLargeRecords,
+  recordFilters,
+} from './large-data.js'
 
 import {mountApplication} from './application.js'
 import {connectPage} from './page.js'

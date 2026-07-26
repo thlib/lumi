@@ -33,3 +33,5 @@
 - document no BEM, use id for singleton, use native when possible, use part names and component names in classes.
 - shorten name based on context, more context = shorter name, so event in an event location can be `e`, normally 3 letter abbreviations work well.
 I like to use the letter `e` for the `event` variable and `el` for `element` for example.
+- in the 20k example you should be able to sort alphabetically by column by clicking the column header (toggles between asc/desc)
+- rename the 20k example as "Records"

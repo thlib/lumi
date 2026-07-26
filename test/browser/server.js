@@ -6,7 +6,9 @@ import { createServer } from 'node:http'
 import { extname, resolve, sep } from 'node:path'
 
 const root = resolve(import.meta.dirname, '../..')
+const port = Number.parseInt(process.env.LUMI_BROWSER_PORT ?? '4173', 10)
 const types = new Map([
+  ['.css', 'text/css; charset=utf-8'],
   ['.html', 'text/html; charset=utf-8'],
   ['.js', 'text/javascript; charset=utf-8'],
 ])
@@ -49,4 +51,4 @@ createServer(async (request, response) => {
   } catch {
     response.writeHead(404).end()
   }
-}).listen(4173, '127.0.0.1')
+}).listen(port, '127.0.0.1')

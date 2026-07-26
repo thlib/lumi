@@ -4,6 +4,7 @@ import {
   type ReactNode,
   type SetStateAction,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
@@ -22,6 +23,13 @@ import {
   type Route,
   type Toast,
 } from '../../data'
+import {
+  filterLargeRecords,
+  orderLargeRecords,
+  recordFilters,
+  type RecordFilter,
+  type RecordSortDirection,
+} from '../../large-data'
 
 function App() {
   normalizeHash()
@@ -29,6 +37,7 @@ function App() {
   const [memberId, setMemberId] = useState<string | null>(() => memberFromHash(location.hash))
   const [navOpen, setNavOpen] = useState(false)
   const [filter, setFilter] = useState<ProjectFilter>('all')
+  const [recordFilter, setRecordFilter] = useState<RecordFilter>('all')
   const [toasts, setToasts] = useState<Toast[]>([])
 
   useEffect(() => {
@@ -67,6 +76,9 @@ function App() {
       <main tabIndex={-1}>
         {route === 'overview' && <Overview />}
         {route === 'projects' && <Projects filter={filter} setFilter={setFilter} />}
+        {route === 'records' && (
+          <Records filter={recordFilter} setFilter={setRecordFilter} />
+        )}
         {route === 'activity' && <ActivityPage />}
         {route === 'teams' && (
           <Teams
@@ -133,6 +145,10 @@ function Navigation({route, closeNav}: {route: Route; closeNav: () => void}) {
         <a className="link" href="#/projects" aria-current={current('projects')} onClick={() => closeIfCurrent('projects')}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h6l2-2h8v14H4v-12Z" /></svg>
           <span>Projects</span><span className="count">{projects.length}</span>
+        </a>
+        <a className="link" href="#/records" aria-current={current('records')} onClick={() => closeIfCurrent('records')}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14M5 12h14M5 19h14" /></svg>
+          <span>Records</span>
         </a>
         <a className="link" href="#/activity" aria-current={current('activity')} onClick={() => closeIfCurrent('activity')}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-6 4 12 2-6h5" /></svg>
@@ -248,6 +264,43 @@ function Projects({filter, setFilter}: {filter: ProjectFilter; setFilter: (filte
         <p>{visible.length} {visible.length === 1 ? 'project' : 'projects'} shown</p>
       </div>
       <ProjectCards items={visible} />
+    </section>
+  )
+}
+
+function Records({filter, setFilter}: {
+  filter: RecordFilter
+  setFilter: (filter: RecordFilter) => void
+}) {
+  const [sort, setSort] = useState<RecordSortDirection>('ascending')
+  const visible = useMemo(
+    () => orderLargeRecords(filterLargeRecords(filter), sort),
+    [filter, sort],
+  )
+
+  return (
+    <section id="records" aria-labelledby="records-title">
+      <div className="heading">
+        <div><p className="eyebrow">Performance dataset</p><h1 id="records-title">Records</h1><p>Filter and sort a deterministic 20,000-row dataset without virtualization.</p></div>
+      </div>
+      <div className="record-toolbar">
+        <div className="filters" aria-label="Filter records">
+          {recordFilters.map(value => (
+            <button type="button" data-record-filter={value} aria-pressed={filter === value} onClick={() => setFilter(value)} key={value}>{value[0].toUpperCase() + value.slice(1)}</button>
+          ))}
+        </div>
+        <p className="record-summary">{visible.length.toLocaleString('en-US')} records shown</p>
+      </div>
+      <div className="record-list-wrap panel">
+        <div className="record-list-header" aria-sort={sort}>
+          <button type="button" data-record-sort onClick={() => setSort(value => value === 'ascending' ? 'descending' : 'ascending')}>
+            Record <span className="record-sort-indicator" aria-hidden="true">{sort === 'ascending' ? '↑' : '↓'}</span>
+          </button>
+        </div>
+        <ol className="record-list">
+          {visible.map(record => <li className="record-row" key={record.id}>{record.label}</li>)}
+        </ol>
+      </div>
     </section>
   )
 }

@@ -496,46 +496,59 @@ function prepareRegion(spec, data, coordinate, normalize) {
     }
   }
 
-  const entries = Array.isArray(resolved) ? resolved : [resolved]
-  const coordinates = Array.isArray(resolved)
-    ? entries.map((_, index) => [...coordinate, index])
-    : entries.map(() => coordinate)
-  const occurrences = entries.map((entry, index) => {
-    const occurrenceCoordinate = coordinates[index] ?? coordinate
-    const ownSinks = spec.ownSinks.map(sink => {
-      return prepareSink(sink, data, occurrenceCoordinate, normalize)
-    })
+  const isArray = Array.isArray(resolved)
+  const entries = isArray ? resolved : [resolved]
+  /** @type {OccurrencePlan[]} */
+  const occurrences = new Array(entries.length)
 
-    if (isTextValue(entry)) {
-      return {
-        mode: /** @type {const} */ ('text'),
-        text: String(entry),
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]
+
+    if (isArray) {
+      coordinate.push(index)
+    }
+
+    try {
+      const ownSinks = spec.ownSinks.map(sink => {
+        return prepareSink(sink, data, coordinate, normalize)
+      })
+
+      if (isTextValue(entry)) {
+        occurrences[index] = {
+          mode: 'text',
+          text: String(entry),
+          ownSinks,
+        }
+        continue
+      }
+
+      if (entry === null || typeof entry !== 'object') {
+        throw new TypeError(
+          'Lumi bind projection arrays must contain text values, objects, or arrays',
+        )
+      }
+
+      occurrences[index] = {
+        mode: 'context',
         ownSinks,
+        scope: prepareScope(
+          spec.scope,
+          data,
+          coordinate,
+          normalize,
+        ),
+      }
+    } finally {
+      if (isArray) {
+        coordinate.pop()
       }
     }
-
-    if (entry === null || typeof entry !== 'object') {
-      throw new TypeError(
-        'Lumi bind projection arrays must contain text values, objects, or arrays',
-      )
-    }
-
-    return {
-      mode: /** @type {const} */ ('context'),
-      ownSinks,
-      scope: prepareScope(
-        spec.scope,
-        data,
-        occurrenceCoordinate,
-        normalize,
-      ),
-    }
-  })
+  }
 
   return {
     spec,
     occurrences,
-    isArray: Array.isArray(resolved),
+    isArray,
   }
 }
 

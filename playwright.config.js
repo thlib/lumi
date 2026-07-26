@@ -2,6 +2,9 @@
 
 import { defineConfig } from '@playwright/test'
 
+const browserPort = process.env.LUMI_BROWSER_PORT ?? '4173'
+const browserBaseUrl = `http://127.0.0.1:${browserPort}`
+
 export default defineConfig({
   testDir: './test/browser',
   fullyParallel: true,
@@ -9,7 +12,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: 'line',
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    baseURL: browserBaseUrl,
   },
   projects: [
     {
@@ -34,7 +37,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'node test/browser/server.js',
-    url: 'http://127.0.0.1:4173/test/browser/fixture.html',
+    url: `${browserBaseUrl}/test/browser/fixture.html`,
     reuseExistingServer: !process.env.CI,
   },
 })

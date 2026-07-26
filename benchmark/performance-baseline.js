@@ -1,19 +1,26 @@
 // @ts-check
 
-import { performance } from 'node:perf_hooks'
-import { JSDOM } from 'jsdom'
-import { bind, component } from '../src/index.js'
+import {performance} from 'node:perf_hooks'
+import {JSDOM} from 'jsdom'
+import {bind, component, on} from '../src/index.js'
 
-const WARMUP_UPDATES = 100
-const SCALAR_UPDATES = 2_000
-const LIST_GROWTH_RUNS = 50
-const LIST_SIZE = 32
+const SAMPLE_COUNT = 7
 
 /**
- * @returns {{ document: Document, close: () => void }}
+ * @typedef {{
+ *   close: () => void,
+ *   operations: number,
+ *   run: (iteration: number) => void,
+ *   validate: () => void,
+ *   warmup: number,
+ * }} Scenario
+ */
+
+/**
+ * @returns {{document: Document, close: () => void}}
  */
 function createDocument() {
-  const { window } = new JSDOM()
+  const {window} = new JSDOM()
 
   return {
     document: window.document,
@@ -26,7 +33,6 @@ function createDocument() {
 /**
  * @param {Document} document
  * @param {string} markup
- * @returns {HTMLTemplateElement}
  */
 function createTemplate(document, markup) {
   const template = document.createElement('template')
@@ -36,96 +42,228 @@ function createTemplate(document, markup) {
 
 /**
  * @param {string} name
- * @param {number} operations
- * @param {() => void} run
+ * @param {() => Scenario} createScenario
  */
-function measure(name, operations, run) {
-  const start = performance.now()
-  run()
-  const elapsed = performance.now() - start
-  const microsecondsPerOperation = (elapsed * 1_000) / operations
-
-  console.log(
-    `${name}: ${elapsed.toFixed(2)} ms (${microsecondsPerOperation.toFixed(2)} µs/update; ${operations} updates)`,
-  )
-}
-
-function benchmarkScalarUpdates() {
-  const { document, close } = createDocument()
+function benchmark(name, createScenario) {
+  const scenario = createScenario()
 
   try {
-    const target = document.createElement('div')
-    const mounted = component({
-      template: createTemplate(document, '<output class="value">0</output>'),
-      bindings: [bind('.value', data => data.value)],
-    }).mount(target)
-
-    for (let value = 0; value < WARMUP_UPDATES; value += 1) {
-      mounted.update({ value })
+    for (let iteration = 0; iteration < scenario.warmup; iteration += 1) {
+      scenario.run(iteration)
     }
 
-    measure('scalar updates', SCALAR_UPDATES, () => {
-      for (let value = 0; value < SCALAR_UPDATES; value += 1) {
-        mounted.update({ value })
+    /** @type {number[]} */
+    const samples = []
+
+    for (let sample = 0; sample < SAMPLE_COUNT; sample += 1) {
+      const start = performance.now()
+
+      for (
+        let iteration = 0;
+        iteration < scenario.operations;
+        iteration += 1
+      ) {
+        scenario.run(iteration + sample * scenario.operations)
       }
-    })
 
-    const value = mounted.root.textContent
-    if (value !== String(SCALAR_UPDATES - 1)) {
-      throw new Error(`Unexpected scalar result: ${value}`)
+      samples.push(
+        ((performance.now() - start) * 1_000) / scenario.operations,
+      )
     }
 
-    mounted.unmount()
+    scenario.validate()
+    const sorted = [...samples].sort((left, right) => left - right)
+    const median = percentile(sorted, 0.5)
+    const p95 = percentile(sorted, 0.95)
+
+    console.log(
+      `${name.padEnd(32)} ${median.toFixed(2).padStart(8)} µs/update `
+      + `(p95 ${p95.toFixed(2)}; ${scenario.operations} updates/sample)`,
+    )
   } finally {
-    close()
+    scenario.close()
   }
 }
 
-function benchmarkPositionalListGrowth() {
-  const { document, close } = createDocument()
+/**
+ * @param {ReadonlyArray<number>} sorted
+ * @param {number} percentileValue
+ */
+function percentile(sorted, percentileValue) {
+  const position = (sorted.length - 1) * percentileValue
+  const lowerIndex = Math.floor(position)
+  const upperIndex = Math.ceil(position)
+  const lower = sorted[lowerIndex]
+  const upper = sorted[upperIndex]
 
-  try {
-    const template = createTemplate(
+  if (lower === undefined || upper === undefined) {
+    throw new Error('Cannot calculate a percentile without samples')
+  }
+
+  return lower + (upper - lower) * (position - lowerIndex)
+}
+
+/**
+ * @param {{bindings: number, changing: boolean}} options
+ * @returns {Scenario}
+ */
+function scalarScenario({bindings: bindingCount, changing}) {
+  const {document, close} = createDocument()
+  const markup = Array.from(
+    {length: bindingCount},
+    (_, index) => `<output class="value-${index}"></output>`,
+  ).join('')
+  const bindings = Array.from({length: bindingCount}, (_, index) => {
+    return bind(`.value-${index}`, data => data)
+  })
+  const mounted = component({
+    template: createTemplate(document, `<section>${markup}</section>`),
+    bindings,
+  }).mount(document.createElement('div'))
+
+  return {
+    operations: bindingCount === 1 ? 10_000 : 2_000,
+    warmup: bindingCount === 1 ? 1_000 : 300,
+    run(iteration) {
+      mounted.update(changing ? String(iteration) : 'same')
+    },
+    validate() {
+      const values = mounted.root.querySelectorAll('output')
+      if (values.length !== bindingCount) {
+        throw new Error(`Expected ${bindingCount} scalar targets`)
+      }
+    },
+    close() {
+      mounted.unmount()
+      close()
+    },
+  }
+}
+
+/**
+ * @param {boolean} changing
+ * @returns {Scenario}
+ */
+function multiMatchScenario(changing) {
+  const {document, close} = createDocument()
+  const markup = '<output class="value"></output>'.repeat(32)
+  const mounted = component({
+    template: createTemplate(document, `<section>${markup}</section>`),
+    bindings: [bind('.value', data => data)],
+  }).mount(document.createElement('div'))
+
+  return {
+    operations: 5_000,
+    warmup: 500,
+    run(iteration) {
+      mounted.update(changing ? String(iteration) : 'same')
+    },
+    validate() {
+      if (mounted.root.querySelectorAll('.value').length !== 32) {
+        throw new Error('Expected 32 multi-match targets')
+      }
+    },
+    close() {
+      mounted.unmount()
+      close()
+    },
+  }
+}
+
+/**
+ * @param {boolean} resize
+ * @returns {Scenario}
+ */
+function listScenario(resize) {
+  const {document, close} = createDocument()
+  const mounted = component({
+    template: createTemplate(
       document,
       '<ul><li class="item">default</li></ul>',
-    )
-    const target = document.createElement('div')
+    ),
+    bindings: [bind('.item', data => data)],
+  }).mount(document.createElement('div'))
+  const values = Array.from({length: 32}, (_, index) => String(index))
+  const sizes = Array.from(
+    {length: 64},
+    (_, index) => index < 32 ? index + 1 : 64 - index,
+  )
+  const snapshots = sizes.map(size => values.slice(0, size))
 
-    // Activate the positional-list planner before measuring growth.
-    const warmup = component({
-      template,
-      bindings: [bind('.item', data => data.items)],
-    }).mount(target)
-    warmup.update({ items: [] })
-    warmup.unmount()
+  mounted.update([])
 
-    measure('positional-list growth', LIST_GROWTH_RUNS * LIST_SIZE, () => {
-      for (let run = 0; run < LIST_GROWTH_RUNS; run += 1) {
-        const mounted = component({
-          template,
-          bindings: [bind('.item', data => data.items)],
-        }).mount(target)
-
-        mounted.update({ items: [] })
-
-        for (let size = 1; size <= LIST_SIZE; size += 1) {
-          mounted.update({
-            items: Array.from({ length: size }, (_, index) => index),
-          })
-        }
-
-        if (mounted.root.querySelectorAll('.item').length !== LIST_SIZE) {
-          throw new Error('Unexpected positional-list length')
-        }
-
-        mounted.unmount()
+  return {
+    operations: 3_000,
+    warmup: 300,
+    run(iteration) {
+      const snapshot = resize
+        ? snapshots[iteration % snapshots.length] ?? []
+        : values
+      mounted.update(snapshot)
+    },
+    validate() {
+      const expected = resize
+        ? sizes[(SAMPLE_COUNT * 3_000 - 1) % sizes.length]
+        : 32
+      if (mounted.root.querySelectorAll('.item').length !== expected) {
+        throw new Error(`Expected ${expected} positional list items`)
       }
-    })
-  } finally {
-    close()
+    },
+    close() {
+      mounted.unmount()
+      close()
+    },
   }
 }
 
-console.log('Lumi performance baseline (Node + jsdom)')
-benchmarkScalarUpdates()
-benchmarkPositionalListGrowth()
+/** @returns {Scenario} */
+function routedEventScenario() {
+  const {document, close} = createDocument()
+  const inertNodes = '<button type="button">Action</button>'.repeat(100)
+  const mounted = component({
+    template: createTemplate(
+      document,
+      `<section><output class="value"></output>${inertNodes}</section>`,
+    ),
+    bindings: [
+      bind('.value', data => data),
+      on('button', 'click', () => {}),
+    ],
+  }).mount(document.createElement('div'))
+
+  return {
+    operations: 5_000,
+    warmup: 500,
+    run() {
+      mounted.update('same')
+    },
+    validate() {
+      if (mounted.root.querySelectorAll('button').length !== 100) {
+        throw new Error('Expected 100 routed event targets')
+      }
+    },
+    close() {
+      mounted.unmount()
+      close()
+    },
+  }
+}
+
+console.log(`Lumi performance baseline (Node + jsdom, ${SAMPLE_COUNT} samples)`)
+benchmark('scalar unchanged', () => {
+  return scalarScenario({bindings: 1, changing: false})
+})
+benchmark('scalar changing', () => {
+  return scalarScenario({bindings: 1, changing: true})
+})
+benchmark('20 bindings unchanged', () => {
+  return scalarScenario({bindings: 20, changing: false})
+})
+benchmark('20 bindings changing', () => {
+  return scalarScenario({bindings: 20, changing: true})
+})
+benchmark('32 matches unchanged', () => multiMatchScenario(false))
+benchmark('32 matches changing', () => multiMatchScenario(true))
+benchmark('positional list stable (32)', () => listScenario(false))
+benchmark('positional list resize (0-32)', () => listScenario(true))
+benchmark('routed event topology (100)', routedEventScenario)

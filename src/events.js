@@ -190,9 +190,15 @@ export function getEventBindingDescriptor(binding) {
  * @param {Element} root
  * @param {ReadonlyArray<EventBindingDescriptor>} descriptors
  * @param {ReadonlyArray<Element>} [ownedSubtrees]
+ * @param {(() => ReadonlySet<ShadowRoot> | null)} [readShadowRoots]
  * @returns {import('./types.js').ConnectedBinding<Data>}
  */
-export function connectEventBindings(root, descriptors, ownedSubtrees = []) {
+export function connectEventBindings(
+  root,
+  descriptors,
+  ownedSubtrees = [],
+  readShadowRoots,
+) {
   let isConnected = true
 
   /** @type {EventRuntime[]} */
@@ -214,6 +220,8 @@ export function connectEventBindings(root, descriptors, ownedSubtrees = []) {
     return runtime.descriptor.at === 'elements'
   })
   const routers = createRouters(runtimes)
+  /** @type {import('./types.js').PreparedUpdate} */
+  const preparedReconciliation = { commit: reconcile }
 
   /**
    * A binding runs at most once per native event even when the event reaches
@@ -408,7 +416,14 @@ export function connectEventBindings(root, descriptors, ownedSubtrees = []) {
   }
 
   function reconcileRouters() {
-    const boundaries = collectEventBoundaries(root, ownedSubtrees)
+    const sharedShadowRoots = readShadowRoots?.() ?? null
+    const boundaries = sharedShadowRoots === null
+      ? collectEventBoundaries(root, ownedSubtrees)
+      : eventBoundariesFromShadowRoots(
+        root,
+        sharedShadowRoots,
+        ownedSubtrees,
+      )
 
     for (const router of routers) {
       if (!router.runtimes.some(runtime => runtime.isActive)) {
@@ -482,9 +497,7 @@ export function connectEventBindings(root, descriptors, ownedSubtrees = []) {
     prepare() {
       // Event declarations project no data. Listener membership follows the
       // committed DOM, so a failed preparation cannot change it.
-      return {
-        commit: reconcile,
-      }
+      return preparedReconciliation
     },
 
     destroy() {
@@ -511,6 +524,28 @@ export function connectEventBindings(root, descriptors, ownedSubtrees = []) {
       routers.length = 0
     },
   }
+}
+
+/**
+ * Builds the component event-boundary set from topology already discovered by
+ * the final DOM commit of the same synchronous update.
+ *
+ * @param {Element} root
+ * @param {ReadonlySet<ShadowRoot>} shadowRoots
+ * @param {ReadonlyArray<Element>} ownedSubtrees
+ * @returns {Set<EventTarget>}
+ */
+function eventBoundariesFromShadowRoots(root, shadowRoots, ownedSubtrees) {
+  /** @type {Set<EventTarget>} */
+  const boundaries = new Set([root])
+
+  for (const shadowRoot of shadowRoots) {
+    if (!isInsideOwnedSubtree(shadowRoot.host, ownedSubtrees)) {
+      boundaries.add(shadowRoot)
+    }
+  }
+
+  return boundaries
 }
 
 /**

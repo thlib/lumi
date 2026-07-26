@@ -74,6 +74,8 @@ class CardinalityRequired extends Error {
  * @property {WeakMap<Element, CachedValue>} values
  * @property {unknown[]} replay
  * @property {boolean} requiresTrustedHTML
+ * @property {(projected: unknown, trustedTypes: TrustedTypesFactory | null) => unknown} normalize
+ * @property {(element: Element, value: unknown) => boolean} apply
  */
 
 /**
@@ -180,20 +182,17 @@ export function getOwnedDomSubtrees(connected) {
  * @param {Element} root
  * @param {ReadonlyArray<DomBindingDescriptor<Data>>} descriptors
  * @param {ReadonlyArray<Element>} [ownedSubtrees]
+ * @param {(roots: ReadonlySet<ShadowRoot>) => void} [publishShadowRoots]
  * @returns {import('./types.js').ConnectedBinding<Data>}
  */
-export function connectDomBindings(root, descriptors, ownedSubtrees = []) {
+export function connectDomBindings(
+  root,
+  descriptors,
+  ownedSubtrees = [],
+  publishShadowRoots,
+) {
   /** @type {Array<DomBindingRuntime<Data>>} */
-  const runtimes = descriptors.map((descriptor, index) => ({
-    descriptor,
-    index,
-    values: new WeakMap(),
-    replay: [],
-    requiresTrustedHTML: (
-      descriptor.kind === 'property'
-      && isTrustedHTMLProperty(descriptor.name)
-    ),
-  }))
+  const runtimes = descriptors.map(createDomBindingRuntime)
   const trustedTypes = runtimes.some(runtime => runtime.requiresTrustedHTML)
     ? trustedTypesFactory(root)
     : null
@@ -212,6 +211,7 @@ export function connectDomBindings(root, descriptors, ownedSubtrees = []) {
     runtimes,
     ownedSubtrees,
     trustedTypes,
+    publishShadowRoots,
   )
   /** @type {ReturnType<typeof connectCardinalityDomBindings> | null} */
   let cardinality = null
@@ -247,14 +247,20 @@ export function connectDomBindings(root, descriptors, ownedSubtrees = []) {
             ),
             ownedSubtreePaths,
             (runtime, projected) => {
+              const scalarRuntime = /** @type {DomBindingRuntime<Data>} */ (
+                /** @type {unknown} */ (runtime)
+              )
               return normalizeProjectedValue(
-                runtime,
+                scalarRuntime,
                 projected,
                 trustedTypes,
               )
             },
             (runtime, element, value) => {
-              applyLiveValue(runtime, element, value)
+              const scalarRuntime = /** @type {DomBindingRuntime<Data>} */ (
+                /** @type {unknown} */ (runtime)
+              )
+              applyLiveValue(scalarRuntime, element, value)
             },
           )
 
@@ -280,6 +286,167 @@ export function connectDomBindings(root, descriptors, ownedSubtrees = []) {
 }
 
 /**
+ * Compiles binding-kind-specific normalization and application once when a
+ * component connects, keeping the per-element update loop monomorphic.
+ *
+ * @template Data
+ * @param {DomBindingDescriptor<Data>} descriptor
+ * @param {number} index
+ * @returns {DomBindingRuntime<Data>}
+ */
+function createDomBindingRuntime(descriptor, index) {
+  const requiresTrustedHTML = descriptor.kind === 'property'
+    && isTrustedHTMLProperty(descriptor.name)
+  /** @type {DomBindingRuntime<Data>} */
+  const runtime = {
+    descriptor,
+    index,
+    values: new WeakMap(),
+    replay: [],
+    requiresTrustedHTML,
+    normalize: () => noValue,
+    apply: () => false,
+  }
+
+  runtime.normalize = createRuntimeNormalizer(runtime)
+  runtime.apply = createRuntimeApply(runtime)
+  return runtime
+}
+
+/**
+ * @template Data
+ * @param {DomBindingRuntime<Data>} runtime
+ */
+function createRuntimeNormalizer(runtime) {
+  const descriptor = runtime.descriptor
+
+  switch (descriptor.kind) {
+    case 'bind':
+      return (/** @type {unknown} */ projected) => {
+        assertTextValue(projected, 'bind')
+        return String(projected)
+      }
+    case 'property': {
+      if (!runtime.requiresTrustedHTML) {
+        return (/** @type {unknown} */ projected) => projected
+      }
+
+      const name = requiredName(descriptor)
+      return (
+        /** @type {unknown} */ projected,
+        /** @type {TrustedTypesFactory | null} */ trustedTypes,
+      ) => {
+        assertTrustedHTML(projected, trustedTypes, name)
+        return projected
+      }
+    }
+    case 'attribute':
+      return (/** @type {unknown} */ projected) => {
+        assertTextValue(projected, 'attribute')
+        return projected === false
+          ? false
+          : projected === true
+            ? ''
+            : String(projected)
+      }
+    case 'class':
+      return (/** @type {unknown} */ projected) => {
+        assertBooleanValue(projected, 'classToggle')
+        return projected
+      }
+    case 'style':
+      return (/** @type {unknown} */ projected) => {
+        assertStringValue(projected, 'style')
+        return projected
+      }
+  }
+}
+
+/**
+ * @template Data
+ * @param {DomBindingRuntime<Data>} runtime
+ */
+function createRuntimeApply(runtime) {
+  const descriptor = runtime.descriptor
+
+  switch (descriptor.kind) {
+    case 'bind':
+      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
+        if (element.textContent === value) {
+          return false
+        }
+
+        element.textContent = /** @type {string} */ (value)
+        return true
+      }
+    case 'property': {
+      const name = requiredName(descriptor)
+      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
+        const current = Reflect.get(element, name)
+        const projectedValue = projectedCacheValue(runtime, value)
+        const previous = runtime.values.get(element)
+
+        const shouldWrite = (
+          !Object.is(current, projectedValue)
+          && !(
+            previous !== undefined
+            && Object.is(previous.projectedValue, projectedValue)
+            && Object.is(previous.domValue, current)
+          )
+        )
+
+        if (shouldWrite) {
+          setProperty(element, name, value)
+        }
+
+        runtime.values.set(element, {
+          projectedValue,
+          domValue: Reflect.get(element, name),
+        })
+        return shouldWrite
+      }
+    }
+    case 'attribute': {
+      const name = requiredName(descriptor)
+      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
+        return setAttributeValue(element, name, value)
+      }
+    }
+    case 'class': {
+      const name = requiredName(descriptor)
+      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
+        const next = /** @type {boolean} */ (value)
+
+        if (element.classList.contains(name) === next) {
+          return false
+        }
+
+        element.classList.toggle(name, next)
+        return true
+      }
+    }
+    case 'style': {
+      const name = requiredName(descriptor)
+      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
+        const styledElement = asStyledElement(element)
+        const current = styledElement.style.getPropertyValue(name)
+
+        if (current === value) {
+          return false
+        }
+
+        if (value === '') {
+          styledElement.style.removeProperty(name)
+        } else {
+          styledElement.style.setProperty(name, /** @type {string} */ (value))
+        }
+        return true
+      }
+    }
+  }
+}
+
+/**
  * Promotion replay belongs only to one preparation attempt. Clearing it on
  * every exit prevents a later snapshot from observing stale projected data.
  *
@@ -300,6 +467,7 @@ function clearProjectionReplay(runtimes) {
  * @param {ReadonlyArray<DomBindingRuntime<Data>>} runtimes
  * @param {ReadonlyArray<Element>} ownedSubtrees
  * @param {TrustedTypesFactory | null} trustedTypes
+ * @param {(roots: ReadonlySet<ShadowRoot>) => void} [publishShadowRoots]
  * @returns {import('./types.js').ConnectedBinding<Data>}
  */
 function connectScalarDomBindings(
@@ -307,6 +475,7 @@ function connectScalarDomBindings(
   runtimes,
   ownedSubtrees,
   trustedTypes,
+  publishShadowRoots,
 ) {
 
   return {
@@ -328,6 +497,7 @@ function connectScalarDomBindings(
           data,
           trustedTypes,
           liveQuery,
+          publishShadowRoots,
         )
       }
 
@@ -456,7 +626,13 @@ function connectScalarDomBindings(
         }
       }
 
-      return preparedDomUpdate(root, operations, ownedSubtrees, liveQuery)
+      return preparedDomUpdate(
+        root,
+        operations,
+        ownedSubtrees,
+        liveQuery,
+        publishShadowRoots,
+      )
     },
 
     destroy: noOperation,
@@ -475,6 +651,7 @@ function connectScalarDomBindings(
  * @param {Data} data
  * @param {TrustedTypesFactory | null} trustedTypes
  * @param {ElementQuery} liveQuery
+ * @param {(roots: ReadonlySet<ShadowRoot>) => void} [publishShadowRoots]
  * @returns {import('./types.js').PreparedUpdate}
  */
 function prepareDirectUpdate(
@@ -485,6 +662,7 @@ function prepareDirectUpdate(
   data,
   trustedTypes,
   liveQuery,
+  publishShadowRoots,
 ) {
   /** @type {Array<DomOperation<Data>>} */
   const operations = []
@@ -531,7 +709,13 @@ function prepareDirectUpdate(
     }
   }
 
-  return preparedDomUpdate(root, operations, ownedSubtrees, liveQuery)
+  return preparedDomUpdate(
+    root,
+    operations,
+    ownedSubtrees,
+    liveQuery,
+    publishShadowRoots,
+  )
 }
 
 /**
@@ -559,6 +743,9 @@ function analyzeStaging(root, runtimes, ownedSubtrees, liveQuery) {
   })
   let hasMatchedStructure = false
 
+  /** @type {Map<Element, Set<number>>} */
+  const structuralRuntimeIndexesByElement = new Map()
+
   for (let runtimeIndex = 0; runtimeIndex < runtimes.length; runtimeIndex += 1) {
     const runtime = runtimes[runtimeIndex]
 
@@ -572,35 +759,81 @@ function analyzeStaging(root, runtimes, ownedSubtrees, liveQuery) {
       hasMatchedStructure = true
     }
 
-    for (const target of structuralElements) {
-      if (
-        ownedSubtrees.some(owned => {
-          return target === owned || target.contains(owned)
-        })
-      ) {
+    for (const element of structuralElements) {
+      let indexes = structuralRuntimeIndexesByElement.get(element)
+
+      if (indexes === undefined) {
+        indexes = new Set()
+        structuralRuntimeIndexesByElement.set(element, indexes)
+      }
+
+      indexes.add(runtimeIndex)
+    }
+  }
+
+  // A structural target cannot replace a child binding's owned subtree.
+  // Walking upward from each owned root avoids comparing every structural
+  // target with every owned subtree.
+  for (const owned of ownedSubtrees) {
+    let current = /** @type {Element | null} */ (owned)
+
+    while (current !== null) {
+      if (structuralRuntimeIndexesByElement.has(current)) {
         return { required: true, elementsByRuntime }
       }
 
-      for (
-        let otherRuntimeIndex = 0;
-        otherRuntimeIndex < elementsByRuntime.length;
-        otherRuntimeIndex += 1
-      ) {
-        const otherElements = elementsByRuntime[otherRuntimeIndex] ?? []
+      current = current.parentElement
+    }
+  }
 
-        for (const other of otherElements) {
-          if (
-            runtimeIndex === otherRuntimeIndex
-            && target === other
-          ) {
-            continue
-          }
+  /** @type {Map<Element, Set<number>>} */
+  const runtimeIndexesByElement = new Map()
 
-          if (target.contains(other)) {
-            return { required: true, elementsByRuntime }
-          }
+  for (let runtimeIndex = 0; runtimeIndex < runtimes.length; runtimeIndex += 1) {
+    for (const element of elementsByRuntime[runtimeIndex] ?? []) {
+      let indexes = runtimeIndexesByElement.get(element)
+
+      if (indexes === undefined) {
+        indexes = new Set()
+        runtimeIndexesByElement.set(element, indexes)
+      }
+
+      indexes.add(runtimeIndex)
+    }
+  }
+
+  // Walk each distinct match toward its tree root. This preserves the exact
+  // contains() relationship used by the former nested search, including its
+  // deliberate separation at ShadowRoot boundaries, while avoiding a full
+  // structural-target × matched-element comparison.
+  for (const [element, matchingRuntimeIndexes] of runtimeIndexesByElement) {
+    let current = /** @type {Element | null} */ (element)
+
+    while (current !== null) {
+      const structuralRuntimeIndexes =
+        structuralRuntimeIndexesByElement.get(current)
+
+      if (structuralRuntimeIndexes !== undefined) {
+        if (current !== element) {
+          return { required: true, elementsByRuntime }
+        }
+
+        // A declaration does not depend on itself at one target. Any other
+        // declaration at the same element is a real ordered dependency.
+        if (
+          structuralRuntimeIndexes.size !== 1
+          || matchingRuntimeIndexes.size !== 1
+          || !matchingRuntimeIndexes.has(
+            /** @type {number} */ (
+              structuralRuntimeIndexes.values().next().value
+            ),
+          )
+        ) {
+          return { required: true, elementsByRuntime }
         }
       }
+
+      current = current.parentElement
     }
   }
 
@@ -648,9 +881,16 @@ function validateDirectStructuralTarget(
  * @param {ReadonlyArray<DomOperation<Data>>} operations
  * @param {ReadonlyArray<Element>} ownedSubtrees
  * @param {ElementQuery} liveQuery
+ * @param {(roots: ReadonlySet<ShadowRoot>) => void} [publishShadowRoots]
  * @returns {import('./types.js').PreparedUpdate}
  */
-function preparedDomUpdate(root, operations, ownedSubtrees, liveQuery) {
+function preparedDomUpdate(
+  root,
+  operations,
+  ownedSubtrees,
+  liveQuery,
+  publishShadowRoots,
+) {
   return {
     commit() {
       // Custom binding commits run between preparation and this DOM commit.
@@ -722,6 +962,7 @@ function preparedDomUpdate(root, operations, ownedSubtrees, liveQuery) {
       }
 
       refreshParentCaches(parentCacheRecords)
+      publishShadowRoots?.(liveQuery.openShadowRoots())
     },
   }
 }
@@ -1001,35 +1242,7 @@ function normalizeProjectedValue(runtime, projected, trustedTypes) {
     return noValue
   }
 
-  const descriptor = runtime.descriptor
-
-  switch (descriptor.kind) {
-    case 'bind':
-      assertTextValue(projected, 'bind')
-      return String(projected)
-    case 'property':
-      if (runtime.requiresTrustedHTML) {
-        assertTrustedHTML(
-          projected,
-          trustedTypes,
-          requiredName(descriptor),
-        )
-      }
-      return projected
-    case 'attribute':
-      assertTextValue(projected, 'attribute')
-      return projected === false
-        ? false
-        : projected === true
-          ? ''
-          : String(projected)
-    case 'class':
-      assertBooleanValue(projected, 'classToggle')
-      return projected
-    case 'style':
-      assertStringValue(projected, 'style')
-      return projected
-  }
+  return runtime.normalize(projected, trustedTypes)
 }
 
 /**
@@ -1157,70 +1370,7 @@ function applyLiveValue(runtime, element, value) {
     return false
   }
 
-  const descriptor = runtime.descriptor
-
-  switch (descriptor.kind) {
-    case 'bind':
-      if (element.textContent !== value) {
-        element.textContent = /** @type {string} */ (value)
-        return true
-      }
-      return false
-    case 'property': {
-      const name = requiredName(descriptor)
-      const current = Reflect.get(element, name)
-      const projectedValue = projectedCacheValue(runtime, value)
-      const previous = runtime.values.get(element)
-
-      const shouldWrite = (
-        !Object.is(current, projectedValue)
-        && !(
-          previous !== undefined
-          && Object.is(previous.projectedValue, projectedValue)
-          && Object.is(previous.domValue, current)
-        )
-      )
-
-      if (shouldWrite) {
-        setProperty(element, name, value)
-      }
-
-      runtime.values.set(element, {
-        projectedValue,
-        domValue: Reflect.get(element, name),
-      })
-      return shouldWrite
-    }
-    case 'attribute':
-      return setAttributeValue(element, requiredName(descriptor), value)
-    case 'class': {
-      const name = requiredName(descriptor)
-      const next = /** @type {boolean} */ (value)
-
-      if (element.classList.contains(name) === next) {
-        return false
-      }
-
-      element.classList.toggle(name, next)
-      return true
-    }
-    case 'style': {
-      const styledElement = asStyledElement(element)
-      const name = requiredName(descriptor)
-      const current = styledElement.style.getPropertyValue(name)
-
-      if (current === value) {
-        return false
-      }
-
-      if (value === '') {
-        styledElement.style.removeProperty(name)
-      } else {
-        styledElement.style.setProperty(name, /** @type {string} */ (value))
-      }
-      return true
-    }
-  }
+  return runtime.apply(element, value)
 }
 
 /**

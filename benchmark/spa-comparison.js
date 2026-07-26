@@ -30,6 +30,8 @@ const root = resolve(import.meta.dirname, '..')
  *   samples: number,
  *   routeCycles: number,
  *   filterCycles: number,
+ *   recordFilterCycles: number,
+ *   recordSamples: number,
  *   build: boolean,
  *   output: string,
  *   jsonOutput: string,
@@ -58,6 +60,9 @@ const root = resolve(import.meta.dirname, '..')
  *   routeElapsedMs: number,
  *   routeMsPerUpdate: number,
  *   routeUpdates: number,
+ *   recordFilterElapsedMs: number | null,
+ *   recordFilterMsPerUpdate: number | null,
+ *   recordFilterUpdates: number,
  * }} StressResult
  *
  * @typedef {{
@@ -69,6 +74,7 @@ const root = resolve(import.meta.dirname, '..')
  * @typedef {{
  *   samples: Record<string, SampleResult[]>,
  *   resourceUrls: Record<string, Set<string>>,
+ *   browserVersion: string,
  * }} BenchmarkResult
  *
  * @typedef {{
@@ -91,6 +97,7 @@ const root = resolve(import.meta.dirname, '..')
  *   blockingTaskTotalMs: Statistics,
  *   nodeDelta: Statistics,
  *   routeMsPerUpdate: Statistics,
+ *   recordFilterMsPerUpdate: Statistics,
  * }} MetricSummary
  *
  * @typedef {{files: number, gzipBytes: number, rawBytes: number}} AssetSummary
@@ -147,6 +154,8 @@ const defaultOptions = Object.freeze({
   samples: 5,
   routeCycles: 50,
   filterCycles: 100,
+  recordFilterCycles: 1,
+  recordSamples: 2,
   build: true,
   output: resolve(root, 'benchmark/results/spa-performance.md'),
   jsonOutput: resolve(root, 'benchmark/results/spa-performance.json'),
@@ -173,27 +182,20 @@ async function main() {
     throw new Error('Benchmark server did not expose a TCP port')
   }
 
-  const browser = await chromium.launch({
-    headless: true,
-    args: [
-      '--enable-precise-memory-info',
-      '--js-flags=--expose-gc',
-    ],
-  })
-
   try {
     console.log(
       `Running ${options.samples} samples with `
       + `${options.routeCycles * 4} route and `
-      + `${options.filterCycles * 3} filter updates per sample`,
+      + `${options.filterCycles * 3} filter updates, plus `
+      + `${options.recordFilterCycles * 3} 20k-row updates in `
+      + `${Math.min(options.recordSamples, options.samples)} samples`,
     )
 
     const result = await runBenchmarks(
-      browser,
       `http://127.0.0.1:${address.port}`,
       options,
     )
-    const report = await createReport(result, options, await browser.version())
+    const report = await createReport(result, options, result.browserVersion)
 
     await mkdir(dirname(options.output), {recursive: true})
     await mkdir(dirname(options.jsonOutput), {recursive: true})
@@ -206,7 +208,6 @@ async function main() {
     console.log(`Markdown report: ${options.output}`)
     console.log(`JSON results: ${options.jsonOutput}`)
   } finally {
-    await browser.close()
     await new Promise((resolveClose, rejectClose) => {
       server.close(error => error ? rejectClose(error) : resolveClose(undefined))
     })
@@ -214,12 +215,11 @@ async function main() {
 }
 
 /**
- * @param {import('@playwright/test').Browser} browser
  * @param {string} origin
  * @param {Options} options
  * @returns {Promise<BenchmarkResult>}
  */
-async function runBenchmarks(browser, origin, options) {
+async function runBenchmarks(origin, options) {
   /** @type {Record<string, Array<Awaited<ReturnType<typeof runSample>>>>} */
   const samples = Object.fromEntries(
     frameworks.map(framework => [framework.id, []]),
@@ -228,6 +228,7 @@ async function runBenchmarks(browser, origin, options) {
   const resourceUrls = Object.fromEntries(
     frameworks.map(framework => [framework.id, new Set()]),
   )
+  let browserVersion = ''
 
   // Rotate framework order on every pass to spread machine warm-up and drift.
   for (let sampleIndex = 0; sampleIndex < options.samples; sampleIndex += 1) {
@@ -241,11 +242,20 @@ async function runBenchmarks(browser, origin, options) {
         `  sample ${sampleIndex + 1}/${options.samples}: `
         + `${framework.label.padEnd(7)} ... `,
       )
-      const result = await runSample(
-        browser,
-        `${origin}/${framework.id}/?sample=${sampleIndex + 1}`,
-        options,
-      )
+      const browser = await launchBenchmarkBrowser()
+      let result
+
+      try {
+        browserVersion ||= await browser.version()
+        result = await runSample(
+          browser,
+          `${origin}/${framework.id}/?sample=${sampleIndex + 1}`,
+          options,
+          sampleIndex >= Math.max(0, options.samples - options.recordSamples),
+        )
+      } finally {
+        await browser.close()
+      }
       recordValue(samples, framework.id).push(result)
       for (const url of result.resources) {
         recordValue(resourceUrls, framework.id).add(url)
@@ -253,21 +263,35 @@ async function runBenchmarks(browser, origin, options) {
       console.log(
         `${result.startup.loadMs.toFixed(1)} ms load, `
         + `${result.stress.routeMsPerUpdate.toFixed(3)} ms/route, `
-        + `${result.stress.filterMsPerUpdate.toFixed(3)} ms/filter`,
+        + `${result.stress.filterMsPerUpdate.toFixed(3)} ms/filter, `
+        + (result.stress.recordFilterMsPerUpdate === null
+          ? '20k filter not sampled'
+          : `${result.stress.recordFilterMsPerUpdate.toFixed(1)} ms/20k filter`),
       )
     }
   }
 
-  return {samples, resourceUrls}
+  return {samples, resourceUrls, browserVersion}
+}
+
+function launchBenchmarkBrowser() {
+  return chromium.launch({
+    headless: true,
+    args: [
+      '--enable-precise-memory-info',
+      '--js-flags=--expose-gc',
+    ],
+  })
 }
 
 /**
  * @param {import('@playwright/test').Browser} browser
  * @param {string} url
  * @param {Options} options
+ * @param {boolean} measureRecordFilter
  * @returns {Promise<SampleResult>}
  */
-async function runSample(browser, url, options) {
+async function runSample(browser, url, options, measureRecordFilter) {
   const context = await browser.newContext({
     reducedMotion: 'reduce',
     serviceWorkers: 'block',
@@ -324,7 +348,12 @@ async function runSample(browser, url, options) {
     })
 
     const stress = await page.evaluate(
-      async ({routeCycles, filterCycles}) => {
+      async ({
+        routeCycles,
+        filterCycles,
+        recordFilterCycles,
+        measureRecordFilter,
+      }) => {
         const routeTitles = {
           overview: 'Good morning, Freddy',
           projects: 'Projects',
@@ -341,6 +370,11 @@ async function runSample(browser, url, options) {
           ['active', 2],
           ['planning', 2],
           ['all', 4],
+        ])
+        const recordFilterSequence = /** @type {const} */ ([
+          ['alpha', 5_000],
+          ['beta', 5_000],
+          ['all', 20_000],
         ])
 
         function visibleHeading() {
@@ -362,7 +396,7 @@ async function runSample(browser, url, options) {
             const timeout = setTimeout(() => {
               observer.disconnect()
               rejectWait(new Error(`Timed out waiting for ${description}`))
-            }, 5_000)
+            }, 30_000)
             const observer = new MutationObserver(() => {
               if (!predicate()) {
                 return
@@ -419,6 +453,28 @@ async function runSample(browser, url, options) {
               && projectPage.querySelectorAll('.project-card').length
                 === expectedCards,
             `filter ${value}`,
+          )
+        }
+
+        /**
+         * @param {'all' | 'alpha' | 'beta'} value
+         * @param {number} expectedRows
+         */
+        async function setRecordFilter(value, expectedRows) {
+          const button = document.querySelector(
+            `[data-record-filter="${value}"]`,
+          )
+
+          if (!(button instanceof HTMLButtonElement)) {
+            throw new Error(`Could not find the "${value}" record filter`)
+          }
+
+          button.click()
+          await waitFor(
+            () => button.getAttribute('aria-pressed') === 'true'
+              && document.querySelectorAll('#records .record-row').length
+                === expectedRows,
+            `record filter ${value}`,
           )
         }
 
@@ -489,6 +545,34 @@ async function runSample(browser, url, options) {
           throw new Error('Stress test finished in an invalid route state')
         }
 
+        let recordFilterElapsedMs = null
+        let recordFilterUpdates = 0
+
+        if (measureRecordFilter) {
+          // Keep the large workload separate from the established DOM and heap
+          // stability measurements above.
+          location.hash = '#/records'
+          await waitFor(
+            () => visibleHeading() === 'Records'
+              && document.querySelectorAll('#records .record-row').length
+                === 20_000,
+            '20k record page',
+          )
+          for (const [value, count] of recordFilterSequence) {
+            await setRecordFilter(value, count)
+          }
+
+          const recordFilterStart = performance.now()
+          for (let cycle = 0; cycle < recordFilterCycles; cycle += 1) {
+            for (const [value, count] of recordFilterSequence) {
+              await setRecordFilter(value, count)
+            }
+          }
+          recordFilterElapsedMs = performance.now() - recordFilterStart
+          recordFilterUpdates = recordFilterCycles
+            * recordFilterSequence.length
+        }
+
         return {
           filterElapsedMs,
           filterMsPerUpdate: filterElapsedMs / filterUpdates,
@@ -512,11 +596,18 @@ async function runSample(browser, url, options) {
           routeElapsedMs,
           routeMsPerUpdate: routeElapsedMs / routeUpdates,
           routeUpdates,
+          recordFilterElapsedMs,
+          recordFilterMsPerUpdate: recordFilterElapsedMs === null
+            ? null
+            : recordFilterElapsedMs / recordFilterUpdates,
+          recordFilterUpdates,
         }
       },
       {
         routeCycles: options.routeCycles,
         filterCycles: options.filterCycles,
+        recordFilterCycles: options.recordFilterCycles,
+        measureRecordFilter,
       },
     )
 
@@ -632,6 +723,9 @@ async function createReport(result, options, browserVersion) {
       routeMsPerUpdate: summarize(frameworkSamples.map(
         sample => sample.stress.routeMsPerUpdate,
       )),
+      recordFilterMsPerUpdate: summarize(frameworkSamples
+        .map(sample => sample.stress.recordFilterMsPerUpdate)
+        .filter(value => value !== null)),
     }]
   })))
 
@@ -651,6 +745,7 @@ async function createReport(result, options, browserVersion) {
   const fastestLoad = winner('loadMs')
   const fastestRoute = winner('routeMsPerUpdate')
   const fastestFilter = winner('filterMsPerUpdate')
+  const fastestRecordFilter = winner('recordFilterMsPerUpdate')
   const sizeRanking = [...frameworks].sort((left, right) => {
     return recordValue(assets, left.id).gzipBytes
       - recordValue(assets, right.id).gzipBytes
@@ -676,6 +771,16 @@ async function createReport(result, options, browserVersion) {
     const value = recordValue(assets, framework.id)
     return `| ${framework.label} | ${value.files} `
       + `| ${formatBytes(value.rawBytes)} | ${formatBytes(value.gzipBytes)} |`
+  }).join('\n')
+  const recordFilterRows = frameworks.map(framework => {
+    const values = recordValue(summary, framework.id)
+    const lumi = recordValue(summary, 'lumi')
+    return `| ${framework.label} ${recordValue(versions, framework.id)} `
+      + `| ${formatTiming(values.recordFilterMsPerUpdate)} `
+      + `| ${formatRatio(
+        values.recordFilterMsPerUpdate.median,
+        lumi.recordFilterMsPerUpdate.median,
+      )} |`
   }).join('\n')
   const relativeRows = frameworks.map(framework => {
     const values = recordValue(summary, framework.id)
@@ -722,6 +827,17 @@ across ${options.samples} cache-disabled samples.
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${resultRows}
 
+## 20k-row filter
+
+This separate workload renders all 20,000 deterministic records without
+virtualization, then filters between two 5,000-row groups and the complete
+dataset. It uses ${recordValue(summary, 'lumi').recordFilterMsPerUpdate.count}
+fresh-browser samples per framework to bound the workload's memory use.
+
+| Framework | Record filter ms/update | Relative to Lumi |
+| --- | ---: | ---: |
+${recordFilterRows}
+
 ## Initial asset footprint
 
 These are the HTML, JavaScript, and CSS resources requested by the initial
@@ -764,6 +880,13 @@ ${validationRows}
     recordValue(summary, fastestFilter.id).filterMsPerUpdate.median,
     3,
   )} ms/update).
+- ${fastestRecordFilter.label} recorded the lowest median 20k-row filter time
+  (${formatNumber(
+    recordValue(
+      summary,
+      fastestRecordFilter.id,
+    ).recordFilterMsPerUpdate.median,
+  )} ms/update).
 - ${smallest.label} requested the smallest initial compressed asset set
   (${formatBytes(recordValue(assets, smallest.id).gzipBytes)}).
 
@@ -779,11 +902,16 @@ application code splitting.
   \`--skip-build\` is passed. Lumi's example is bundled and minified with
   esbuild from the same unbundled source the repository serves directly.
 - Framework order rotates between samples. Browser HTTP cache is disabled.
+- Each framework sample uses a fresh browser process, bounding retained state
+  from the intentionally large Records workload.
 - Every sample runs two unmeasured route cycles and one filter cycle to warm
   JIT and scheduler paths.
 - A measured route cycle renders Projects → Activity → Teams → Overview.
 - A measured filter cycle renders Active → Planning → All and verifies
   2 → 2 → 4 project cards.
+- A separate 20k-row cycle renders Alpha → Beta → All and verifies
+  5,000 → 5,000 → 20,000 rows. It runs after the established DOM and
+  heap stability measurements.
 - CSS transitions and animations are disabled; the viewport is 1440 × 1000
   with reduced motion enabled.
 - Cold load is \`PerformanceNavigationTiming.loadEventEnd\`. Update timings are
@@ -808,6 +936,9 @@ application code splitting.
     configuration: {
       filterCycles: options.filterCycles,
       filterUpdatesPerSample: options.filterCycles * 3,
+      recordFilterCycles: options.recordFilterCycles,
+      recordFilterUpdatesPerSample: options.recordFilterCycles * 3,
+      recordSamples: Math.min(options.recordSamples, options.samples),
       routeCycles: options.routeCycles,
       routeUpdatesPerSample: options.routeCycles * 4,
       samples: options.samples,
@@ -834,6 +965,9 @@ application code splitting.
         + `filter ${formatNumber(
           value.filterMsPerUpdate.median,
           3,
+        ).padStart(7)} ms/update | `
+        + `20k ${formatNumber(
+          value.recordFilterMsPerUpdate.median,
         ).padStart(7)} ms/update | `
         + `gzip ${formatBytes(frameworkAssets.gzipBytes)}`
     }),
@@ -1111,6 +1245,10 @@ function parseArguments(arguments_) {
       options.routeCycles = parsePositiveInteger(name, value)
     } else if (name === '--filter-cycles') {
       options.filterCycles = parsePositiveInteger(name, value)
+    } else if (name === '--record-filter-cycles') {
+      options.recordFilterCycles = parsePositiveInteger(name, value)
+    } else if (name === '--record-samples') {
+      options.recordSamples = parsePositiveInteger(name, value)
     } else if (name === '--output') {
       options.output = resolve(process.cwd(), value)
     } else if (name === '--json-output') {
@@ -1139,6 +1277,9 @@ Options:
   --samples=N          Cache-disabled samples per framework (default: 5)
   --route-cycles=N     Four route updates per cycle (default: 50)
   --filter-cycles=N    Three filter updates per cycle (default: 100)
+  --record-filter-cycles=N
+                       Three 20k-row updates per cycle (default: 1)
+  --record-samples=N   Samples that run the memory-heavy 20k case (default: 2)
   --skip-build         Use existing framework production bundles
   --output=PATH        Markdown report path
   --json-output=PATH   Raw JSON report path

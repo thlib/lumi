@@ -7,7 +7,8 @@ These three applications reproduce the result and interactions of
 - [`vue`](./vue/) — Vue single-file components and Composition API
 - [`angular`](./angular/) — Angular standalone components and signals
 
-They share only [`data.ts`](./data.ts) and [`spa.css`](./spa.css).
+They share only [`data.ts`](./data.ts), [`large-data.ts`](./large-data.ts), and
+[`spa.css`](./spa.css).
 None imports Lumi, `@thlib/lumi`, or anything from the repository's `src`
 directory.
 
@@ -27,6 +28,10 @@ static server can also open the applications at
 `/examples/framework-spa/angular/`. Rebuild the corresponding application after
 changing its source.
 
+Each application also includes the unvirtualized **Records** route. It renders
+the same deterministic 20,000-row dataset, filters it by group, and toggles
+alphabetical order from the Record column header.
+
 ## Performance comparison
 
 From the repository root, run the production SPA stress benchmark:
@@ -37,10 +42,11 @@ pnpm run benchmark:spa
 
 The runner rebuilds the React, Vue, and Angular applications, serves all four
 implementations from one local server, and measures cache-disabled cold load,
-route-render churn, repeated project filtering, long tasks, DOM stability, heap
-change, and initial asset size in headless Chromium. It writes a readable report
-to `benchmark/results/spa-performance.md` and full samples to the adjacent JSON
+route-render churn, repeated project filtering, a separately sampled
+20,000-row filter cycle, long tasks, DOM stability, heap change, and initial
+asset size in headless Chromium. It writes a readable report to
+`benchmark/results/spa-performance.md` and full samples to the adjacent JSON
 file.
 
 Use `pnpm run benchmark:spa --help` for shorter smoke runs, custom cycle
-counts, output paths, or `--skip-build`.
+counts, 20k sample controls, output paths, or `--skip-build`.

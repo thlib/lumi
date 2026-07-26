@@ -18,8 +18,9 @@ pnpm run test:browser --project=chromium --project=firefox
 ```
 
 `pnpm run benchmark` is a small, repeatable Node/jsdom performance baseline for
-scalar updates and positional-list growth. Use it to compare local changes on
-the same machine; its timings are not cross-machine targets.
+scalar updates, selector fan-out, positional lists, and routed-event topology.
+Use it to compare local changes on the same machine; its timings are not
+cross-machine targets.
 
 Changes to behavior should include a focused contract test. Changes to the
 public API should also update `README.md`, `API.md`, the TypeScript consumer

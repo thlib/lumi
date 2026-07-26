@@ -1,7 +1,9 @@
 // @ts-check
 
-/** @typedef {'overview' | 'projects' | 'activity' | 'teams'} Route */
+/** @typedef {'overview' | 'projects' | 'records' | 'activity' | 'teams'} Route */
 /** @typedef {'all' | 'active' | 'planning'} ProjectFilter */
+/** @typedef {'all' | 'alpha' | 'beta' | 'gamma' | 'delta'} RecordFilter */
+/** @typedef {'ascending' | 'descending'} RecordSortDirection */
 
 /**
  * @typedef {{
@@ -67,6 +69,16 @@
  *   toasts: readonly Toast[],
  *   selectedMemberId: string | null,
  *   filter: ProjectFilter,
+ *   recordFilter: RecordFilter,
+ *   recordSort: RecordSortDirection,
+ *   records: ReadonlyArray<{
+ *     id: string,
+ *     name: string,
+ *     group: string,
+ *     owner: string,
+ *     value: number,
+ *     label: string,
+ *   }>,
  *   projects: readonly Project[],
  *   activities: readonly Activity[],
  *   members: readonly Member[],
@@ -84,6 +96,7 @@ import {
   projects,
   routeFromHash,
 } from './data.js'
+import {largeRecords} from './large-data.js'
 
 /** @type {PageData} */
 let data = {
@@ -92,6 +105,9 @@ let data = {
   toasts: [],
   selectedMemberId: memberFromHash(window.location.hash),
   filter: 'all',
+  recordFilter: 'all',
+  recordSort: 'ascending',
+  records: largeRecords,
   projects,
   activities,
   members,

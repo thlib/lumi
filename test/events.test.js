@@ -480,6 +480,46 @@ test('routes events inside open shadow roots exactly once', () => {
   assert.deepEqual(handled, ['button', 'button'])
 })
 
+test('shares current DOM topology with routed event reconciliation', () => {
+  const { document, window } = createDocument()
+  const template = createTemplate(document, `
+    <section>
+      <output class="value"></output>
+      <div class="host"></div>
+    </section>
+  `)
+  /** @type {string[]} */
+  const handled = []
+  const mounted = component({
+    template,
+    bindings: [
+      bind('.value', data => data),
+      on('.action', 'click', () => {
+        handled.push('action')
+      }),
+    ],
+  }).mount(document.createElement('div'))
+  const host = /** @type {HTMLDivElement} */ (
+    mounted.root.querySelector('.host')
+  )
+  const shadow = host.attachShadow({ mode: 'open' })
+  shadow.innerHTML = '<button class="action" type="button">Run</button>'
+  const button = /** @type {HTMLButtonElement} */ (
+    shadow.querySelector('.action')
+  )
+
+  mounted.update('First')
+  button.dispatchEvent(nativeEvent(window, 'click', { composed: false }))
+  assert.deepEqual(handled, ['action'])
+
+  // Removing a host between updates must remove the listener from its now
+  // detached shadow boundary even when DOM and event planning share topology.
+  host.remove()
+  mounted.update('Second')
+  button.dispatchEvent(nativeEvent(window, 'click', { composed: false }))
+  assert.deepEqual(handled, ['action'])
+})
+
 test('maintains element listeners on every matching element', () => {
   const { document, window } = createDocument()
   const template = createTemplate(document, `

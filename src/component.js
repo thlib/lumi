@@ -87,6 +87,48 @@ function connectComponent(root, bindings) {
   const eventBindings = []
   /** @type {Element[]} */
   const ownedSubtrees = []
+  /** @type {Array<import('./types.js').PreparedUpdate>} */
+  const prepared = []
+  let isSettled = true
+
+  /** @type {import('./types.js').PreparedUpdate} */
+  const preparedUpdate = {
+    commit() {
+      if (isSettled) {
+        throw new Error('Cannot commit a settled Lumi update')
+      }
+
+      let commitIndex = 0
+
+      try {
+        for (; commitIndex < prepared.length; commitIndex += 1) {
+          prepared[commitIndex]?.commit()
+        }
+      } catch (error) {
+        isFaulted = true
+        discardPrepared(prepared, commitIndex)
+        throw error
+      } finally {
+        prepared.length = 0
+        isSettled = true
+        isRendering = false
+      }
+    },
+
+    discard() {
+      if (isSettled) {
+        return
+      }
+
+      try {
+        discardPrepared(prepared)
+      } finally {
+        prepared.length = 0
+        isSettled = true
+        isRendering = false
+      }
+    },
+  }
 
   /**
    * @param {Data} data
@@ -108,8 +150,8 @@ function connectComponent(root, bindings) {
     }
 
     isRendering = true
-    /** @type {import('./types.js').PreparedUpdate[]} */
-    const prepared = []
+    isSettled = false
+    prepared.length = 0
 
     try {
       for (const binding of connected) {
@@ -117,47 +159,13 @@ function connectComponent(root, bindings) {
       }
     } catch (error) {
       discardPrepared(prepared)
+      prepared.length = 0
+      isSettled = true
       isRendering = false
       throw error
     }
 
-    let isSettled = false
-
-    return {
-      commit() {
-        if (isSettled) {
-          throw new Error('Cannot commit a settled Lumi update')
-        }
-
-        let commitIndex = 0
-
-        try {
-          for (; commitIndex < prepared.length; commitIndex += 1) {
-            prepared[commitIndex]?.commit()
-          }
-        } catch (error) {
-          isFaulted = true
-          discardPrepared(prepared, commitIndex)
-          throw error
-        } finally {
-          isSettled = true
-          isRendering = false
-        }
-      },
-
-      discard() {
-        if (isSettled) {
-          return
-        }
-
-        try {
-          discardPrepared(prepared)
-        } finally {
-          isSettled = true
-          isRendering = false
-        }
-      },
-    }
+    return preparedUpdate
   }
 
   /** @param {Data} data */
@@ -186,18 +194,47 @@ function connectComponent(root, bindings) {
       }
     }
 
+    /** @type {{roots: ReadonlySet<ShadowRoot> | null} | null} */
+    const sharedShadowTopology = (
+      eventBindings.length > 0
+      && domBindingIndex !== undefined
+      && domBindingIndex === connected.length
+    )
+      ? { roots: null }
+      : null
+
     if (domBindingIndex !== undefined) {
       connected.splice(
         domBindingIndex,
         0,
-        connectDomBindings(root, domBindings, ownedSubtrees),
+        connectDomBindings(
+          root,
+          domBindings,
+          ownedSubtrees,
+          sharedShadowTopology === null
+            ? undefined
+            : roots => {
+              sharedShadowTopology.roots = roots
+            },
+        ),
       )
     }
 
     if (eventBindings.length > 0) {
       // Managed listeners follow the committed DOM, so the event manager
       // commits last and releases its listeners first on unmount.
-      connected.push(connectEventBindings(root, eventBindings, ownedSubtrees))
+      connected.push(connectEventBindings(
+        root,
+        eventBindings,
+        ownedSubtrees,
+        sharedShadowTopology === null
+          ? undefined
+          : () => {
+            const roots = sharedShadowTopology.roots
+            sharedShadowTopology.roots = null
+            return roots
+          },
+      ))
     }
   } catch (error) {
     destroyConnected(connected)

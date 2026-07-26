@@ -28,6 +28,9 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h6l2-2h8v14H4v-12Z"></path></svg>
           <span>Projects</span><span class="count">{{ projects.length }}</span>
         </a>
+        <a class="link" href="#/records" [attr.aria-current]="route() === 'records' ? 'page' : null" (click)="closeIfCurrent('records')">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14M5 12h14M5 19h14"></path></svg><span>Records</span>
+        </a>
         <a class="link" href="#/activity" [attr.aria-current]="route() === 'activity' ? 'page' : null" (click)="closeIfCurrent('activity')">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h3l2-6 4 12 2-6h5"></path></svg><span>Activity</span>
         </a>
@@ -97,6 +100,30 @@
           @for (project of visibleProjects(); track project.id) {
             <ng-container [ngTemplateOutlet]="projectCard" [ngTemplateOutletContext]="{$implicit: project}"></ng-container>
           }
+        </div>
+      </section>
+    } @else if (route() === 'records') {
+      <section id="records" aria-labelledby="records-title">
+        <div class="heading"><div><p class="eyebrow">Performance dataset</p><h1 id="records-title">Records</h1><p>Filter and sort a deterministic 20,000-row dataset without virtualization.</p></div></div>
+        <div class="record-toolbar">
+          <div class="filters" aria-label="Filter records">
+            @for (value of recordFilters; track value) {
+              <button type="button" [attr.data-record-filter]="value" [attr.aria-pressed]="recordFilter() === value" (click)="setRecordFilter(value)">{{ value[0].toUpperCase() + value.slice(1) }}</button>
+            }
+          </div>
+          <p class="record-summary">{{ visibleRecords().length.toLocaleString('en-US') }} records shown</p>
+        </div>
+        <div class="record-list-wrap panel">
+          <div class="record-list-header" [attr.aria-sort]="recordSort()">
+            <button type="button" data-record-sort (click)="toggleRecordSort()">
+              Record <span class="record-sort-indicator" aria-hidden="true">{{ recordSort() === 'ascending' ? '↑' : '↓' }}</span>
+            </button>
+          </div>
+          <ol class="record-list">
+            @for (record of visibleRecords(); track record.id) {
+              <li class="record-row">{{ record.label }}</li>
+            }
+          </ol>
         </div>
       </section>
     } @else if (route() === 'activity') {

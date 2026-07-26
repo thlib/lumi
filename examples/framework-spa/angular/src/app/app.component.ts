@@ -21,6 +21,13 @@ import {
   type Route,
   type Toast,
 } from '../../../data'
+import {
+  filterLargeRecords,
+  orderLargeRecords,
+  recordFilters,
+  type RecordFilter,
+  type RecordSortDirection,
+} from '../../../large-data'
 
 @Component({
   selector: 'app-root',
@@ -35,6 +42,7 @@ export class AppComponent {
   readonly members = members
   readonly metrics = metrics
   readonly filters: readonly ProjectFilter[] = ['all', 'active', 'planning']
+  readonly recordFilters = recordFilters
   readonly weeklyBars = [
     {day: 'Mon', height: 42},
     {day: 'Tue', height: 67},
@@ -50,6 +58,8 @@ export class AppComponent {
   readonly memberId = signal<string | null>(null)
   readonly navOpen = signal(false)
   readonly filter = signal<ProjectFilter>('all')
+  readonly recordFilter = signal<RecordFilter>('all')
+  readonly recordSort = signal<RecordSortDirection>('ascending')
   readonly toasts = signal<Toast[]>([])
   readonly emailError = signal('')
 
@@ -61,6 +71,12 @@ export class AppComponent {
       return this.filter() === 'all'
         || project.status.toLowerCase() === this.filter()
     })
+  })
+  readonly visibleRecords = computed(() => {
+    return orderLargeRecords(
+      filterLargeRecords(this.recordFilter()),
+      this.recordSort(),
+    )
   })
 
   private readonly destroyRef = inject(DestroyRef)
@@ -95,6 +111,16 @@ export class AppComponent {
 
   setFilter(filter: ProjectFilter): void {
     this.filter.set(filter)
+  }
+
+  setRecordFilter(filter: RecordFilter): void {
+    this.recordFilter.set(filter)
+  }
+
+  toggleRecordSort(): void {
+    this.recordSort.update(direction => {
+      return direction === 'ascending' ? 'descending' : 'ascending'
+    })
   }
 
   submitInvite(e: SubmitEvent): void {

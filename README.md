@@ -177,7 +177,9 @@ content and visual design, but do not import or depend on Lumi.
 ## SPA benchmark
 
 The equivalent SPAs are exercised through the same verified route and project
-filter workload in headless Chromium.
+filter workload in headless Chromium. A separate benchmark row measures
+filtering the unvirtualized 20,000-row Records page so its heavier DOM work does
+not change the established workload's meaning.
 
 > [**View the latest SPA performance comparison →**](./benchmark/results/spa-performance.md)
 

@@ -1,5 +1,5 @@
 // Static content and routing helpers shared by the framework implementations.
-export type Route = 'overview' | 'projects' | 'activity' | 'teams'
+export type Route = 'overview' | 'projects' | 'records' | 'activity' | 'teams'
 export type ProjectFilter = 'all' | 'active' | 'planning'
 
 export interface Project {
@@ -60,6 +60,7 @@ export interface AppState {
 export const routeLabels: Record<Route, string> = {
   overview: 'Overview',
   projects: 'Projects',
+  records: 'Records',
   activity: 'Activity',
   teams: 'Manage teams',
 }
@@ -254,7 +255,10 @@ export const metrics: readonly Metric[] = [
 
 export function routeFromHash(hash: string): Route {
   const route = hash.replace(/^#\//, '').split(/[/?]/)[0]
-  return route === 'projects' || route === 'activity' || route === 'teams'
+  return route === 'projects'
+    || route === 'records'
+    || route === 'activity'
+    || route === 'teams'
     ? route
     : 'overview'
 }
@@ -264,7 +268,7 @@ export function memberFromHash(hash: string): string | null {
 }
 
 export function normalizeHash(): void {
-  if (!/^#\/(overview|projects|activity|teams)(?:[/?]|$)/.test(location.hash)) {
+  if (!/^#\/(overview|projects|records|activity|teams)(?:[/?]|$)/.test(location.hash)) {
     history.replaceState(null, '', '#/overview')
   }
 }

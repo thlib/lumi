@@ -127,6 +127,7 @@ test('keeps only the active SPA page connected to the document', () => {
 
   define('overview', definition('overview'))
   define('projects', definition('projects'))
+  define('records', definition('records'))
   define('activityPage', definition('activityPage'))
   define('teams', definition('teams'))
 
@@ -156,6 +157,7 @@ test('keeps only the active SPA page connected to the document', () => {
   assert.equal(presentationCount.overview, 2)
   assert.equal(presentationCount.projects, 1)
   assert.equal(presentationCount.activityPage, undefined)
+  assert.equal(presentationCount.records, undefined)
   assert.equal(presentationCount.teams, undefined)
   assert.equal(pageSlot().childElementCount, 1)
 

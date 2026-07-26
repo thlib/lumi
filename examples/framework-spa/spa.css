@@ -751,6 +751,73 @@ main > section > .heading p:not(.eyebrow),
   margin-top: 20px;
 }
 
+.record-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 6px 0 20px;
+}
+
+.record-toolbar > p {
+  margin: 0;
+  color: #777481;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.record-list-wrap {
+  max-height: 68vh;
+  overflow: auto;
+}
+
+.record-list-header {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.record-list-header button {
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  color: #514d5d;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.record-list-header button:hover {
+  color: var(--purple);
+}
+
+.record-sort-indicator {
+  margin-left: 4px;
+}
+
+.record-list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.record-row {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.record-row:nth-child(even) {
+  background: var(--soft);
+}
+
 main > section > .heading .count {
   padding: 7px 11px;
   color: #5e4cc6;
@@ -1444,7 +1511,8 @@ main > section > .heading .count {
     display: block;
   }
 
-  .project-toolbar {
+  .project-toolbar,
+  .record-toolbar {
     align-items: flex-start;
     gap: 13px;
     flex-direction: column;

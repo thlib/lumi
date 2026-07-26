@@ -60,7 +60,7 @@ spa-bench: ## Run the SPA comparison benchmark
 
 serve: ## Serve the repository on port 8008 to browse examples/
 	@echo "Examples: http://localhost:$(PORT)/examples/counter/"
-	python3 -m http.server $(PORT)
+	python -m http.server $(PORT)
 
 clean: ## Remove build output
 	$(PNPM) run clean

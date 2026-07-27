@@ -4,6 +4,7 @@ import { assertElement, cloneTemplateRoot } from './dom.js'
 import { connectEventBindings, getEventBindingDescriptor } from './events.js'
 import {
   connectDomBindings,
+  flattenDomBindingDescriptors,
   getDomBindingDescriptor,
   getOwnedDomSubtrees,
 } from './plan.js'
@@ -186,7 +187,7 @@ function connectComponent(root, bindings) {
 
       if (descriptor !== null) {
         domBindingIndex ??= connected.length
-        domBindings.push(descriptor)
+        domBindings.push(...flattenDomBindingDescriptors([descriptor]))
       } else {
         const connectedBinding = binding.connect(root)
         connected.push(connectedBinding)

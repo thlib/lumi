@@ -14,6 +14,7 @@ import {
   queryElements,
   queryOwnedElements,
 } from './dom.js'
+import {warn} from './internal/diagnostics.js'
 
 const eventBindingDescriptor = Symbol('Lumi event binding descriptor')
 
@@ -895,12 +896,11 @@ function warnAboutNonBubblingComponentEvent(descriptor) {
     descriptor.at !== 'component'
     || descriptor.capture
     || !nonBubblingEventTypes.has(descriptor.type)
-    || !isDevelopment()
   ) {
     return
   }
 
-  console.warn(
+  warn(
     `Lumi component event "${descriptor.type}" normally does not bubble.\n`
     + '\nUse:\n'
     + '  {at: "elements"}\n'
@@ -908,26 +908,4 @@ function warnAboutNonBubblingComponentEvent(descriptor) {
     + '  {capture: true}\n'
     + 'for intentional component capture.',
   )
-}
-
-/**
- * Development diagnostics stay on unless the host declares a production
- * environment.
- *
- * @returns {boolean}
- */
-function isDevelopment() {
-  const process = Reflect.get(globalThis, 'process')
-
-  if (typeof process !== 'object' || process === null) {
-    return true
-  }
-
-  const environment = Reflect.get(process, 'env')
-
-  if (typeof environment !== 'object' || environment === null) {
-    return true
-  }
-
-  return Reflect.get(environment, 'NODE_ENV') !== 'production'
 }

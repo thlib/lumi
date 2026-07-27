@@ -14,13 +14,14 @@
 
 export {
   attr,
-  bind,
   child,
   classToggle,
   component,
   on,
   prop,
+  repeat,
   style,
+  text,
 } from '../../src/index.js'
 
 export {define, resolve} from './demo-components.js'

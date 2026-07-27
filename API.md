@@ -10,16 +10,17 @@ The API is experimental and may change while the design is validated.
 The supported module is `@thlib/lumi`. It exports:
 
 - `component`
-- `bind`
+- `repeat`
+- `text`
 - `on`
 - `prop`
 - `attr`
 - `classToggle`
 - `style`
 - `child`
-- The `Component`, `ComponentOptions`, and `MountedComponent` TypeScript
-  types, plus `EventBindingOptions`, `EventBindingLocation`, and
-  `EventBindingFrequency`
+- The `Component`, `ComponentOptions`, `MountedComponent`, and
+  `ProjectionContext` TypeScript types, plus `EventBindingOptions`,
+  `EventBindingLocation`, and `EventBindingFrequency`
 
 `component()` returns a definition with `mount()`. A mounted component exposes
 only `root`, `update()`, and `unmount()`.
@@ -33,12 +34,10 @@ application APIs.
 
 ```js
 import {
-  bind,
   component,
   on,
   prop,
 } from '@thlib/lumi'
-import {jsonPath} from './plain.js'
 
 let actualData = {
   count: 0,
@@ -57,13 +56,10 @@ const slot = document.querySelector('#counter-slot')
 const counter = component({
   template: document.querySelector('template'),
   bindings: [
-    bind(
-      '[data-bind]',
-      (data, element) => jsonPath(data, element.dataset.bind),
-    ),
+    text('output span', ({data}) => data.count),
     prop(
       '[data-disabled]',
-      (data, element) => jsonPath(data, element.dataset.disabled),
+      ({data}) => data.counterDisabled,
       'disabled',
     ),
     on('[data-action="increment"]', 'click', () => {
@@ -85,10 +81,10 @@ content:
 ```html
 <template>
   <section class="counter">
-    <output>count is <span data-bind="$.count">0</span></output>
+    <output>count is <span>0</span></output>
     <button
       data-action="increment"
-      data-disabled="$.counterDisabled"
+      data-disabled
     >Increment</button>
   </section>
 </template>
@@ -110,17 +106,16 @@ and register native event handlers. The explicit `update()` call supplies the
 presentation snapshot. State transitions remain ordinary application
 JavaScript.
 
-`data-bind`, `data-disabled`, and `data-action` are application-owned hooks.
-Their names and values are opaque. Both scalar projections receive the matched
-element, and the example chooses to resolve
-`element.dataset.bind` and `element.dataset.disabled` with its local
-`jsonPath` helper.
+`data-disabled` and `data-action` are application-owned hooks. Their names and
+values are opaque. The bindings in this quick start project the presentation
+snapshot directly with ordinary JavaScript functions.
 
 The action value is likewise resolved by application code, but only as part of
 the exact CSS selector `[data-action="increment"]`. There is no dynamic
 function lookup or built-in event dispatcher.
 
-The example-local `jsonPath` helper is not part of the public API.
+Application conventions, including the optional JSONPath adapter shown below,
+are not part of the public API.
 
 ## `component(options)`
 
@@ -202,7 +197,7 @@ are not observable to Lumi. Native CSS scoping still applies: Lumi searches
 each open tree, but a single selector cannot express an ancestor relationship
 across a shadow boundary.
 
-Content-owning rules (`bind` and structural properties) are planned in DOM
+Content-owning rules (`text` and structural properties) are planned in DOM
 ancestor order, independent of declaration order. Descendant selectors are
 then resolved against the parent rule's
 planned result. This lets a parent create content that a descendant rule
@@ -210,8 +205,8 @@ updates in the same render, and naturally skips a descendant removed by its
 parent:
 
 ```js
-bind('.person', () => 'Ada')
-bind('.person .name', () => 'Lovelace')
+text('.person', () => 'Ada')
+text('.person .name', () => 'Lovelace')
 ```
 
 Here the first rule removes `.name` through native `textContent` semantics.
@@ -232,21 +227,20 @@ the corresponding native element type. Complex selectors safely fall back to
 
 | Binding | Projection result | DOM effect |
 | --- | --- | --- |
-| `bind(selector, project)` | text value, nested arrays, or nullish | Assigns text, repeats the matched element positionally, or does nothing for nullish |
+| `repeat(selector, project, bindings?)` | array or nullish | Repeats the matched template element once per item; optional built-in DOM bindings are scoped to those occurrences |
+| `text(selector, project)` | text value or nullish | Assigns `textContent`, or preserves it for nullish and invalid values |
 | `prop(selector, project, name)` | any non-nullish value, TrustedHTML for `innerHTML`/`outerHTML`, or nullish | Assigns the native property with `Reflect.set`, or does nothing for nullish |
 | `attr(selector, name, project)` | string, number, boolean, or nullish | Removes on `false`, creates an empty attribute on `true`, sets text, or does nothing for nullish |
 | `classToggle(selector, name, project)` | boolean or nullish | Toggles only the named class, or does nothing for nullish |
 | `style(selector, name, project)` | string or nullish | Sets one inline property, removes it for an empty string, or does nothing for nullish |
 
-These declared projection results are validated during preparation. Scalar
-`bind` and `attr` values must be strings, numbers, or booleans; `style`
-requires strings; and `classToggle` requires a boolean. A `bind` projection may
-additionally return arrays to repeat its element, as described below, and any
-binding inside a repeated region may return one parallel array entry per
-occurrence. Each resolved entry is validated as the scalar value above. For
-every scalar binding, `undefined` and `null` perform no DOM operation and leave
-the corresponding state unchanged. Other invalid values throw a `TypeError`
-before the update makes any DOM changes.
+Every render projection receives the same context object: `data`, `item`,
+`index`, `path`, and `parent`; `el` remains its second argument. `repeat` is
+the only binding that interprets an array structurally. `undefined` and `null`
+perform no DOM operation and leave the corresponding state unchanged. Invalid
+`repeat`, `text`, `attr`, `classToggle`, and `style` results also perform no
+operation and produce a deduplicated development warning. TrustedHTML property
+validation remains a preparation-time error.
 
 Except for HTML injection sinks, `prop` intentionally does not impose a
 generic value restriction. Native and custom properties may legitimately
@@ -280,7 +274,7 @@ const markupPolicy = trustedTypes.createPolicy('application-markup', {
 
 prop(
   '.preview',
-  data => markupPolicy.createHTML(data.markup),
+  ({data}) => markupPolicy.createHTML(data.markup),
   'innerHTML',
 )
 ```
@@ -441,19 +435,44 @@ There is no synthetic event object, event pooling, dynamic function lookup, or
 automatic update: the application handler owns its state transition and calls
 `mounted.update()` when needed.
 
-## Array-valued bind projections
+## Repeated occurrences
 
-When `bind` receives an array, the matched element repeats once for each entry.
-An empty array produces zero elements. An internal non-element range anchor
-lets later updates add elements at the same location.
-
-A nullish bind projection is a no-op and preserves the current region.
-Nullish entries inside an array are invalid because each array entry defines
-one repeated occurrence.
+`repeat` creates one occurrence of the matched element for each projected
+array entry. An empty array produces zero elements. An internal non-element
+range anchor lets later updates add elements at the same location. A nullish
+or non-array result is a recoverable no-op that preserves the region.
 
 ```js
-bind('.item', data => data.items)
+repeat('.item', ({data}) => data.items)
+text('.item', ({item}) => item.name)
 ```
+
+For a local reading order, `repeat` may take its built-in DOM bindings as an
+optional third argument. Those bindings resolve their selectors only inside
+the repeated template element, and their projections receive that occurrence's
+context. The repeated element participates in matching, so `:scope` selects
+that element itself:
+
+```js
+repeat('.item', ({data}) => data.items, [
+  text('.name', ({item}) => item.name),
+])
+```
+
+`on` and `child` remain component-level declarations. A repeat binding list
+accepts `repeat`, `text`, `prop`, `attr`, `classToggle`, and `style`; all of
+them receive the repeated occurrence's context.
+
+Flat bindings remain useful when the template position is already clear:
+
+```js
+repeat('.item', ({data}) => data.items)
+text('.item .name', ({item}) => item.name)
+```
+
+Here context follows the matched DOM position. The nested form instead makes
+the owning repeat explicit, so a local `.name` cannot also match a `.name`
+elsewhere in the component.
 
 ```html
 <ul>
@@ -461,15 +480,14 @@ bind('.item', data => data.items)
 </ul>
 ```
 
-Text entries become the repeated elements' `textContent`. Object and nested
-array entries establish structural context and preserve the element's
-descendants for nested bindings:
+Each entry establishes structural context and preserves the element's
+descendants. Nested arrays remain ordinary item values until a nested repeat
+consumes them:
 
 ```js
-bind('.group', data => data.groups)
-bind('.name', data => data.groups.map(group => {
-  return group.map(person => person.name)
-}))
+repeat('.group', ({data}) => data.groups)
+repeat('.name', ({item: group}) => group)
+text('.name', ({item: person}) => person.name)
 ```
 
 ```html
@@ -479,10 +497,8 @@ bind('.name', data => data.groups.map(group => {
 ```
 
 Every repeated occurrence has a positional coordinate such as `[1, 2]`.
-Nested projection arrays consume those coordinates. Scalar descendant
-projections broadcast to every occurrence below them. Ragged nested arrays
-are valid, and an empty inner array removes only the elements at that inner
-level.
+Ragged nested arrays are valid, and an empty inner array removes only the
+elements at that inner level.
 
 Repeated elements are reconciled by array position. Reordering changes the
 data represented by existing positions. Existing positions retain their native
@@ -499,16 +515,42 @@ The repeatable target must exist in the component template to provide a
 pristine element to clone. Projection and coordinate validation complete
 before the live DOM changes.
 
+## Explicit positional contexts
+
+`repeat` separates positional cardinality from text. Its projection receives
+the nearest occurrence context and returns the items at that template
+location. `text` receives the same context and owns only `textContent`:
+
+```js
+repeat('.group', ({data}) => data.groups)
+repeat('.person', ({item}) => item.people)
+text('.name', ({item}) => item.name)
+text('.currency', ({data}) => data.currency)
+```
+
+The context contains `data`, `item`, `index`, `path`, and `parent`. At the
+component root, `item === data`, `index === 0`, `path` is empty, and `parent`
+is null. Every repeat preserves `data`, sets `item` to the current entry, and
+extends the positional path.
+
+Only `repeat` interprets an array structurally. Nested arrays remain ordinary
+items until a nested `repeat` consumes them. A non-array repeat result or a
+non-text text result is a recoverable no-op: Lumi preserves the existing DOM
+and emits one development warning per mounted declaration and received value
+category.
+
 ## Injecting an application binding convention
 
 The smallest convention can map application-owned metadata directly to
 presentation object properties:
 
 ```js
+import {text} from '@thlib/lumi'
+
 function bindFields() {
-  return bind(
+  return text(
     '[data-field]',
-    (data, element) => data[element.dataset.field],
+    ({data}, el) => data[el.dataset.field],
   )
 }
 ```
@@ -521,40 +563,43 @@ That convention belongs entirely to the application. If it projects a missing,
 `undefined`, or `null` field, Lumi leaves the corresponding DOM state
 unchanged.
 
-The counter example chooses a more elaborate option by defining `jsonPath()`
-in its own `plain.js`. The projection receives the matched element and injects
-the example's path behavior:
+The JSONPath counter chooses a more elaborate option by wrapping an external
+RFC 9535 implementation in `examples/data-path.js`. The projection receives
+the matched element and injects the application's path behavior:
 
 ```js
-function bindPaths() {
-  return bind(
-    '[data-bind]',
-    (data, element) => jsonPath(data, element.dataset.bind),
-  )
+import {repeat, text} from '@thlib/lumi'
+import {jsonPath} from './examples/data-path.js'
+
+function exactlyOne(values) {
+  return values.length === 1 ? values[0] : undefined
 }
 
-function disabledPaths() {
-  return prop(
-    '[data-disabled]',
-    (data, element) => jsonPath(data, element.dataset.disabled),
-    'disabled',
-  )
+function bindDataPaths() {
+  return [
+    repeat('[data-repeat]', ({item}, el) => {
+      return jsonPath(item, el.dataset.repeat)
+    }),
+    text('[data-text]', ({item}, el) => {
+      return exactlyOne(jsonPath(item, el.dataset.text))
+    }),
+  ]
 }
 
 const definition = component({
   template,
   bindings: [
-    bindPaths(),
-    disabledPaths(),
+    ...bindDataPaths(),
   ],
 })
 ```
 
-The path behavior belongs to `jsonPath`, not `bind`. The counter's helper
-chooses to distribute named members through arrays, so `$.items.name` returns
-an array with the same shape as `items`. Another application may use direct
-projections, external binding maps, another metadata convention, or no helper
-at all.
+The path behavior belongs to JSONPath, not Lumi. The adapter caches parsed
+queries and preserves JSONPath's nodelist cardinality. `repeat` consumes the
+whole nodelist while `text` selects exactly one result. Paths are evaluated
+against the current item, which is the component data outside a repeated
+region. Another application may use direct projections, external binding
+maps, another metadata convention, or no helper at all.
 
 These factories compose Lumi's public functions; they do not add a second
 component or rendering lifecycle. Lumi does not reserve their attributes,
@@ -576,8 +621,8 @@ container must not initially contain another element.
 
 A binding writes only the DOM sink named by that binding:
 
-- A `bind` declaration owns positional element cardinality and scalar
-  `textContent`.
+- A `repeat` declaration owns positional element cardinality.
+- A `text` declaration owns scalar `textContent`.
 - A property binding owns one property.
 - A class binding owns one class token.
 - A style binding owns one style property.

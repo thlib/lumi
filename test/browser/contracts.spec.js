@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/test/browser/fixture.html')
 })
 
-test('bind and TrustedHTML properties work with Trusted Types enforced', async ({
+test('text and TrustedHTML properties work with Trusted Types enforced', async ({
   page,
 }) => {
   await page.goto('/test/browser/fixture.html?trusted-types')
@@ -24,7 +24,7 @@ test('bind and TrustedHTML properties work with Trusted Types enforced', async (
   )
 
   const result = await page.evaluate(async () => {
-    const { bind, component, prop } = /** @type {typeof import('../../src/index.js')} */ (
+    const { component, prop, text } = /** @type {typeof import('../../src/index.js')} */ (
       await import(String('/src/index.js'))
     )
     const factory = Reflect.get(window, 'trustedTypes')
@@ -42,8 +42,8 @@ test('bind and TrustedHTML properties work with Trusted Types enforced', async (
     const mounted = component({
       template,
       bindings: [
-        bind('output', data => data.text),
-        prop('.markup', data => data.markup, 'innerHTML'),
+        text('output', ({data}) => /** @type {{text: string}} */ (data).text),
+        prop('.markup', ({data}) => /** @type {{markup: unknown}} */ (data).markup, 'innerHTML'),
       ],
     }).mount(document.querySelector('#test-root'))
     const createHTML = Reflect.get(policy, 'createHTML')
@@ -87,7 +87,7 @@ test('an unrelated update preserves an unbound input value and focus', async ({
   page,
 }) => {
   await page.evaluate(async () => {
-    const { bind, component } = /** @type {typeof import('../../src/index.js')} */ (
+    const { component, text } = /** @type {typeof import('../../src/index.js')} */ (
       await import(String('/src/index.js'))
     )
     const template = document.createElement('template')
@@ -100,7 +100,7 @@ test('an unrelated update preserves an unbound input value and focus', async ({
     /** @type {import('../../src/index.js').ComponentOptions<{ count: number }>} */
     const options = {
       template,
-      bindings: [bind('output', data => data.count)],
+      bindings: [text('output', ({data}) => data.count)],
     }
     const mounted = component(options)
       .mount(document.querySelector('#test-root'))
@@ -130,7 +130,7 @@ test('a bound input value is restored from authoritative data', async ({
     /** @type {import('../../src/index.js').ComponentOptions<{ title: string }>} */
     const options = {
       template,
-      bindings: [prop('input', data => data.title, 'value')],
+      bindings: [prop('input', ({data}) => data.title, 'value')],
     }
     const mounted = component(options)
       .mount(document.querySelector('#test-root'))
@@ -153,7 +153,7 @@ test('array append and truncation preserve surviving rows and form state', async
   page,
 }) => {
   await page.evaluate(async () => {
-    const { bind, component } = /** @type {typeof import('../../src/index.js')} */ (
+    const { component, repeat, text } = /** @type {typeof import('../../src/index.js')} */ (
       await import(String('/src/index.js'))
     )
     const template = document.createElement('template')
@@ -171,8 +171,8 @@ test('array append and truncation preserve surviving rows and form state', async
     const options = {
       template,
       bindings: [
-        bind('.row', data => data.items),
-        bind('.name', data => data.items.map(item => item.name)),
+        repeat('.row', ({data}) => /** @type {{items: Array<{name: string}>}} */ (data).items),
+        text('.name', ({item}) => item.name),
       ],
     }
     const mounted = component(options)
@@ -283,8 +283,8 @@ test('a custom element receives only necessary writes and one lifecycle', async 
     const options = {
       template,
       bindings: [
-        prop('contract-probe', data => data.value, 'value'),
-        attr('contract-probe', 'status', data => data.status),
+        prop('contract-probe', ({data}) => data.value, 'value'),
+        attr('contract-probe', 'status', ({data}) => data.status),
       ],
     }
     const mounted = component(options)
@@ -310,7 +310,7 @@ test('a preparation failure leaves the live form and focus unchanged', async ({
   page,
 }) => {
   await page.evaluate(async () => {
-    const { bind, component } = /** @type {typeof import('../../src/index.js')} */ (
+    const { component, text } = /** @type {typeof import('../../src/index.js')} */ (
       await import(String('/src/index.js'))
     )
     const template = document.createElement('template')
@@ -329,8 +329,8 @@ test('a preparation failure leaves the live form and focus unchanged', async ({
     const options = {
       template,
       bindings: [
-        bind('.first', data => data.first),
-        bind('.second', data => {
+        text('.first', ({data}) => data.first),
+        text('.second', ({data}) => {
           if (data.fail) {
             throw new Error('preparation failed')
           }
@@ -362,7 +362,7 @@ test('a preparation failure leaves the live form and focus unchanged', async ({
   })
 
   expect(message).toBe(
-    'Lumi bind projection for ".second" at matched position 1 failed: '
+    'Lumi text projection for ".second" at matched position 1 failed: '
     + 'preparation failed',
   )
   await expect(page.locator('.first')).toHaveText('before')
@@ -438,7 +438,7 @@ test('binding-level once consumes one declaration for the mounted component', as
   page,
 }) => {
   const result = await page.evaluate(async () => {
-    const { bind, component, on } = /** @type {typeof import('../../src/index.js')} */ (
+    const { component, on, repeat } = /** @type {typeof import('../../src/index.js')} */ (
       await import(String('/src/index.js'))
     )
     const template = document.createElement('template')
@@ -448,7 +448,7 @@ test('binding-level once consumes one declaration for the mounted component', as
     const mounted = component({
       template,
       bindings: [
-        bind('.row', (/** @type {{rows: object[]}} */ data) => data.rows),
+        repeat('.row', ({data}) => /** @type {{rows: object[]}} */ (data).rows),
         on('button', 'click', () => order.push('once'), { freq: 'once' }),
         on('button', 'click', () => order.push('always')),
       ],

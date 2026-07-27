@@ -1,16 +1,18 @@
 import {
   attr,
-  bind,
   child,
   classToggle,
   component,
   on,
   prop,
+  repeat,
   style,
+  text,
   type Component,
   type ComponentOptions,
   type EventBindingOptions,
   type MountedComponent,
+  type ProjectionContext,
 } from '@thlib/lumi'
 
 type CounterData = {
@@ -30,14 +32,14 @@ const mediaOptions: EventBindingOptions = {
 const options: ComponentOptions<CounterData> = {
   template,
   bindings: [
-    bind('output', (data, element) => {
+    text<CounterData, CounterData, 'output'>('output', ({data}, element) => {
       const output: HTMLOutputElement = element
       return `${data.label}: ${data.count} (${output.htmlFor.value})`
     }),
-    prop('output', data => data.count, 'value'),
-    attr('output', 'aria-label', data => data.label),
-    classToggle('output', 'disabled', data => data.disabled),
-    style('output', 'opacity', data => data.disabled ? '0.5' : '1'),
+    prop<CounterData, CounterData>('output', ({data}) => data.count, 'value'),
+    attr<CounterData, CounterData>('output', 'aria-label', ({data}) => data.label),
+    classToggle<CounterData, CounterData>('output', 'disabled', ({data}) => data.disabled),
+    style<CounterData, CounterData>('output', 'opacity', ({data}) => data.disabled ? '0.5' : '1'),
     on('button', 'click', (nativeEvent, button) => {
       const click: MouseEvent = nativeEvent
       const control: HTMLButtonElement = button
@@ -64,12 +66,12 @@ mounted.update({
 mounted.update({ count: '1', label: 'Count', disabled: false })
 
 // @ts-expect-error text bindings cannot project arbitrary objects.
-bind('output', () => ({ count: 1 }))
+text('output', () => ({ count: 1 }))
 
 // @ts-expect-error attribute bindings accept only text-compatible primitives.
 attr('output', 'title', () => ({ invalid: true }))
 
-// One value per repeated occurrence remains available to every binding.
+// @ts-expect-error arrays belong to repeat, not scalar projections.
 attr('output', 'title', () => ['first', 'second'])
 
 // @ts-expect-error class bindings require boolean projections.
@@ -92,12 +94,50 @@ const pageOptions: ComponentOptions<PageData> = {
 
 component(pageOptions)
 
-bind<CounterData>('output', data => data.count)
+type Person = {name: string}
+type PeoplePage = {people: Person[], heading: string}
 
-bind('circle', (_data, circle) => circle.r.baseVal.value)
-bind('math', (_data, math) => math.tagName)
+const peopleOptions: ComponentOptions<PeoplePage> = {
+  template,
+  bindings: [
+    repeat<Person, PeoplePage>('li', ({data}, el) => {
+      const item: Element = el
+      void item
+      return data.people
+    }, [
+      text<Person, PeoplePage>('.name', ({item, data}, el) => {
+        const contextItem: Person = item
+        const rootData: PeoplePage = data
+        const matched: Element = el
+        void contextItem
+        void rootData
+        void matched
+        return item.name
+      }),
+    ]),
+  ],
+}
 
-bind('.result', (_data, element) => {
+component(peopleOptions)
+
+const personContext: ProjectionContext<Person, PeoplePage> = {
+  data: {people: [], heading: 'People'},
+  item: {name: 'Ada'},
+  index: 0,
+  path: [0],
+  parent: null,
+}
+void personContext
+
+// @ts-expect-error text item types are explicit and checked.
+text<Person>('.name', ({item}) => item.missing)
+
+text<CounterData, CounterData, 'output'>('output', ({data}) => data.count)
+
+text<CounterData, CounterData, 'circle'>('circle', (_context, circle) => circle.r.baseVal.value)
+text<CounterData, CounterData, 'math'>('math', (_context, math) => math.tagName)
+
+text<CounterData, CounterData, '.result'>('.result', (_context, element) => {
   const matchedElement: Element = element
 
   // @ts-expect-error complex selectors safely retain the base Element type.

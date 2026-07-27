@@ -16,20 +16,14 @@ import {
   shadowIncludingParent,
 } from './dom.js'
 import { connectCardinalityDomBindings } from './cardinality.js'
+import {warn} from './internal/diagnostics.js'
 import { isNoValue, noValue } from './internal/no-value.js'
 import { projectionError } from './internal/projection-error.js'
+import {rootContext} from './internal/projection-context.js'
 
 const domBindingDescriptor = Symbol('Lumi DOM binding descriptor')
 const ownedDomSubtrees = Symbol('Lumi owned DOM subtrees')
 const noOperation = () => {}
-
-class CardinalityRequired extends Error {
-  /** @param {string} selector */
-  constructor(selector) {
-    super()
-    this.selector = selector
-  }
-}
 
 /**
  * @typedef {string | number | boolean} TextValue
@@ -48,7 +42,7 @@ class CardinalityRequired extends Error {
  */
 
 /**
- * @typedef {'bind' | 'property' | 'attribute' | 'class' | 'style'} DomBindingKind
+ * @typedef {'repeat' | 'text' | 'property' | 'attribute' | 'class' | 'style'} DomBindingKind
  */
 
 /**
@@ -56,8 +50,10 @@ class CardinalityRequired extends Error {
  * @typedef {object} DomBindingDescriptor
  * @property {DomBindingKind} kind
  * @property {string} selector
- * @property {(data: Data, element: Element) => unknown} project
+ * @property {(input: any, el: Element) => unknown} project
  * @property {string} [name]
+ * @property {DomBindingDescriptor<Data>} [scope]
+ * @property {ReadonlyArray<DomBindingDescriptor<Data>>} [bindings]
  */
 
 /**
@@ -74,6 +70,8 @@ class CardinalityRequired extends Error {
  * @property {WeakMap<Element, CachedValue>} values
  * @property {unknown[]} replay
  * @property {boolean} requiresTrustedHTML
+ * @property {Set<string>} warnings
+ * @property {Window | null} view
  * @property {(projected: unknown, trustedTypes: TrustedTypesFactory | null) => unknown} normalize
  * @property {(element: Element, value: unknown) => boolean} apply
  */
@@ -120,7 +118,7 @@ export function createDomBinding(descriptor) {
     [domBindingDescriptor]: descriptor,
 
     connect(/** @type {Element} */ root) {
-      return connectDomBindings(root, [descriptor])
+      return connectDomBindings(root, flattenDomBindingDescriptors([descriptor]))
     },
   }
 
@@ -146,6 +144,38 @@ export function getDomBindingDescriptor(binding) {
   return /** @type {DomBindingDescriptor<Data>} */ (
     Reflect.get(binding, domBindingDescriptor)
   )
+}
+
+/**
+ * Returns one built-in DOM declaration and every nested declaration owned by
+ * an optional repeat binding list. Nested declarations retain their owning
+ * repeat so the cardinality planner can resolve their selectors locally.
+ *
+ * @template Data
+ * @param {ReadonlyArray<DomBindingDescriptor<Data>>} descriptors
+ * @param {DomBindingDescriptor<Data> | undefined} [scope]
+ * @returns {ReadonlyArray<DomBindingDescriptor<Data>>}
+ */
+export function flattenDomBindingDescriptors(descriptors, scope = undefined) {
+  /** @type {Array<DomBindingDescriptor<Data>>} */
+  const flattened = []
+
+  for (const descriptor of descriptors) {
+    const declaration = scope === undefined
+      ? descriptor
+      : {...descriptor, scope}
+
+    flattened.push(declaration)
+
+    if (descriptor.bindings !== undefined) {
+      flattened.push(...flattenDomBindingDescriptors(
+        descriptor.bindings,
+        declaration,
+      ))
+    }
+  }
+
+  return flattened
 }
 
 /**
@@ -192,7 +222,9 @@ export function connectDomBindings(
   publishShadowRoots,
 ) {
   /** @type {Array<DomBindingRuntime<Data>>} */
-  const runtimes = descriptors.map(createDomBindingRuntime)
+  const runtimes = descriptors.map((descriptor, index) => {
+    return createDomBindingRuntime(descriptor, index, root)
+  })
   const trustedTypes = runtimes.some(runtime => runtime.requiresTrustedHTML)
     ? trustedTypesFactory(root)
     : null
@@ -214,7 +246,38 @@ export function connectDomBindings(
     publishShadowRoots,
   )
   /** @type {ReturnType<typeof connectCardinalityDomBindings> | null} */
-  let cardinality = null
+  let cardinality = runtimes.some(runtime => {
+    return runtime.descriptor.kind === 'repeat'
+  })
+    ? createCardinality()
+    : null
+
+  function createCardinality() {
+    return connectCardinalityDomBindings(
+      root,
+      blueprintRoot,
+      /** @type {ReadonlyArray<import('./cardinality.js').Runtime>} */ (
+        runtimes
+      ),
+      ownedSubtreePaths,
+      (runtime, projected) => {
+        const scalarRuntime = /** @type {DomBindingRuntime<Data>} */ (
+          /** @type {unknown} */ (runtime)
+        )
+        return normalizeProjectedValue(
+          scalarRuntime,
+          projected,
+          trustedTypes,
+        )
+      },
+      (runtime, element, value) => {
+        const scalarRuntime = /** @type {DomBindingRuntime<Data>} */ (
+          /** @type {unknown} */ (runtime)
+        )
+        applyLiveValue(scalarRuntime, element, value)
+      },
+    )
+  }
 
   return {
     prepare(data) {
@@ -222,60 +285,9 @@ export function connectDomBindings(
         return cardinality.prepare(data)
       }
 
-      try {
-        const prepared = scalar.prepare(data)
-        clearProjectionReplay(runtimes)
-        return prepared
-      } catch (error) {
-        if (!(error instanceof CardinalityRequired)) {
-          clearProjectionReplay(runtimes)
-          throw error
-        }
-
-        try {
-          if (queryElements(blueprintRoot, error.selector).length === 0) {
-            throw new TypeError(
-              `Lumi array bind selector "${error.selector}" must match the component template`,
-            )
-          }
-
-          const candidate = connectCardinalityDomBindings(
-            root,
-            blueprintRoot,
-            /** @type {ReadonlyArray<import('./cardinality.js').Runtime>} */ (
-              runtimes
-            ),
-            ownedSubtreePaths,
-            (runtime, projected) => {
-              const scalarRuntime = /** @type {DomBindingRuntime<Data>} */ (
-                /** @type {unknown} */ (runtime)
-              )
-              return normalizeProjectedValue(
-                scalarRuntime,
-                projected,
-                trustedTypes,
-              )
-            },
-            (runtime, element, value) => {
-              const scalarRuntime = /** @type {DomBindingRuntime<Data>} */ (
-                /** @type {unknown} */ (runtime)
-              )
-              applyLiveValue(scalarRuntime, element, value)
-            },
-          )
-
-          try {
-            const prepared = candidate.prepare(data)
-            cardinality = candidate
-            return prepared
-          } catch (cardinalityError) {
-            candidate.destroy()
-            throw cardinalityError
-          }
-        } finally {
-          clearProjectionReplay(runtimes)
-        }
-      }
+      const prepared = scalar.prepare(data)
+      clearProjectionReplay(runtimes)
+      return prepared
     },
 
     destroy() {
@@ -292,9 +304,10 @@ export function connectDomBindings(
  * @template Data
  * @param {DomBindingDescriptor<Data>} descriptor
  * @param {number} index
+ * @param {Element} root
  * @returns {DomBindingRuntime<Data>}
  */
-function createDomBindingRuntime(descriptor, index) {
+function createDomBindingRuntime(descriptor, index, root) {
   const requiresTrustedHTML = descriptor.kind === 'property'
     && isTrustedHTMLProperty(descriptor.name)
   /** @type {DomBindingRuntime<Data>} */
@@ -304,6 +317,8 @@ function createDomBindingRuntime(descriptor, index) {
     values: new WeakMap(),
     replay: [],
     requiresTrustedHTML,
+    warnings: new Set(),
+    view: root.ownerDocument.defaultView,
     normalize: () => noValue,
     apply: () => false,
   }
@@ -321,9 +336,31 @@ function createRuntimeNormalizer(runtime) {
   const descriptor = runtime.descriptor
 
   switch (descriptor.kind) {
-    case 'bind':
+    case 'repeat':
       return (/** @type {unknown} */ projected) => {
-        assertTextValue(projected, 'bind')
+        if (!Array.isArray(projected)) {
+          warnIgnored(runtime, projected, 'an array')
+          return noValue
+        }
+
+        for (let i = 0; i < projected.length; i += 1) {
+          if (!Object.hasOwn(projected, i)) {
+            warnIgnored(runtime, projected, 'a dense array', 'sparse array')
+            return noValue
+          }
+        }
+        return projected
+      }
+    case 'text':
+      return (/** @type {unknown} */ projected) => {
+        if (!isTextValue(projected)) {
+          warnIgnored(
+            runtime,
+            projected,
+            'a string, number, or boolean',
+          )
+          return noValue
+        }
         return String(projected)
       }
     case 'property': {
@@ -342,7 +379,10 @@ function createRuntimeNormalizer(runtime) {
     }
     case 'attribute':
       return (/** @type {unknown} */ projected) => {
-        assertTextValue(projected, 'attribute')
+        if (!isTextValue(projected)) {
+          warnIgnored(runtime, projected, 'a string, number, or boolean')
+          return noValue
+        }
         return projected === false
           ? false
           : projected === true
@@ -351,12 +391,18 @@ function createRuntimeNormalizer(runtime) {
       }
     case 'class':
       return (/** @type {unknown} */ projected) => {
-        assertBooleanValue(projected, 'classToggle')
+        if (typeof projected !== 'boolean') {
+          warnIgnored(runtime, projected, 'a boolean')
+          return noValue
+        }
         return projected
       }
     case 'style':
       return (/** @type {unknown} */ projected) => {
-        assertStringValue(projected, 'style')
+        if (typeof projected !== 'string') {
+          warnIgnored(runtime, projected, 'a string')
+          return noValue
+        }
         return projected
       }
   }
@@ -370,7 +416,9 @@ function createRuntimeApply(runtime) {
   const descriptor = runtime.descriptor
 
   switch (descriptor.kind) {
-    case 'bind':
+    case 'repeat':
+      return () => false
+    case 'text':
       return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
         if (element.textContent === value) {
           return false
@@ -1033,7 +1081,7 @@ function refreshParentCaches(records) {
  * @returns {boolean}
  */
 function ownsElementContent(descriptor) {
-  return descriptor.kind === 'bind'
+  return descriptor.kind === 'text'
     || (
       descriptor.kind === 'property'
       && isStructuralProperty(descriptor.name)
@@ -1163,7 +1211,8 @@ function elementDepth(root, element) {
  * @returns {boolean}
  */
 function isStructural(descriptor) {
-  return descriptor.kind === 'bind'
+  return descriptor.kind === 'repeat'
+    || descriptor.kind === 'text'
     || (
       descriptor.kind === 'property'
       && isStructuralProperty(descriptor.name)
@@ -1216,16 +1265,12 @@ function projectValue(runtime, data, element, matchIndex, trustedTypes) {
   let projected
 
   try {
-    projected = descriptor.project(data, element)
+    projected = descriptor.project(rootContext(data), element)
   } catch (error) {
     throw projectionError(descriptor, matchIndex, error)
   }
 
   runtime.replay[matchIndex] = projected
-
-  if (descriptor.kind === 'bind' && Array.isArray(projected)) {
-    throw new CardinalityRequired(descriptor.selector)
-  }
 
   return normalizeProjectedValue(runtime, projected, trustedTypes)
 }
@@ -1277,7 +1322,7 @@ function applyPlannedValue(
   const descriptor = runtime.descriptor
 
   switch (descriptor.kind) {
-    case 'bind': {
+    case 'text': {
       assertDoesNotReplaceOwnedSubtree(element, ownedSubtrees)
 
       if (element.textContent !== value) {
@@ -1354,7 +1399,10 @@ function applyPlannedValue(
       } else {
         styledElement.style.setProperty(name, /** @type {string} */ (value))
       }
+      return
     }
+    case 'repeat':
+      return
   }
 }
 
@@ -1652,6 +1700,32 @@ function projectionValueType(value) {
 }
 
 /**
+ * Reports one recoverable value-domain mismatch per mounted declaration and
+ * received category.
+ *
+ * @template Data
+ * @param {DomBindingRuntime<Data>} runtime
+ * @param {unknown} value
+ * @param {string} expected
+ * @param {string} [category]
+ */
+function warnIgnored(runtime, value, expected, category) {
+  const actual = category ?? projectionValueType(value)
+
+  if (runtime.warnings.has(actual)) {
+    return
+  }
+
+  runtime.warnings.add(actual)
+  warn(
+    `Lumi ${runtime.descriptor.kind} binding `
+    + `"${runtime.descriptor.selector}" ignored ${actual}; expected `
+    + `${expected}. The existing DOM state was preserved.`,
+    runtime.view,
+  )
+}
+
+/**
  * @param {string} binding
  * @param {string} expected
  * @param {unknown} value
@@ -1665,41 +1739,10 @@ function invalidProjectionValue(binding, expected, value) {
 
 /**
  * @param {unknown} value
- * @param {string} binding
- * @returns {asserts value is TextValue}
+ * @returns {value is TextValue}
  */
-function assertTextValue(value, binding) {
-  if (
-    typeof value !== 'string'
-    && typeof value !== 'number'
-    && typeof value !== 'boolean'
-  ) {
-    throw invalidProjectionValue(
-      binding,
-      'a string, number, or boolean',
-      value,
-    )
-  }
-}
-
-/**
- * @param {unknown} value
- * @param {string} binding
- * @returns {asserts value is string}
- */
-function assertStringValue(value, binding) {
-  if (typeof value !== 'string') {
-    throw invalidProjectionValue(binding, 'a string', value)
-  }
-}
-
-/**
- * @param {unknown} value
- * @param {string} binding
- * @returns {asserts value is boolean}
- */
-function assertBooleanValue(value, binding) {
-  if (typeof value !== 'boolean') {
-    throw invalidProjectionValue(binding, 'a boolean', value)
-  }
+function isTextValue(value) {
+  return typeof value === 'string'
+    || typeof value === 'number'
+    || typeof value === 'boolean'
 }

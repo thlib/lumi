@@ -21,7 +21,7 @@
 
   ```html
   <script type="module">
-    import {bind, component, on, prop} from 'https://cdn.jsdelivr.net/npm/@thlib/lumi@0.1.0/dist/lumi.js'
+    import {component, on, prop, text} from 'https://cdn.jsdelivr.net/npm/@thlib/lumi@0.1.0/dist/lumi.js'
   </script>
   ```
 
@@ -33,4 +33,5 @@
 - shorten name based on context, more context = shorter name, so event in an event location can be `e`, normally 3 letter abbreviations work well.
 I like to use the letter `e` for the `event` variable and `el` for `element` for example.
 - lumi spa should be in typescript while lumi itself can remain js with jsDoc
-  
+- keep lumi as jsdoc and js, change lumi spa to ts
+- no need for exactlyOne I think.

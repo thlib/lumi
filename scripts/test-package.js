@@ -54,7 +54,9 @@ try {
     'dist/dom.d.ts',
     'dist/events.d.ts',
     'dist/index.d.ts',
+    'dist/internal/diagnostics.d.ts',
     'dist/internal/no-value.d.ts',
+    'dist/internal/projection-context.d.ts',
     'dist/internal/projection-error.d.ts',
     'dist/plan.d.ts',
     'dist/types.d.ts',
@@ -96,13 +98,14 @@ try {
 
     assert.deepEqual(Object.keys(lumi).sort(), [
       'attr',
-      'bind',
       'child',
       'classToggle',
       'component',
       'on',
       'prop',
+      'repeat',
       'style',
+      'text',
     ])
 
     const bundle = await import('@thlib/lumi/dist/lumi.js')

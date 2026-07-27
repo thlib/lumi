@@ -166,28 +166,27 @@ The template is ordinary HTML:
 ```html
 <template id="counter-template">
   <section class="counter">
-    <output>count is <span data-bind="$.count">0</span></output>
+    <output>count is <span data-path="$.count">0</span></output>
     <button
       data-action="decrement"
-      data-disabled="$.decrementDisabled"
+      data-disabled
     >Decrement</button>
     <button
       data-action="increment"
-      data-disabled="$.counterDisabled"
+      data-disabled
     >Increment</button>
-    <ul data-bind="$.items">
-      <li data-bind="$.items.name">Item</li>
+    <ul data-path="$.items[*]">
+      <li data-path="$.items[*].name">Item</li>
     </ul>
   </section>
 </template>
 ```
 
-The `data-bind` and `data-disabled` values are application-owned metadata and
+The `data-path` and `data-disabled` values are application-owned metadata and
 have no built-in interpretation. The example injects a projection adapter that
-returns ordinary JavaScript scalar or array values. Its named path members
-distribute through arrays, but that convention is external. The browser can
-parse the template without knowing about either the rendering mechanism or the
-convention, and the template retains real default content.
+returns JSONPath nodelists unchanged. The browser can parse the template
+without knowing about either the rendering mechanism or the convention, and
+the template retains real default content.
 
 The component owns a presentation function that derives the exact snapshot
 required by its template and rendering rules:
@@ -232,13 +231,13 @@ const slot = document.querySelector('#counter-slot')
 const counter = component({
   template: document.querySelector('#counter-template'),
   bindings: [
-    bind(
-      '[data-bind]',
-      (data, element) => jsonPath(data, element.dataset.bind),
+    text(
+      '[data-path]',
+      ({data}, element) => jsonPath(data, element.dataset.path),
     ),
     prop(
       '[data-disabled]',
-      (data, element) => jsonPath(data, element.dataset.disabled),
+      ({data}) => data.counterDisabled,
       'disabled',
     ),
     on('[data-action="increment"]', 'click', () => {
@@ -669,7 +668,7 @@ Components use three languages the browser and tooling already understand:
 
 A construct is inside the boundary when an existing language or published
 standard defines its semantics. Calling
-`bind('.value', data => data.count)` uses a normal JavaScript function, native
+`text('.value', ({data}) => data.count)` uses a normal JavaScript function, native
 selector syntax, and a callback. The API defines the function's behavior but
 does not parse the callback or selector as a separate language.
 
@@ -693,7 +692,7 @@ that boundary.
 An independent adapter may deliberately define a small language in `data-*`
 metadata, provided that it owns and documents the parsing, scope, errors, and
 lifecycle. The rendering API still receives ordinary selectors, projection
-functions, and JavaScript values. The example's `data-bind` path is therefore
+functions, and JavaScript values. The example's `data-path` path is therefore
 a language owned by `jsonPath`, not a hidden template language.
 
 The API itself should stay unsurprising JavaScript. It must not grow clever
@@ -783,9 +782,8 @@ The design remains intact only if all of these stay true:
 - Overlapping built-in selector sets are deterministic, and the last
   declaration wins when they reach the same sink.
 - Scalar bindings reject projection results outside their declared value
-  types instead of relying on implicit DOM string or boolean coercion. Text
-  bindings additionally accept explicitly defined positional array shapes.
-- Empty bind arrays produce zero elements, nested arrays preserve their
+  types instead of relying on implicit DOM string or boolean coercion.
+- Empty repeat arrays produce zero elements, nested repeats preserve their
   dimensions, and repeated element identity remains positional across renders.
 - Changing one scalar projection changes only its bound DOM state.
 - An unbound DOM property remains untouched.

@@ -8,6 +8,24 @@
  */
 
 /**
+ * The current positional occurrence presented to a projection.
+ *
+ * At a mounted component boundary, item is the component data, index is 0,
+ * path is empty, and parent is null. A repeat binding creates one child
+ * context per returned item while preserving the component data.
+ *
+ * @template Item
+ * @template [Data=unknown]
+ * @typedef {Readonly<{
+ *   data: Data,
+ *   item: Item,
+ *   index: number,
+ *   path: ReadonlyArray<number>,
+ *   parent: ProjectionContext<unknown, Data> | null,
+ * }>} ProjectionContext
+ */
+
+/**
  * @internal
  * @template Data
  * @typedef {object} ConnectedBinding

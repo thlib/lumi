@@ -27,13 +27,20 @@
  * @typedef {import('./types.js').EventBindingOptions} EventBindingOptions
  */
 
+/**
+ * @template Item
+ * @template [Data=unknown]
+ * @typedef {import('./types.js').ProjectionContext<Item, Data>} ProjectionContext
+ */
+
 export {
   attr,
-  bind,
   child,
   classToggle,
   prop,
+  repeat,
   style,
+  text,
 } from './bindings.js'
 export { component } from './component.js'
 export { on } from './events.js'

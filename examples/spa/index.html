@@ -52,7 +52,7 @@
           component: component({
             template: document.querySelector('#app-shell-template'),
             bindings: [
-              classToggle('#shell', 'nav-open', data => data.navOpen),
+              classToggle('#shell', 'nav-open', ({data}) => data.navOpen),
               on('#backdrop', 'click', () => {
                 update(data => ({...data, navOpen: false}))
               }),
@@ -105,7 +105,7 @@
     </template>
 
     <script type="module">
-      import {attr, bind, component, define, on, update} from './app.js'
+      import {attr, component, define, on, text, update} from './app.js'
 
       define('header', () => ({
         present: data => ({
@@ -118,13 +118,13 @@
         component: component({
           template: document.querySelector('#header-template'),
           bindings: [
-            bind('.workspace-switcher .name', data => data.workspace),
-            bind('.user-menu .name', data => data.userName),
-            bind('.user-menu .avatar', data => data.userInitials),
+            text('.workspace-switcher .name', ({data}) => data.workspace),
+            text('.user-menu .name', ({data}) => data.userName),
+            text('.user-menu .avatar', ({data}) => data.userInitials),
             attr(
               '[aria-controls="navigation"]',
               'aria-expanded',
-              data => String(data.navOpen),
+              ({data}) => String(data.navOpen),
             ),
             on('[aria-controls="navigation"]', 'click', () => {
               update(data => ({...data, navOpen: !data.navOpen}))
@@ -181,7 +181,7 @@
     </template>
 
     <script type="module">
-      import {attr, bind, component, define, on, update} from './app.js'
+      import {attr, component, define, on, text, update} from './app.js'
 
       // Each link already carries its route in href, so the bindings read the
       // document rather than a parallel attribute.
@@ -194,7 +194,7 @@
         component: component({
           template: document.querySelector('#navigation-template'),
           bindings: [
-            bind('.link .count', data => data.projectCount),
+            text('.link .count', ({data}) => data.projectCount),
             on('.link', 'click', (e, el) => {
               if (el.getAttribute('href') === window.location.hash) {
                 update(data => ({...data, navOpen: false}))
@@ -203,11 +203,9 @@
             attr(
               '.link',
               'aria-current',
-              (data, el) => {
-                return el.getAttribute('href') === `#/${data.route}`
-                  ? 'page'
-                  : false
-              },
+              ({data}, el) => (
+                el.getAttribute('href') === `#/${data.route}` ? 'page' : false
+              ),
             ),
           ],
         }),
@@ -393,13 +391,14 @@
     <script type="module">
       import {
         attr,
-        bind,
         component,
         define,
         emailValidationMessage,
         on,
         prop,
+        repeat,
         style,
+        text,
         update,
       } from './app.js'
 
@@ -409,9 +408,9 @@
 
         return {
           present: data => {
-            const selectedMember = data.members.find(member => {
-              return member.id === data.selectedMemberId
-            })
+            const selectedMember = data.members.find(
+              member => member.id === data.selectedMemberId,
+            )
 
             return {
               toasts: data.toasts,
@@ -425,40 +424,27 @@
           component: component({
             template: document.querySelector('#teams-template'),
             bindings: [
-              bind('#directory > .heading .count', data => data.memberCount),
-              bind('.member-row', data => data.members),
-              bind(
-                '.member-row .avatar',
-                data => data.members.map(member => member.initials),
-              ),
-              bind(
-                '.member-row .name',
-                data => data.members.map(member => member.name),
-              ),
-              bind(
-                '.member-row .email',
-                data => data.members.map(member => member.email),
-              ),
-              bind(
-                '.member-row .team',
-                data => data.members.map(member => member.team),
-              ),
-              bind(
-                '.member-row .role',
-                data => data.members.map(member => member.role),
-              ),
-              bind('#profile .avatar', data => data.selectedMember.initials),
-              bind('#profile .name', data => data.selectedMember.name),
-              bind('#profile .role', data => data.selectedMember.role),
-              bind('#profile .team', data => data.selectedMember.team),
-              bind('#profile .country', data => data.selectedMember.country),
-              bind('#profile .email', data => data.selectedMember.email),
-              bind('#profile .bio', data => data.selectedMember.bio),
-              bind('.toast', data => data.toasts),
-              bind(
-                '.toast .message',
-                data => data.toasts.map(toast => toast.message),
-              ),
+              text('#directory > .heading .count', ({data}) => data.memberCount),
+              repeat('.member-row', ({data}) => data.members, [
+                text('.avatar', ({item}) => item.initials),
+                text('.name', ({item}) => item.name),
+                text('.email', ({item}) => item.email),
+                text('.team', ({item}) => item.team),
+                text('.role', ({item}) => item.role),
+                attr('.name', 'href', ({item}) => `#/teams/${item.id}`),
+                style('.avatar', 'background-color', ({item}) => item.tone),
+              ]),
+              text('#profile .avatar', ({data}) => data.selectedMember.initials),
+              text('#profile .name', ({data}) => data.selectedMember.name),
+              text('#profile .role', ({data}) => data.selectedMember.role),
+              text('#profile .team', ({data}) => data.selectedMember.team),
+              text('#profile .country', ({data}) => data.selectedMember.country),
+              text('#profile .email', ({data}) => data.selectedMember.email),
+              text('#profile .bio', ({data}) => data.selectedMember.bio),
+              repeat('.toast', ({data}) => data.toasts, [
+                text('.message', ({item}) => item.message),
+                attr(':scope', 'data-toast-id', ({item}) => item.id),
+              ]),
               on('.invite input[type="email"]', 'input', (e, el) => {
                 if (
                   el instanceof HTMLInputElement
@@ -507,34 +493,17 @@
                   toasts: data.toasts.filter(item => item.id !== id),
                 }))
               }),
-              prop('#directory', data => data.hasSelectedMember, 'hidden'),
-              prop('#profile', data => !data.hasSelectedMember, 'hidden'),
-              // The dismiss handler reads this identifier back off the element,
-              // so it stays a data attribute: it carries a value, not a hook.
-              attr(
-                '.toast',
-                'data-toast-id',
-                data => data.toasts.map(toast => toast.id),
-              ),
-              attr(
-                '.member-row .name',
-                'href',
-                data => data.members.map(member => `#/teams/${member.id}`),
-              ),
+              prop('#directory', ({data}) => data.hasSelectedMember, 'hidden'),
+              prop('#profile', ({data}) => !data.hasSelectedMember, 'hidden'),
               attr(
                 '#profile .email',
                 'href',
-                data => `mailto:${data.selectedMember.email}`,
-              ),
-              style(
-                '.member-row .avatar',
-                'background-color',
-                data => data.members.map(member => member.tone),
+                ({data}) => `mailto:${data.selectedMember.email}`,
               ),
               style(
                 '#profile .avatar',
                 'background-color',
-                data => data.selectedMember.tone,
+                ({data}) => data.selectedMember.tone,
               ),
             ],
           }),
@@ -613,7 +582,7 @@
     </template>
 
     <script type="module">
-      import {bind, classToggle, component, define, style} from './app.js'
+      import {classToggle, component, define, repeat, style, text} from './app.js'
 
       define('projectList', () => ({
         present: projects => ({projects}),
@@ -621,48 +590,17 @@
         component: component({
           template: document.querySelector('#project-list-template'),
           bindings: [
-            bind('.project-card', data => data.projects),
-            bind(
-              '.project-card .status',
-              data => data.projects.map(project => project.status),
-            ),
-            bind(
-              '.project-card .name',
-              data => data.projects.map(project => project.name),
-            ),
-            bind(
-              '.project-card .description',
-              data => data.projects.map(project => project.description),
-            ),
-            bind(
-              '.project-card .members',
-              data => data.projects.map(project => project.members),
-            ),
-            bind(
-              '.project-card .due',
-              data => data.projects.map(project => project.due),
-            ),
-            bind(
-              '.progress-label .value',
-              data => data.projects.map(project => `${project.progress}%`),
-            ),
-            style(
-              '.project-card .accent',
-              'background-color',
-              data => data.projects.map(project => project.accent),
-            ),
-            style(
-              '.progress-track .bar',
-              'width',
-              data => data.projects.map(project => `${project.progress}%`),
-            ),
-            classToggle(
-              '.project-card .status',
-              'planning',
-              data => data.projects.map(project => {
-                return project.status === 'Planning'
-              }),
-            ),
+            repeat('.project-card', ({data}) => data.projects, [
+              text('.status', ({item}) => item.status),
+              text('.name', ({item}) => item.name),
+              text('.description', ({item}) => item.description),
+              text('.members', ({item}) => item.members),
+              text('.due', ({item}) => item.due),
+              text('.progress-label .value', ({item}) => `${item.progress}%`),
+              style('.accent', 'background-color', ({item}) => item.accent),
+              style('.progress-track .bar', 'width', ({item}) => `${item.progress}%`),
+              classToggle('.status', 'planning', ({item}) => item.status === 'Planning'),
+            ]),
           ],
         }),
       }))
@@ -685,7 +623,7 @@
     </template>
 
     <script type="module">
-      import {attr, bind, component, define, style} from './app.js'
+      import {attr, component, define, repeat, style, text} from './app.js'
 
       define('activityList', () => ({
         present: activities => ({activities}),
@@ -693,39 +631,15 @@
         component: component({
           template: document.querySelector('#activity-list-template'),
           bindings: [
-            bind('.activity-item', data => data.activities),
-            bind(
-              '.activity-item .avatar',
-              data => data.activities.map(activity => activity.initials),
-            ),
-            bind(
-              '.activity-item .person',
-              data => data.activities.map(activity => activity.person),
-            ),
-            bind(
-              '.activity-item .action',
-              data => data.activities.map(activity => activity.action),
-            ),
-            bind(
-              '.activity-item .target',
-              data => data.activities.map(activity => activity.target),
-            ),
-            bind(
-              '.activity-item time',
-              data => data.activities.map(activity => activity.time),
-            ),
-            style(
-              '.activity-item .avatar',
-              'background-color',
-              data => data.activities.map(activity => activity.tone),
-            ),
-            attr(
-              '.activity-item .person',
-              'href',
-              data => data.activities.map(activity => {
-                return `#/teams/${activity.personId}`
-              }),
-            ),
+            repeat('.activity-item', ({data}) => data.activities, [
+              text('.avatar', ({item}) => item.initials),
+              text('.person', ({item}) => item.person),
+              text('.action', ({item}) => item.action),
+              text('.target', ({item}) => item.target),
+              text('time', ({item}) => item.time),
+              style('.avatar', 'background-color', ({item}) => item.tone),
+              attr('.person', 'href', ({item}) => `#/teams/${item.personId}`),
+            ]),
           ],
         }),
       }))
@@ -805,12 +719,13 @@
 
     <script type="module">
       import {
-        bind,
         child,
         classToggle,
         component,
         define,
+        repeat,
         resolve,
+        text,
       } from './app.js'
 
       define('overview', () => {
@@ -829,31 +744,16 @@
           component: component({
             template: document.querySelector('#overview-template'),
             bindings: [
-              child('.focus > .content', projectList.component, data => {
-                return data.projects
-              }),
-              child('.activity-panel > .content', activityList.component, data => {
-                return data.activities
-              }),
-              bind('#overview > .heading .eyebrow', data => data.date),
-              bind('#overview-title', data => data.title),
-              bind('.metric-card', data => data.metrics),
-              bind('.metric-card .label', data => data.metrics.map(metric => {
-                return metric.label
-              })),
-              bind('.metric-card .value', data => data.metrics.map(metric => {
-                return metric.value
-              })),
-              bind('.metric-card .change', data => data.metrics.map(metric => {
-                return metric.change
-              })),
-              classToggle(
-                '.metric-card',
-                'positive',
-                data => data.metrics.map(metric => {
-                  return metric.direction === 'positive'
-                }),
-              ),
+              child('.focus > .content', projectList.component, data => data.projects),
+              child('.activity-panel > .content', activityList.component, data => data.activities),
+              text('#overview > .heading .eyebrow', ({data}) => data.date),
+              text('#overview-title', ({data}) => data.title),
+              repeat('.metric-card', ({data}) => data.metrics, [
+                text('.label', ({item}) => item.label),
+                text('.value', ({item}) => item.value),
+                text('.change', ({item}) => item.change),
+                classToggle(':scope', 'positive', ({item}) => item.direction === 'positive'),
+              ]),
             ],
           }),
         }
@@ -886,12 +786,12 @@
     <script type="module">
       import {
         attr,
-        bind,
         child,
         component,
         define,
         on,
         resolve,
+        text,
         update,
       } from './app.js'
 
@@ -900,10 +800,10 @@
 
         return {
           present: data => {
-            const projects = data.projects.filter(project => {
-              return data.filter === 'all'
-                || project.status.toLowerCase() === data.filter
-            })
+            const projects = data.projects.filter(
+              project => data.filter === 'all'
+                || project.status.toLowerCase() === data.filter,
+            )
             const suffix = projects.length === 1 ? 'project' : 'projects'
 
             return {
@@ -916,10 +816,8 @@
           component: component({
             template: document.querySelector('#projects-template'),
             bindings: [
-              child('#projects > .content', projectList.component, data => {
-                return data.projects
-              }),
-              bind('.project-toolbar .summary', data => data.summary),
+              child('#projects > .content', projectList.component, data => data.projects),
+              text('.project-toolbar .summary', ({data}) => data.summary),
               // Each button carries the filter it selects, so this stays a data
               // attribute: the handler and the projection both read its value.
               on('[data-filter]', 'click', (e, el) => {
@@ -936,7 +834,7 @@
               attr(
                 '[data-filter]',
                 'aria-pressed',
-                (data, el) => String(el.dataset.filter === data.filter),
+                ({data}, el) => String(el.dataset.filter === data.filter),
               ),
             ],
           }),
@@ -979,12 +877,13 @@
     <script type="module">
       import {
         attr,
-        bind,
         component,
         define,
         filterLargeRecords,
         on,
         orderLargeRecords,
+        repeat,
+        text,
         update,
       } from './app.js'
 
@@ -1006,9 +905,11 @@
         component: component({
           template: document.querySelector('#records-template'),
           bindings: [
-            bind('.record-row', data => data.rows),
-            bind('.record-summary', data => data.summary),
-            bind('.record-sort-indicator', data => data.sortIndicator),
+            repeat('.record-row', ({data}) => data.rows, [
+              text(':scope', ({item}) => item),
+            ]),
+            text('.record-summary', ({data}) => data.summary),
+            text('.record-sort-indicator', ({data}) => data.sortIndicator),
             on('[data-record-sort]', 'click', () => {
               update(data => ({
                 ...data,
@@ -1032,9 +933,9 @@
             attr(
               '[data-record-filter]',
               'aria-pressed',
-              (data, el) => String(el.dataset.recordFilter === data.filter),
+              ({data}, el) => String(el.dataset.recordFilter === data.filter),
             ),
-            attr('[data-record-header]', 'aria-sort', data => data.sort),
+            attr('[data-record-header]', 'aria-sort', ({data}) => data.sort),
           ],
         }),
       }))
@@ -1087,7 +988,7 @@
     </template>
 
     <script type="module">
-      import {bind, child, component, define, resolve} from './app.js'
+      import {child, component, define, resolve, text} from './app.js'
 
       define('activityPage', () => {
         const activityList = resolve('activityList')
@@ -1101,10 +1002,8 @@
           component: component({
             template: document.querySelector('#activity-page-template'),
             bindings: [
-              child('.activity-panel > .content', activityList.component, data => {
-                return data.activities
-              }),
-              bind('#activity > .heading .count', data => data.count),
+              child('.activity-panel > .content', activityList.component, data => data.activities),
+              text('#activity > .heading .count', ({data}) => data.count),
             ],
           }),
         }

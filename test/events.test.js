@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { JSDOM } from 'jsdom'
-import { bind, child, component, on } from '../src/index.js'
+import { child, component, on, repeat, text } from '../src/index.js'
 
 /**
  * @returns {{ document: Document, window: import('jsdom').DOMWindow }}
@@ -294,7 +294,7 @@ test('keeps routing elements created by later updates', () => {
   const mounted = component({
     template,
     bindings: [
-      bind('.item', (/** @type {{items: object[]}} */ data) => data.items),
+      repeat('.item', ({data}) => /** @type {{items: object[]}} */ (data).items),
       on('.item button', 'click', (_event, element) => {
         handled.push(element)
       }),
@@ -380,7 +380,7 @@ test('does not invoke a binding twice when a handler updates the component', () 
   const mounted = component({
     template,
     bindings: [
-      bind('.item', (/** @type {{items: object[]}} */ data) => data.items),
+      repeat('.item', ({data}) => /** @type {{items: object[]}} */ (data).items),
       on('button', 'click', () => {
         handled.push(mounted.root.querySelectorAll('button').length)
         mounted.update({ items: [{}, {}, {}] })
@@ -493,7 +493,7 @@ test('shares current DOM topology with routed event reconciliation', () => {
   const mounted = component({
     template,
     bindings: [
-      bind('.value', data => data),
+      text('.value', ({data}) => /** @type {string} */ (data)),
       on('.action', 'click', () => {
         handled.push('action')
       }),
@@ -530,7 +530,7 @@ test('maintains element listeners on every matching element', () => {
   const mounted = component({
     template,
     bindings: [
-      bind('.item', (/** @type {{items: object[]}} */ data) => data.items),
+      repeat('.item', ({data}) => /** @type {{items: object[]}} */ (data).items),
       on('video', 'ended', event => {
         handled.push(event.currentTarget)
       }, { at: 'elements' }),
@@ -574,13 +574,13 @@ test('keeps element listener membership when preparation fails', () => {
   const mounted = component({
     template,
     bindings: [
-      bind(
+      repeat(
         '.item',
-        (/** @type {{items: object[], fail?: boolean}} */ data) => {
-          if (data.fail === true) {
+        ({data}) => {
+          if ((/** @type {{fail?: boolean}} */ (data)).fail === true) {
             throw new Error('projection failed')
           }
-          return data.items
+          return /** @type {{items: object[]}} */ (data).items
         },
       ),
       on('button', 'click', () => {
@@ -638,7 +638,7 @@ test('consumes a once binding for the mounted component lifetime', () => {
   const definition = component({
     template,
     bindings: [
-      bind('.item', (/** @type {{items: object[]}} */ data) => data.items),
+      repeat('.item', ({data}) => /** @type {{items: object[]}} */ (data).items),
       on('button', 'click', () => {
         order.push('once')
       }, { freq: 'once' }),
@@ -762,7 +762,7 @@ test('removes element listeners when a once binding is consumed', () => {
   const mounted = component({
     template,
     bindings: [
-      bind('.item', (/** @type {{items: object[]}} */ data) => data.items),
+      repeat('.item', ({data}) => /** @type {{items: object[]}} */ (data).items),
       on('video', 'ended', () => {
         calls += 1
       }, { at: 'elements', freq: 'once' }),

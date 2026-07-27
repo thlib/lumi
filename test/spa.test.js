@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { JSDOM } from 'jsdom'
-import {bind, component} from '../src/index.js'
+import {component, text} from '../src/index.js'
 import {mountApplication} from '../examples/spa/application.js'
 import {define, resolve} from '../examples/spa/demo-components.js'
 import { emailValidationMessage } from '../examples/spa/validation.js'
@@ -187,7 +187,7 @@ test('keeps only the active SPA page connected to the document', () => {
           document,
           `<section data-page="${name}">Not presented</section>`,
         ),
-        bindings: [bind('[data-page]', data => data)],
+        bindings: [text('[data-page]', ({data}) => data)],
       }),
     })
   }

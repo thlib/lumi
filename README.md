@@ -116,9 +116,9 @@ component template. Array repetition deliberately preserves identity by
 position: Lumi does not inspect `key`, `id`, object identity, or any other
 application value to infer keyed identity.
 
-Projections always receive the whole presentation snapshot, including inside a
-repeated element. Cardinality comes from a positional coordinate applied to
-each projection's returned value.
+Every render projection receives a context containing the whole presentation
+snapshot and the current occurrence. `repeat` changes cardinality; other
+bindings project one value into the current occurrence.
 [How array cardinality works](./docs/cardinality-explained.md) walks through
 that mechanism.
 
@@ -133,8 +133,8 @@ definition boundary:
 
 ```ts
 import {
-  bind,
   component,
+  text,
   type ComponentOptions,
 } from '@thlib/lumi'
 
@@ -145,7 +145,7 @@ type CounterData = {
 const options: ComponentOptions<CounterData> = {
   template: document.querySelector('#counter-template'),
   bindings: [
-    bind('output', (data, output) => {
+    text('output', ({data}, output) => {
       // data is CounterData; output is HTMLOutputElement.
       return data.count
     }),
@@ -164,15 +164,21 @@ element type. Complex selectors receive `Element`, matching the safe fallback
 used by the browser's selector APIs. The declaration build and a package-level
 TypeScript consumer contract run as part of `pnpm run lint`.
 
-Try the [live counter example](https://thlib.github.io/lumi/examples/counter/)
-or the [component-based SPA](https://thlib.github.io/lumi/examples/spa/).
-Their source is in [`examples/counter`](./examples/counter) and
-[`examples/spa`](./examples/spa).
+## Demos
 
-Equivalent standalone implementations of the SPA in React, Vue, and Angular
-are available in
-[`examples/framework-spa`](./examples/framework-spa). They share the demo's
-content and visual design, but do not import or depend on Lumi.
+- [Native bindings counter](https://thlib.github.io/lumi/examples/counter-native/)
+  ([source](./examples/counter-native)): the smallest direct Lumi example. HTML
+  stays native; JavaScript bindings beside the template project data into it.
+- [JSONPath counter](https://thlib.github.io/lumi/examples/counter/)
+  ([source](./examples/counter)): the same behavior using application-owned
+  `data-path` attributes and a cached RFC 9535 JSONPath adapter. It shows an
+  optional declarative convention, not a Lumi requirement.
+- [Component-based SPA](https://thlib.github.io/lumi/examples/spa/)
+  ([source](./examples/spa)): a larger dependency-free application using
+  colocated templates and explicit presentation mappings.
+- [Framework comparison SPAs](./examples/framework-spa): equivalent React, Vue,
+  and Angular applications sharing the SPA's content and visual design without
+  importing Lumi.
 
 ## SPA benchmark
 
@@ -206,12 +212,12 @@ that return Lumi bindings. For example, an application may give `data-field`
 attributes direct-property semantics:
 
 ```js
-import {bind, component} from '@thlib/lumi'
+import {component, text} from '@thlib/lumi'
 
 function bindFields() {
-  return bind(
+  return text(
     '[data-field]',
-    (data, el) => data[el.dataset.field],
+    ({data}, el) => data[el.dataset.field],
   )
 }
 
@@ -222,7 +228,7 @@ const counter = component({
 ```
 
 `data-field` and `bindFields` belong to the application. Lumi sees only the
-binding returned by its public `bind()` function. A missing or nullish
+binding returned by its public `text()` function. A missing or nullish
 projected field is a no-op. A different application can inject another
 metadata convention, use external binding maps, or write projections directly
 without changing Lumi.

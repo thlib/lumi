@@ -2,7 +2,7 @@
 
 import {performance} from 'node:perf_hooks'
 import {JSDOM} from 'jsdom'
-import {bind, component, on} from '../src/index.js'
+import {component, on, repeat, text} from '../src/index.js'
 
 const SAMPLE_COUNT = 7
 
@@ -114,7 +114,7 @@ function scalarScenario({bindings: bindingCount, changing}) {
     (_, index) => `<output class="value-${index}"></output>`,
   ).join('')
   const bindings = Array.from({length: bindingCount}, (_, index) => {
-    return bind(`.value-${index}`, data => data)
+    return text(`.value-${index}`, ({data}) => /** @type {string} */ (data))
   })
   const mounted = component({
     template: createTemplate(document, `<section>${markup}</section>`),
@@ -149,7 +149,7 @@ function multiMatchScenario(changing) {
   const markup = '<output class="value"></output>'.repeat(32)
   const mounted = component({
     template: createTemplate(document, `<section>${markup}</section>`),
-    bindings: [bind('.value', data => data)],
+    bindings: [text('.value', ({data}) => /** @type {string} */ (data))],
   }).mount(document.createElement('div'))
 
   return {
@@ -181,7 +181,10 @@ function listScenario(resize) {
       document,
       '<ul><li class="item">default</li></ul>',
     ),
-    bindings: [bind('.item', data => data)],
+    bindings: [
+      repeat('.item', ({data}) => /** @type {string[]} */ (data)),
+      text('.item', ({item}) => item),
+    ],
   }).mount(document.createElement('div'))
   const values = Array.from({length: 32}, (_, index) => String(index))
   const sizes = Array.from(
@@ -226,7 +229,7 @@ function routedEventScenario() {
       `<section><output class="value"></output>${inertNodes}</section>`,
     ),
     bindings: [
-      bind('.value', data => data),
+      text('.value', ({data}) => /** @type {string} */ (data)),
       on('button', 'click', () => {}),
     ],
   }).mount(document.createElement('div'))

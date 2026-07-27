@@ -2,12 +2,13 @@
 
 import {
   attr,
-  bind,
   classToggle,
   component,
   on,
   prop,
+  repeat,
   style,
+  text,
 } from '../src/index.js'
 import * as lumi from '../src/index.js'
 
@@ -15,8 +16,8 @@ import * as lumi from '../src/index.js'
 lumi.mount
 // @ts-expect-error raw HTML has no dedicated public binding.
 lumi.html
-// @ts-expect-error keyed component repetition is not public.
-lumi.repeat
+
+/** @typedef {import('../src/index.js').ProjectionContext<CounterData, CounterData>} CounterContext */
 
 /** @typedef {{ count: number }} CounterData */
 
@@ -27,9 +28,9 @@ template.innerHTML = '<output></output>'
 const options = {
   template,
   bindings: [
-    bind('output', data => data.count),
-    prop('output', data => data.count, 'value'),
-    attr('output', 'aria-label', data => data.count),
+    text('output', (/** @type {CounterContext} */ {data}) => data.count),
+    prop('output', (/** @type {CounterContext} */ {data}) => data.count, 'value'),
+    attr('output', 'aria-label', (/** @type {CounterContext} */ {data}) => data.count),
     on('output', 'click', (nativeEvent, output) => {
       const click = /** @type {MouseEvent} */ (nativeEvent)
       const control = /** @type {HTMLOutputElement} */ (output)
@@ -45,6 +46,23 @@ const options = {
   ],
 }
 
+repeat('li', (/** @type {CounterContext} */ {data}, el) => {
+  const item = /** @type {HTMLLIElement} */ (el)
+  void item
+  return Array.from({length: data.count}, (_, index) => index)
+}, [
+  text('li', (/** @type {CounterContext} */ {item}) => item.count),
+])
+
+text('output', (/** @type {CounterContext} */ {item}, el) => {
+  const output = /** @type {HTMLOutputElement} */ (el)
+  void output
+  return item.count
+})
+
+// @ts-expect-error text projections do not accept arrays.
+text('output', () => ['invalid'])
+
 // @ts-expect-error the native once option is replaced by freq.
 on('output', 'click', () => {}, { once: true })
 
@@ -57,12 +75,12 @@ on('output', 'click', () => {}, { prevent: true })
 // @ts-expect-error at accepts only the declared binding locations.
 on('output', 'click', () => {}, { at: 'document' })
 
-// @ts-expect-error bind projections must return text values or arrays.
-bind('output', () => ({ count: 1 }))
-
-bind('output', () => [{ count: 1 }])
-bind('output', () => null)
-bind('output', () => undefined)
+// @ts-expect-error text projections must return a text-compatible scalar.
+text('output', () => ({ count: 1 }))
+// @ts-expect-error text projections do not accept arrays.
+text('output', () => [{ count: 1 }])
+text('output', () => null)
+text('output', () => undefined)
 
 // @ts-expect-error attribute projections must return text-compatible primitives.
 attr('output', 'title', () => ({ invalid: true }))
@@ -76,9 +94,11 @@ classToggle('output', 'active', () => undefined)
 style('output', 'color', () => 1)
 style('output', 'color', () => null)
 
-// Inside a repeated region, every binding may return one value per occurrence.
+// @ts-expect-error arrays belong to repeat, not scalar projections.
 attr('output', 'title', () => ['first', 'second'])
+// @ts-expect-error arrays belong to repeat, not scalar projections.
 classToggle('output', 'active', () => [true, false])
+// @ts-expect-error arrays belong to repeat, not scalar projections.
 style('output', 'color', () => ['red', 'blue'])
 
 // Property bindings intentionally preserve arbitrary inferred value types.

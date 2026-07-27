@@ -2,17 +2,25 @@
 
 import { findElement } from './dom.js'
 import { prepareMounted } from './component.js'
-import { claimDomSubtree, createDomBinding } from './plan.js'
+import {
+  claimDomSubtree,
+  createDomBinding,
+  getDomBindingDescriptor,
+} from './plan.js'
 
 /**
  * @typedef {string | number | boolean} TextValue
  */
 
 /**
- * @template Data
- * @template Value
+ * @template Item
+ * @template [Data=unknown]
+ * @template [Value=unknown]
  * @template {Element} [Target=Element]
- * @typedef {(data: Data, element: Target) => Value} ScalarProjection
+ * @typedef {(
+ *   context: import('./types.js').ProjectionContext<Item, Data>,
+ *   el: Target,
+ * ) => Value} ContextProjection
  */
 
 /**
@@ -43,29 +51,73 @@ function assertSafeBindingName(kind, name) {
 }
 
 /**
- * Binds projected data to an element.
+ * Repeats the matched template element once for every projected item.
  *
- * The projection receives the matching element in Lumi's prepared DOM so
- * application code may inject conventions such as reading a data attribute.
- * Lumi does not interpret those attributes.
+ * The projection receives the nearest positional occurrence. At the
+ * component boundary, context.item is the component data. A nullish or
+ * non-array result preserves the current region. Built-in DOM bindings in
+ * the optional third argument resolve selectors inside each repeated
+ * occurrence and receive that occurrence's context.
  *
- * Text values write textContent. Arrays repeat the matched element
- * positionally. Nested arrays are consumed by nested bind declarations,
- * while scalar descendant projections broadcast through inherited array
- * coordinates. A nullish projection performs no DOM operation.
- *
- * @template Data
+ * @template Item
+ * @template [Data=unknown]
+ * @template [Parent=Data]
  * @template {string} [Selector=string]
  * @param {Selector} selector
- * @param {ScalarProjection<Data, TextValue | null | undefined | ReadonlyArray<unknown>, SelectorElement<Selector>>} project
+ * @param {ContextProjection<Parent, Data, ReadonlyArray<Item> | null | undefined, SelectorElement<Selector>>} project
+ * @param {ReadonlyArray<import('./types.js').Binding<Data>>} [bindings]
  * @returns {import('./types.js').Binding<Data>}
- * @throws {TypeError} When a scalar projection returns a non-text value.
  */
-export function bind(selector, project) {
+export function repeat(selector, project, bindings) {
   return createDomBinding({
-    kind: 'bind',
+    kind: 'repeat',
     selector,
-    project: /** @type {(data: Data, element: Element) => unknown} */ (
+    project: /** @type {(context: import('./types.js').ProjectionContext<Parent, Data>, el: Element) => unknown} */ (
+      /** @type {unknown} */ (project)
+    ),
+    bindings: repeatBindingDescriptors(bindings),
+  })
+}
+
+/**
+ * @template Data
+ * @param {ReadonlyArray<import('./types.js').Binding<Data>> | undefined} bindings
+ * @returns {ReadonlyArray<import('./plan.js').DomBindingDescriptor<Data>>}
+ */
+function repeatBindingDescriptors(bindings) {
+  if (bindings === undefined) {
+    return []
+  }
+
+  return bindings.map(binding => {
+    const descriptor = getDomBindingDescriptor(binding)
+
+    if (descriptor === null) {
+      throw new TypeError(
+        'Lumi repeat bindings must use built-in DOM bindings',
+      )
+    }
+
+    return descriptor
+  })
+}
+
+/**
+ * Projects a text-compatible scalar into textContent for each occurrence.
+ * A nullish or non-text result leaves the existing text unchanged.
+ *
+ * @template Item
+ * @template [Data=unknown]
+ * @template {string} [Selector=string]
+ * @param {Selector} selector
+ * @param {ContextProjection<Item, Data, TextValue | null | undefined, SelectorElement<Selector>>} project
+ * @returns {import('./types.js').Binding<Data>}
+ */
+export function text(selector, project) {
+  return createDomBinding({
+    kind: 'text',
+    selector,
+    project: /** @type {(context: import('./types.js').ProjectionContext<Item, Data>, el: Element) => unknown} */ (
       /** @type {unknown} */ (project)
     ),
   })
@@ -79,11 +131,12 @@ export function bind(selector, project) {
  * innerHTML and outerHTML projections must return a genuine TrustedHTML value
  * created by a policy in a browser that implements the Trusted Types API.
  *
- * @template Data
- * @template Value
+ * @template Item
+ * @template [Data=unknown]
+ * @template [Value=unknown]
  * @template {string} [Selector=string]
  * @param {Selector} selector
- * @param {ScalarProjection<Data, Value | null | undefined, SelectorElement<Selector>>} project
+ * @param {ContextProjection<Item, Data, Value | null | undefined, SelectorElement<Selector>>} project
  * @param {string} name
  * @returns {import('./types.js').Binding<Data>}
  * @throws {TypeError} When name is an event handler or srcdoc, or an
@@ -95,7 +148,7 @@ export function prop(selector, project, name) {
   return createDomBinding({
     kind: 'property',
     selector,
-    project: /** @type {(data: Data, element: Element) => unknown} */ (
+    project: /** @type {(context: import('./types.js').ProjectionContext<Item, Data>, el: Element) => unknown} */ (
       /** @type {unknown} */ (project)
     ),
     name,
@@ -109,14 +162,14 @@ export function prop(selector, project, name) {
  *
  * Native event handlers and srcdoc are not supported by generic bindings.
  *
- * @template Data
+ * @template Item
+ * @template [Data=unknown]
  * @template {string} [Selector=string]
  * @param {Selector} selector
  * @param {string} name
- * @param {ScalarProjection<Data, TextValue | null | undefined | ReadonlyArray<unknown>, SelectorElement<Selector>>} project
+ * @param {ContextProjection<Item, Data, TextValue | null | undefined, SelectorElement<Selector>>} project
  * @returns {import('./types.js').Binding<Data>}
- * @throws {TypeError} When name is an event handler or srcdoc, or a projection
- * returns a non-text value.
+ * @throws {TypeError} When name is an event handler or srcdoc.
  */
 export function attr(selector, name, project) {
   assertSafeBindingName('attribute', name)
@@ -124,7 +177,7 @@ export function attr(selector, name, project) {
   return createDomBinding({
     kind: 'attribute',
     selector,
-    project: /** @type {(data: Data, element: Element) => unknown} */ (
+    project: /** @type {(context: import('./types.js').ProjectionContext<Item, Data>, el: Element) => unknown} */ (
       /** @type {unknown} */ (project)
     ),
     name,
@@ -135,19 +188,19 @@ export function attr(selector, name, project) {
  * Toggles one class without replacing classes owned by HTML or other code. A
  * nullish projection performs no DOM operation.
  *
- * @template Data
+ * @template Item
+ * @template [Data=unknown]
  * @template {string} [Selector=string]
  * @param {Selector} selector
  * @param {string} name
- * @param {ScalarProjection<Data, boolean | null | undefined | ReadonlyArray<unknown>, SelectorElement<Selector>>} project
+ * @param {ContextProjection<Item, Data, boolean | null | undefined, SelectorElement<Selector>>} project
  * @returns {import('./types.js').Binding<Data>}
- * @throws {TypeError} When a projection does not return a boolean.
  */
 export function classToggle(selector, name, project) {
   return createDomBinding({
     kind: 'class',
     selector,
-    project: /** @type {(data: Data, element: Element) => unknown} */ (
+    project: /** @type {(context: import('./types.js').ProjectionContext<Item, Data>, el: Element) => unknown} */ (
       /** @type {unknown} */ (project)
     ),
     name,
@@ -158,19 +211,19 @@ export function classToggle(selector, name, project) {
  * Projects data into one inline style property without replacing the style
  * attribute. A nullish projection performs no DOM operation.
  *
- * @template Data
+ * @template Item
+ * @template [Data=unknown]
  * @template {string} [Selector=string]
  * @param {Selector} selector
  * @param {string} name
- * @param {ScalarProjection<Data, string | null | undefined | ReadonlyArray<unknown>, SelectorElement<Selector>>} project
+ * @param {ContextProjection<Item, Data, string | null | undefined, SelectorElement<Selector>>} project
  * @returns {import('./types.js').Binding<Data>}
- * @throws {TypeError} When a projection does not return a string.
  */
 export function style(selector, name, project) {
   return createDomBinding({
     kind: 'style',
     selector,
-    project: /** @type {(data: Data, element: Element) => unknown} */ (
+    project: /** @type {(context: import('./types.js').ProjectionContext<Item, Data>, el: Element) => unknown} */ (
       /** @type {unknown} */ (project)
     ),
     name,

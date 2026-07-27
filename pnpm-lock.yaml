@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@jsonjoy.com/json-path':
+        specifier: ^18.28.0
+        version: 18.28.0(tslib@2.8.1)
       '@playwright/test':
         specifier: ^1.61.1
         version: 1.61.1
@@ -762,6 +765,18 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@jsonjoy.com/codegen@18.28.0':
+    resolution: {integrity: sha512-x88wUPMAXivw/ZHwbruc6XO74iuWuI+GIN0cNl6rj488adKG3MUEBay8ujHHS+s4/Kk/mR4aw/huCVirADTh0g==}
+    engines: {node: '>=10.0'}
+    peerDependencies:
+      tslib: '2'
+
+  '@jsonjoy.com/json-path@18.28.0':
+    resolution: {integrity: sha512-+3PjZPPPbzmKUx23NnP0BM1LEBu06LckyQxAYxYo9NRCSzZ2OjwgcpKbIIraVVS8sdQ9e32YHn+i5ZGemc2hVw==}
+    engines: {node: '>=10.0'}
+    peerDependencies:
+      tslib: '2'
 
   '@listr2/prompt-adapter-inquirer@3.0.5':
     resolution: {integrity: sha512-WELs+hj6xcilkloBXYf9XXK8tYEnKsgLj01Xl5ONUJpKjmT5hGVUzNUS5tooUxs7pGMrw+jFD/41WpqW4V3LDA==}
@@ -3516,6 +3531,15 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@jsonjoy.com/codegen@18.28.0(tslib@2.8.1)':
+    dependencies:
+      tslib: 2.8.1
+
+  '@jsonjoy.com/json-path@18.28.0(tslib@2.8.1)':
+    dependencies:
+      '@jsonjoy.com/codegen': 18.28.0(tslib@2.8.1)
+      tslib: 2.8.1
 
   '@listr2/prompt-adapter-inquirer@3.0.5(@inquirer/prompts@7.10.1(@types/node@26.1.1))(@types/node@26.1.1)(listr2@9.0.5)':
     dependencies:

@@ -1,6 +1,6 @@
 # SPA performance comparison
 
-Generated 2026-07-26T19:46:24.968Z on linux 6.6.87.2-microsoft-standard-WSL2, Node v24.14.1,
+Generated 2026-07-27T11:23:24.968Z on linux 6.6.87.2-microsoft-standard-WSL2, Node v24.14.1,
 Chromium 149.0.7827.55. Lower timing and size values are better.
 
 ## Results
@@ -10,10 +10,10 @@ across 5 cache-disabled samples.
 
 | Framework | Cold load ms | FCP ms | Route ms/update | Filter ms/update | Tasks >10 ms count / total ms | Initial DOM nodes | DOM node delta |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Lumi 0.1.0 | 24.8 (31.5) | 76.0 (96.0) | 0.536 (0.625) | 0.105 (0.122) | 1 / 31.7 | 218 | 0 |
-| React 19.2.8 | 10.2 (10.6) | 88.0 (88.0) | 0.733 (0.862) | 0.128 (0.183) | 1 / 38.9 | 197 | 0 |
-| Vue 3.5.40 | 10.8 (11.5) | 80.0 (84.0) | 0.605 (0.667) | 0.078 (0.108) | 1 / 23.8 | 197 | 0 |
-| Angular 21.2.18 | 29.7 (31.2) | 80.0 (80.0) | 0.713 (0.845) | 1.659 (1.662) | 0 / 0.0 | 199 | 0 |
+| Lumi 0.1.0 | 23.4 (50.9) | 72.0 (80.0) | 0.495 (0.547) | 0.097 (0.117) | 1 / 29.2 | 218 | 0 |
+| React 19.2.8 | 10.5 (12.0) | 88.0 (88.0) | 0.709 (0.735) | 0.129 (0.167) | 1 / 38.9 | 197 | 0 |
+| Vue 3.5.40 | 10.0 (11.9) | 76.0 (92.0) | 0.622 (0.745) | 0.077 (0.118) | 1 / 23.5 | 197 | 0 |
+| Angular 21.2.18 | 30.4 (31.2) | 76.0 (80.0) | 0.747 (0.761) | 1.643 (1.660) | 0 / 0.0 | 199 | 0 |
 
 ## 20k-row filter
 
@@ -24,10 +24,10 @@ fresh-browser samples per framework to bound the workload's memory use.
 
 | Framework | Record filter ms/update | Relative to Lumi |
 | --- | ---: | ---: |
-| Lumi 0.1.0 | 10.4 (11.6) | 1.00× |
-| React 19.2.8 | 19.3 (19.4) | 1.86× |
-| Vue 3.5.40 | 16.9 (18.8) | 1.63× |
-| Angular 21.2.18 | 167.0 (170.0) | 16.06× |
+| Lumi 0.1.0 | 12.0 (13.4) | 1.00× |
+| React 19.2.8 | 21.4 (23.7) | 1.78× |
+| Vue 3.5.40 | 16.1 (18.7) | 1.34× |
+| Angular 21.2.18 | 164.6 (167.4) | 13.67× |
 
 ## Initial asset footprint
 
@@ -37,7 +37,7 @@ compressed transfer, not the benchmark server's uncompressed transfer.
 
 | Framework | Files | Raw | Gzip |
 | --- | ---: | ---: | ---: |
-| Lumi | 3 | 103.2 KiB | 26.7 KiB |
+| Lumi | 3 | 102.3 KiB | 27.0 KiB |
 | React | 4 | 235.3 KiB | 73.0 KiB |
 | Vue | 4 | 106.4 KiB | 38.9 KiB |
 | Angular | 3 | 167.2 KiB | 54.9 KiB |
@@ -49,9 +49,9 @@ Values below 1.00× are lower than Lumi; values above 1.00× are higher.
 | Framework | Cold load | Route update | Filter update | Gzip assets |
 | --- | ---: | ---: | ---: | ---: |
 | Lumi | 1.00× | 1.00× | 1.00× | 1.00× |
-| React | 0.41× | 1.37× | 1.22× | 2.74× |
-| Vue | 0.44× | 1.13× | 0.74× | 1.46× |
-| Angular | 1.20× | 1.33× | 15.80× | 2.06× |
+| React | 0.45× | 1.43× | 1.33× | 2.70× |
+| Vue | 0.43× | 1.25× | 0.80× | 1.44× |
+| Angular | 1.30× | 1.51× | 17.00× | 2.04× |
 
 ## Stress validation
 
@@ -61,23 +61,23 @@ same overview state after warmup and after the complete stress run.
 
 | Framework | Route updates | Filter updates | DOM delta range | Median heap delta |
 | --- | ---: | ---: | ---: | ---: |
-| Lumi | 1000 | 1500 | 0 to 0 | +298.1 KiB |
-| React | 1000 | 1500 | 0 to 0 | +440.8 KiB |
-| Vue | 1000 | 1500 | 0 to 0 | +358.5 KiB |
-| Angular | 1000 | 1500 | 0 to 0 | +605.8 KiB |
+| Lumi | 1000 | 1500 | 0 to 0 | +276.0 KiB |
+| React | 1000 | 1500 | 0 to 0 | +440.2 KiB |
+| Vue | 1000 | 1500 | 0 to 0 | +359.0 KiB |
+| Angular | 1000 | 1500 | 0 to 0 | +606.4 KiB |
 
 ## Reading the result
 
-- React recorded the lowest median cold-load time
-  (10.2 ms).
+- Vue recorded the lowest median cold-load time
+  (10.0 ms).
 - Lumi recorded the lowest median route-update time
-  (0.536 ms/update).
+  (0.495 ms/update).
 - Vue recorded the lowest median project-filter time
-  (0.078 ms/update).
+  (0.077 ms/update).
 - Lumi recorded the lowest median 20k-row filter time
-  (10.4 ms/update).
+  (12.0 ms/update).
 - Lumi requested the smallest initial compressed asset set
-  (26.7 KiB).
+  (27.0 KiB).
 
 Do not treat small differences as universal framework rankings. This suite
 compares the repository's equivalent Luminate implementations, on one machine,

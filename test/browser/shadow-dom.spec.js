@@ -39,7 +39,7 @@ test('bindings plan and render through an open shadow root', async ({
     }
 
     customElements.define('shadow-contract', ShadowContract)
-    const { bind, component, prop } = /** @type {typeof import('../../src/index.js')} */ (
+    const { component, prop, text } = /** @type {typeof import('../../src/index.js')} */ (
       await import(String('/src/index.js'))
     )
     const factory = Reflect.get(window, 'trustedTypes')
@@ -65,7 +65,7 @@ test('bindings plan and render through an open shadow root', async ({
           ),
           'innerHTML',
         ),
-        bind('.value', data => data),
+        text('.value', ({data}) => /** @type {string} */ (data)),
       ],
     }).mount(document.querySelector('#test-root'))
 

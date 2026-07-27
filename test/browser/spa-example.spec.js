@@ -22,7 +22,7 @@ for (const framework of ['vue', 'react', 'angular']) {
   })
 }
 
-for (const variant of ['lumi-native', 'lumi-build', 'lumi-elements']) {
+for (const variant of ['lumi-native', 'lumi-build']) {
   test(`the ${variant} SPA starts from its intended output`, async ({page}) => {
     /** @type {string[]} */
     const problems = []
@@ -37,9 +37,6 @@ for (const variant of ['lumi-native', 'lumi-build', 'lumi-elements']) {
     await page.goto(`/examples/spa/${variant}${output}/index.html#/overview`)
 
     await expect(page.locator('#overview-title')).toBeVisible()
-    if (variant === 'lumi-elements') {
-      await expect(page.locator('lu-header')).toHaveCount(1)
-    }
     expect(problems).toEqual([])
   })
 }

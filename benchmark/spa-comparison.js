@@ -124,14 +124,6 @@ const frameworks = Object.freeze([
     urlPath: 'lumi-build',
   },
   {
-    id: 'lumi-elements',
-    label: 'Lumi elements',
-    packageFile: resolve(root, 'package.json'),
-    buildDirectory: null,
-    publicRoot: resolve(root, 'examples/spa/lumi-elements'),
-    urlPath: 'examples/spa/lumi-elements',
-  },
-  {
     id: 'vue',
     label: 'Vue',
     packageFile: resolve(root, 'examples/spa/vue/package.json'),
@@ -932,8 +924,8 @@ application code splitting.
 ## Methodology
 
 - Built applications are rebuilt unless \`--skip-build\` is passed. Lumi native
-  is served as its browser-loaded module graph; Lumi build and Lumi elements
-  are assembled and minified with esbuild.
+  is served as its browser-loaded module graph; Lumi build is assembled and
+  minified with esbuild.
 - Framework order rotates between samples. Browser HTTP cache is disabled.
 - Each framework sample uses a fresh browser process, bounding retained state
   from the intentionally large Records workload.

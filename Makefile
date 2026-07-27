@@ -65,7 +65,6 @@ serve: ## Serve the repository on port 8008 to browse examples/
 	@echo "Examples: http://localhost:$(PORT)/examples/counter/"
 	@echo "Lumi native: http://localhost:$(PORT)/examples/spa/lumi-native/"
 	@echo "Lumi build: http://localhost:$(PORT)/examples/spa/lumi-build/dist/"
-	@echo "Lumi elements: http://localhost:$(PORT)/examples/spa/lumi-elements/dist/"
 	python -m http.server $(PORT)
 
 clean: ## Remove build output

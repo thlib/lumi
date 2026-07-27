@@ -177,8 +177,6 @@ TypeScript consumer contract run as part of `pnpm run lint`.
   behavior in one `index.html`, backed by one unbundled demo module.
 - [Component-build SPA](./examples/spa/lumi-build): one native HTML document
   per component, assembled and bundled for development and production.
-- [Custom-element SPA](./examples/spa/lumi-elements): browser-native templates
-  using registered `<lu-*>` element roots.
 - [Framework comparison SPAs](./examples/spa): equivalent React, Vue,
   and Angular applications sharing the SPA's content and visual design without
   importing Lumi.
@@ -197,12 +195,10 @@ details, and methodology. The [benchmark source](./benchmark/spa-comparison.js)
 and [raw samples](./benchmark/results/spa-performance.json) are also available.
 Run it locally with `pnpm benchmark:spa`.
 
-The three Lumi variants make their authoring and runtime tradeoffs explicit.
+The two Lumi variants make their authoring and runtime tradeoffs explicit.
 Lumi native uses a browser-loaded module graph. Lumi build associates native
 component documents by filename during bundling, without runtime `define()`
-calls. Lumi elements registers `lu-` custom elements without an application
-build while retaining Lumi's explicit page update. All three are measured
-independently by the SPA benchmark.
+calls. Both are measured independently by the SPA benchmark.
 
 ## Application binding conventions
 

@@ -41,9 +41,6 @@ demo-app in all examples
 
 lumi example should be the native one?
 
-lumi-elements doesn't seem to use the components at all...
-
-
 
 
 

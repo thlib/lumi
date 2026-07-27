@@ -1,16 +1,15 @@
 # SPA comparisons
 
-These six applications reproduce the same result and interactions using each
+These five applications reproduce the same result and interactions using each
 renderer’s own application model:
 
 - [`lumi-native`](./lumi-native/) — inline templates and one native demo module
 - [`lumi-build`](./lumi-build/) — bundled native component documents
-- [`lumi-elements`](./lumi-elements/) — browser-native `lu-` custom elements
 - [`vue`](./vue/) — Vue single-file components and Composition API
 - [`react`](./react/) — React components and hooks
 - [`angular`](./angular/) — Angular standalone components and signals
 
-All six use the static JSON payloads in this directory and the
+All five use the static JSON payloads in this directory and the
 shared visual design in [`spa.css`](./spa.css). React, Vue, and Angular also
 share the typed helpers in [`data.ts`](./data.ts) and
 [`data-20k.ts`](./data-20k.ts). None of those three imports Lumi,
@@ -27,9 +26,9 @@ pnpm run dev:spa
 ```
 
 The development server rebuilds the same `lumi-build/dist/` application used
-by the browser contracts and production benchmark. The two browser-native
-Lumi variants can be served directly from the repository root after running
-`pnpm run build`.
+by the browser contracts and production benchmark. The browser-native
+`lumi-native` variant can be served directly from the repository root after
+running `pnpm run build`.
 
 The framework applications are pnpm workspace packages. Install all workspace
 dependencies from the repository root, then run one by package name:
@@ -58,7 +57,7 @@ From the repository root, run the production SPA stress benchmark:
 pnpm run benchmark:spa
 ```
 
-The runner rebuilds all six applications and measures cache-disabled cold load,
+The runner rebuilds all five applications and measures cache-disabled cold load,
 route-render churn, repeated project filtering, a separately sampled
 20,000-row filter cycle, long tasks, DOM stability, heap change, and initial
 asset size in headless Chromium. It writes a readable report to

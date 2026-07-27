@@ -3,10 +3,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { JSDOM } from 'jsdom'
-import {repeat, text} from '../src/index.js'
+import {text} from '../src/index.js'
 import {mountApplication} from '../examples/spa/application.js'
 import {define} from '../examples/spa/demo-components.js'
-import {mountGroup} from '../examples/spa/group.js'
 import { emailValidationMessage } from '../examples/spa/validation.js'
 
 test('describes the invite email validity state', () => {
@@ -99,19 +98,23 @@ test('keeps only the active SPA page connected to the document', () => {
   /** @type {Record<string, number>} */
   const presentationCount = {}
 
-  define('appShell', () => ({
-    components: [{
-      present(data) {
-        countPresentation('appShell')
-        return {route: data.route}
-      },
-      template: createTemplate(document, `
-        <div id="shell">
-          <main></main>
-        </div>
-      `),
-    }],
-  }))
+  define('appShell', {
+    present(data) {
+      countPresentation('appShell')
+      return {route: data.route}
+    },
+    template: createTemplate(document, `
+      <div id="shell">
+        <div id="header"></div>
+        <aside id="sidebar"></aside>
+        <main></main>
+      </div>
+    `),
+  })
+  define('header', emptyDefinition(document, '<header></header>'))
+  define('navigation', emptyDefinition(document, '<nav></nav>'))
+  define('projectList', emptyDefinition(document, '<div></div>'))
+  define('activityList', emptyDefinition(document, '<ol></ol>'))
 
   define('overview', definition('overview'))
   define('projects', definition('projects'))
@@ -123,25 +126,25 @@ test('keeps only the active SPA page connected to the document', () => {
   const application = mountApplication(target)
   assert.equal(pageSlot().childElementCount, 0)
 
-  application.update({route: 'overview', value: 'First'})
+  application.update(pageData('overview', 'First'))
 
   const overviewRoot = pageRoot()
-  assert.equal(overviewRoot.textContent, 'overview: First')
+  assert.equal(pageValue(overviewRoot), 'overview: First')
   assert.equal(presentationCount.overview, 1)
   assert.equal(presentationCount.projects, undefined)
 
-  application.update({route: 'overview', value: 'Updated'})
+  application.update(pageData('overview', 'Updated'))
 
   assert.strictEqual(pageRoot(), overviewRoot)
-  assert.equal(overviewRoot.textContent, 'overview: Updated')
+  assert.equal(pageValue(overviewRoot), 'overview: Updated')
   assert.equal(presentationCount.overview, 2)
 
-  application.update({route: 'projects', value: 'Second'})
+  application.update(pageData('projects', 'Second'))
 
   const projectsRoot = pageRoot()
   assert.notStrictEqual(projectsRoot, overviewRoot)
   assert.equal(overviewRoot.isConnected, false)
-  assert.equal(projectsRoot.textContent, 'projects: Second')
+  assert.equal(pageValue(projectsRoot), 'projects: Second')
   assert.equal(presentationCount.overview, 2)
   assert.equal(presentationCount.projects, 1)
   assert.equal(presentationCount.activityPage, undefined)
@@ -149,10 +152,10 @@ test('keeps only the active SPA page connected to the document', () => {
   assert.equal(presentationCount.teams, undefined)
   assert.equal(pageSlot().childElementCount, 1)
 
-  application.update({route: 'overview', value: 'Again'})
+  application.update(pageData('overview', 'Again'))
 
   assert.strictEqual(pageRoot(), overviewRoot)
-  assert.equal(overviewRoot.textContent, 'overview: Again')
+  assert.equal(pageValue(overviewRoot), 'overview: Again')
   assert.equal(projectsRoot.isConnected, false)
   assert.equal(presentationCount.overview, 3)
 
@@ -161,22 +164,32 @@ test('keeps only the active SPA page connected to the document', () => {
 
   /**
    * @param {string} name
-   * @returns {() => import('../examples/spa/demo-components.js').Definition}
+   * @returns {import('../examples/spa/demo-components.js').DefinitionOptions}
    */
   function definition(name) {
-    return () => ({
-      components: [{
-        present(data) {
-          countPresentation(name)
-          return `${name}: ${data.value}`
-        },
-        template: createTemplate(
-          document,
-          `<section data-page="${name}">Not presented</section>`,
-        ),
-        bindings: [text('[data-page]', ({data}) => data)],
-      }],
-    })
+    const slots = name === 'overview'
+      ? `
+        <div class="focus"><div class="content"></div></div>
+        <div class="activity-panel"><div class="content"></div></div>
+      `
+      : name === 'projects'
+        ? '<div class="content"></div>'
+        : ''
+
+    return {
+      present(data) {
+        countPresentation(name)
+        return `${name}: ${data.value}`
+      },
+      template: createTemplate(
+        document,
+        `<section id="${name}" data-page="${name}">
+          <span class="page-value">Not presented</span>
+          ${slots}
+        </section>`,
+      ),
+      bindings: [text('.page-value', ({data}) => data)],
+    }
   }
 
   /** @param {string} name */
@@ -197,153 +210,25 @@ test('keeps only the active SPA page connected to the document', () => {
     assert.ok(root instanceof window.HTMLElement)
     return root
   }
-})
 
-test('composes independently reusable components with isolated DOM ownership', () => {
-  const window = new JSDOM().window
-  const {document} = window
-  /** @type {import('../examples/spa/demo-components.js').Definition<any>} */
-  const list = {
-    components: [{
-      present: data => data,
-      template: createTemplate(
-        document,
-        '<ul class="list"><li class="item">Default</li></ul>',
-      ),
-      bindings: [
-        repeat('.item', ({data}) => data, [
-          text(':scope', ({item}) => item),
-        ]),
-      ],
-    }],
+  /** @param {Element} root */
+  function pageValue(root) {
+    return root.querySelector('.page-value')?.textContent
   }
-  let overriddenConnections = 0
-  /** @type {import('../examples/spa/demo-components.js').Definition<any>} */
-  const overridden = {
-    components: [{
-      present: data => data,
-      template: createTemplate(document, '<p class="overridden">Wrong</p>'),
-      bindings: [{
-        connect() {
-          overriddenConnections += 1
-          return {
-            prepare() {
-              return {commit() {}}
-            },
-            destroy() {},
-          }
-        },
-      }],
-    }],
+
+  /**
+   * @param {'overview' | 'projects'} route
+   * @param {string} value
+   */
+  function pageData(route, value) {
+    return {
+      route,
+      value,
+      projects: [],
+      activities: [],
+      filter: 'all',
+    }
   }
-  /** @type {import('../examples/spa/demo-components.js').Definition<any>} */
-  const page = {
-    components: [
-      {
-        present: data => data.title,
-        template: createTemplate(document, `
-          <section>
-            <h1 class="title">Default</h1>
-            <div class="list-slot"></div>
-          </section>
-        `),
-        bindings: [
-          text('.title', ({data}) => data),
-          // This selector must not cross the planned component boundary.
-          text('.item', () => 'Owned by the page'),
-        ],
-      },
-      {at: '.list-slot', use: overridden},
-      {
-        at: '.list-slot',
-        use: list,
-        select: data => data.items,
-      },
-    ],
-  }
-  const target = document.createElement('div')
-  const mounted = mountGroup(page, target)
-
-  mounted.update({title: 'Projects', items: ['One', 'Two']})
-
-  assert.equal(mounted.root.querySelector('.title')?.textContent, 'Projects')
-  assert.deepEqual(
-    Array.from(mounted.root.querySelectorAll('.item'), item => item.textContent),
-    ['One', 'Two'],
-  )
-  assert.equal(overriddenConnections, 0)
-
-  mounted.update({title: 'Updated', items: ['Three']})
-
-  assert.equal(mounted.root.querySelector('.title')?.textContent, 'Updated')
-  assert.deepEqual(
-    Array.from(mounted.root.querySelectorAll('.item'), item => item.textContent),
-    ['Three'],
-  )
-
-  mounted.unmount()
-  assert.equal(target.childElementCount, 0)
-  window.close()
-})
-
-test('prepares every component group entry before committing any entry', () => {
-  const window = new JSDOM().window
-  const {document} = window
-  /** @type {import('../examples/spa/demo-components.js').Definition<any>} */
-  const detail = {
-    components: [{
-      present: data => data,
-      template: createTemplate(document, '<p class="detail">Default</p>'),
-      bindings: [
-        text('.detail', ({data}) => {
-          if (data === 'Rejected') {
-            throw new Error('Rejected detail')
-          }
-
-          return data
-        }),
-      ],
-    }],
-  }
-  /** @type {import('../examples/spa/demo-components.js').Definition<any>} */
-  const page = {
-    components: [
-      {
-        present: data => data.title,
-        template: createTemplate(document, `
-          <section>
-            <h1 class="title">Default</h1>
-            <div class="detail-slot"></div>
-          </section>
-        `),
-        bindings: [text('.title', ({data}) => data)],
-      },
-      {
-        at: '.detail-slot',
-        use: detail,
-        select: data => data.detail,
-      },
-    ],
-  }
-  const target = document.createElement('div')
-  const mounted = mountGroup(page, target)
-
-  mounted.update({title: 'Before', detail: 'Ready'})
-
-  assert.throws(
-    () => mounted.update({title: 'Must not commit', detail: 'Rejected'}),
-    /Rejected detail/,
-  )
-  assert.equal(mounted.root.querySelector('.title')?.textContent, 'Before')
-  assert.equal(mounted.root.querySelector('.detail')?.textContent, 'Ready')
-
-  mounted.update({title: 'After', detail: 'Recovered'})
-
-  assert.equal(mounted.root.querySelector('.title')?.textContent, 'After')
-  assert.equal(mounted.root.querySelector('.detail')?.textContent, 'Recovered')
-
-  mounted.unmount()
-  window.close()
 })
 
 /**
@@ -355,6 +240,18 @@ function createTemplate(document, markup) {
   const template = document.createElement('template')
   template.innerHTML = markup
   return template
+}
+
+/**
+ * @param {Document} document
+ * @param {string} markup
+ * @returns {import('../examples/spa/demo-components.js').DefinitionOptions}
+ */
+function emptyDefinition(document, markup) {
+  return {
+    template: createTemplate(document, markup),
+    present: () => ({}),
+  }
 }
 
 /**

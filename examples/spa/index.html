@@ -32,32 +32,20 @@
         classToggle,
         define,
         on,
-        resolve,
         update,
       } from './app.js'
 
-      define('appShell', () => {
-        const header = resolve('header')
-        const navigation = resolve('navigation')
-
-        return {
-          components: [
-            {
-              present: data => ({
-                navOpen: data.navOpen,
-              }),
-              template: document.querySelector('#app-shell-template'),
-              bindings: [
-                classToggle('#shell', 'nav-open', ({data}) => data.navOpen),
-                on('#backdrop', 'click', () => {
-                  update(data => ({...data, navOpen: false}))
-                }),
-              ],
-            },
-            {at: '#header', use: header},
-            {at: '#sidebar', use: navigation},
-          ],
-        }
+      define('appShell', {
+        present: data => ({
+          navOpen: data.navOpen,
+        }),
+        template: document.querySelector('#app-shell-template'),
+        bindings: [
+          classToggle('#shell', 'nav-open', ({data}) => data.navOpen),
+          on('#backdrop', 'click', () => {
+            update(data => ({...data, navOpen: false}))
+          }),
+        ],
       })
     </script>
 
@@ -104,30 +92,28 @@
     <script type="module">
       import {attr, define, on, text, update} from './app.js'
 
-      define('header', () => ({
-        components: [{
-          present: data => ({
-            workspace: 'Luminate',
-            userName: 'Freddy Fraggin',
-            userInitials: 'FF',
-            navOpen: data.navOpen,
+      define('header', {
+        present: data => ({
+          workspace: 'Luminate',
+          userName: 'Freddy Fraggin',
+          userInitials: 'FF',
+          navOpen: data.navOpen,
+        }),
+        template: document.querySelector('#header-template'),
+        bindings: [
+          text('.workspace-switcher .name', ({data}) => data.workspace),
+          text('.user-menu .name', ({data}) => data.userName),
+          text('.user-menu .avatar', ({data}) => data.userInitials),
+          attr(
+            '[aria-controls="navigation"]',
+            'aria-expanded',
+            ({data}) => String(data.navOpen),
+          ),
+          on('[aria-controls="navigation"]', 'click', () => {
+            update(data => ({...data, navOpen: !data.navOpen}))
           }),
-          template: document.querySelector('#header-template'),
-          bindings: [
-            text('.workspace-switcher .name', ({data}) => data.workspace),
-            text('.user-menu .name', ({data}) => data.userName),
-            text('.user-menu .avatar', ({data}) => data.userInitials),
-            attr(
-              '[aria-controls="navigation"]',
-              'aria-expanded',
-              ({data}) => String(data.navOpen),
-            ),
-            on('[aria-controls="navigation"]', 'click', () => {
-              update(data => ({...data, navOpen: !data.navOpen}))
-            }),
-          ],
-        }],
-      }))
+        ],
+      })
     </script>
 
     <template id="navigation-template">
@@ -181,30 +167,28 @@
 
       // Each link already carries its route in href, so the bindings read the
       // document rather than a parallel attribute.
-      define('navigation', () => ({
-        components: [{
-          present: data => ({
-            route: data.route,
-            projectCount: data.projects.length,
+      define('navigation', {
+        present: data => ({
+          route: data.route,
+          projectCount: data.projects.length,
+        }),
+        template: document.querySelector('#navigation-template'),
+        bindings: [
+          text('.link .count', ({data}) => data.projectCount),
+          on('.link', 'click', (e, el) => {
+            if (el.getAttribute('href') === window.location.hash) {
+              update(data => ({...data, navOpen: false}))
+            }
           }),
-          template: document.querySelector('#navigation-template'),
-          bindings: [
-            text('.link .count', ({data}) => data.projectCount),
-            on('.link', 'click', (e, el) => {
-              if (el.getAttribute('href') === window.location.hash) {
-                update(data => ({...data, navOpen: false}))
-              }
-            }),
-            attr(
-              '.link',
-              'aria-current',
-              ({data}, el) => (
-                el.getAttribute('href') === `#/${data.route}` ? 'page' : false
-              ),
+          attr(
+            '.link',
+            'aria-current',
+            ({data}, el) => (
+              el.getAttribute('href') === `#/${data.route}` ? 'page' : false
             ),
-          ],
-        }],
-      }))
+          ),
+        ],
+      })
     </script>
 
     <template id="teams-template">
@@ -401,22 +385,21 @@
         const toastTimers = new Map()
 
         return {
-          components: [{
-            present: data => {
-              const selectedMember = data.members.find(
-                member => member.id === data.selectedMemberId,
-              )
+          present: data => {
+            const selectedMember = data.members.find(
+              member => member.id === data.selectedMemberId,
+            )
 
-              return {
-                toasts: data.toasts,
-                memberCount: `${data.members.length} members`,
-                members: data.members,
-                hasSelectedMember: selectedMember !== undefined,
-                selectedMember: selectedMember ?? data.members[0],
-              }
-            },
-            template: document.querySelector('#teams-template'),
-            bindings: [
+            return {
+              toasts: data.toasts,
+              memberCount: `${data.members.length} members`,
+              members: data.members,
+              hasSelectedMember: selectedMember !== undefined,
+              selectedMember: selectedMember ?? data.members[0],
+            }
+          },
+          template: document.querySelector('#teams-template'),
+          bindings: [
               text('#directory > .heading .count', ({data}) => data.memberCount),
               repeat('.member-row', ({data}) => data.members, [
                 text('.avatar', ({item}) => item.initials),
@@ -498,8 +481,7 @@
                 'background-color',
                 ({data}) => data.selectedMember.tone,
               ),
-            ],
-          }],
+          ],
         }
 
         /**
@@ -577,25 +559,23 @@
     <script type="module">
       import {classToggle, define, repeat, style, text} from './app.js'
 
-      define('projectList', () => ({
-        components: [{
-          present: projects => ({projects}),
-          template: document.querySelector('#project-list-template'),
-          bindings: [
-            repeat('.project-card', ({data}) => data.projects, [
-              text('.status', ({item}) => item.status),
-              text('.name', ({item}) => item.name),
-              text('.description', ({item}) => item.description),
-              text('.members', ({item}) => item.members),
-              text('.due', ({item}) => item.due),
-              text('.progress-label .value', ({item}) => `${item.progress}%`),
-              style('.accent', 'background-color', ({item}) => item.accent),
-              style('.progress-track .bar', 'width', ({item}) => `${item.progress}%`),
-              classToggle('.status', 'planning', ({item}) => item.status === 'Planning'),
-            ]),
-          ],
-        }],
-      }))
+      define('projectList', {
+        present: projects => ({projects}),
+        template: document.querySelector('#project-list-template'),
+        bindings: [
+          repeat('.project-card', ({data}) => data.projects, [
+            text('.status', ({item}) => item.status),
+            text('.name', ({item}) => item.name),
+            text('.description', ({item}) => item.description),
+            text('.members', ({item}) => item.members),
+            text('.due', ({item}) => item.due),
+            text('.progress-label .value', ({item}) => `${item.progress}%`),
+            style('.accent', 'background-color', ({item}) => item.accent),
+            style('.progress-track .bar', 'width', ({item}) => `${item.progress}%`),
+            classToggle('.status', 'planning', ({item}) => item.status === 'Planning'),
+          ]),
+        ],
+      })
     </script>
 
     <template id="activity-list-template">
@@ -617,23 +597,21 @@
     <script type="module">
       import {attr, define, repeat, style, text} from './app.js'
 
-      define('activityList', () => ({
-        components: [{
-          present: activities => ({activities}),
-          template: document.querySelector('#activity-list-template'),
-          bindings: [
-            repeat('.activity-item', ({data}) => data.activities, [
-              text('.avatar', ({item}) => item.initials),
-              text('.person', ({item}) => item.person),
-              text('.action', ({item}) => item.action),
-              text('.target', ({item}) => item.target),
-              text('time', ({item}) => item.time),
-              style('.avatar', 'background-color', ({item}) => item.tone),
-              attr('.person', 'href', ({item}) => `#/teams/${item.personId}`),
-            ]),
-          ],
-        }],
-      }))
+      define('activityList', {
+        present: activities => ({activities}),
+        template: document.querySelector('#activity-list-template'),
+        bindings: [
+          repeat('.activity-item', ({data}) => data.activities, [
+            text('.avatar', ({item}) => item.initials),
+            text('.person', ({item}) => item.person),
+            text('.action', ({item}) => item.action),
+            text('.target', ({item}) => item.target),
+            text('time', ({item}) => item.time),
+            style('.avatar', 'background-color', ({item}) => item.tone),
+            attr('.person', 'href', ({item}) => `#/teams/${item.personId}`),
+          ]),
+        ],
+      })
     </script>
 
     <template id="overview-template">
@@ -713,46 +691,26 @@
         classToggle,
         define,
         repeat,
-        resolve,
         text,
       } from './app.js'
 
-      define('overview', () => {
-        const projectList = resolve('projectList')
-        const activityList = resolve('activityList')
-
-        return {
-          components: [
-            {
-              present: data => ({
-                title: 'Good morning, Freddy',
-                date: 'Friday, July 24',
-                metrics: data.metrics,
-              }),
-              template: document.querySelector('#overview-template'),
-              bindings: [
-                text('#overview > .heading .eyebrow', ({data}) => data.date),
-                text('#overview-title', ({data}) => data.title),
-                repeat('.metric-card', ({data}) => data.metrics, [
-                  text('.label', ({item}) => item.label),
-                  text('.value', ({item}) => item.value),
-                  text('.change', ({item}) => item.change),
-                  classToggle(':scope', 'positive', ({item}) => item.direction === 'positive'),
-                ]),
-              ],
-            },
-            {
-              at: '.focus > .content',
-              use: projectList,
-              select: data => data.projects.slice(0, 3),
-            },
-            {
-              at: '.activity-panel > .content',
-              use: activityList,
-              select: data => data.activities.slice(0, 3),
-            },
-          ],
-        }
+      define('overview', {
+        present: data => ({
+          title: 'Good morning, Freddy',
+          date: 'Friday, July 24',
+          metrics: data.metrics,
+        }),
+        template: document.querySelector('#overview-template'),
+        bindings: [
+          text('#overview > .heading .eyebrow', ({data}) => data.date),
+          text('#overview-title', ({data}) => data.title),
+          repeat('.metric-card', ({data}) => data.metrics, [
+            text('.label', ({item}) => item.label),
+            text('.value', ({item}) => item.value),
+            text('.change', ({item}) => item.change),
+            classToggle(':scope', 'positive', ({item}) => item.direction === 'positive'),
+          ]),
+        ],
       })
     </script>
 
@@ -784,60 +742,45 @@
         attr,
         define,
         on,
-        resolve,
         text,
         update,
       } from './app.js'
 
-      define('projects', () => {
-        const projectList = resolve('projectList')
-        const selectedProjects = data => data.projects.filter(
-          project => data.filter === 'all'
-            || project.status.toLowerCase() === data.filter,
-        )
+      define('projects', {
+        present: data => {
+          const projects = data.projects.filter(
+            project => data.filter === 'all'
+              || project.status.toLowerCase() === data.filter,
+          )
+          const suffix = projects.length === 1 ? 'project' : 'projects'
 
-        return {
-          components: [
-            {
-              present: data => {
-                const projects = selectedProjects(data)
-                const suffix = projects.length === 1 ? 'project' : 'projects'
+          return {
+            filter: data.filter,
+            summary: `${projects.length} ${suffix} shown`,
+          }
+        },
+        template: document.querySelector('#projects-template'),
+        bindings: [
+          text('.project-toolbar .summary', ({data}) => data.summary),
+          // Each button carries its filter, so both the handler and projection
+          // read it from the native data attribute.
+          on('[data-filter]', 'click', (e, el) => {
+            const filter = el.dataset.filter
 
-                return {
-                  filter: data.filter,
-                  summary: `${projects.length} ${suffix} shown`,
-                }
-              },
-              template: document.querySelector('#projects-template'),
-              bindings: [
-                text('.project-toolbar .summary', ({data}) => data.summary),
-                // Each button carries its filter, so both the handler and
-                // projection read it from the native data attribute.
-                on('[data-filter]', 'click', (e, el) => {
-                  const filter = el.dataset.filter
-
-                  if (
-                    filter === 'all'
-                    || filter === 'active'
-                    || filter === 'planning'
-                  ) {
-                    update(data => ({...data, filter}))
-                  }
-                }),
-                attr(
-                  '[data-filter]',
-                  'aria-pressed',
-                  ({data}, el) => String(el.dataset.filter === data.filter),
-                ),
-              ],
-            },
-            {
-              at: '#projects > .content',
-              use: projectList,
-              select: selectedProjects,
-            },
-          ],
-        }
+            if (
+              filter === 'all'
+              || filter === 'active'
+              || filter === 'planning'
+            ) {
+              update(data => ({...data, filter}))
+            }
+          }),
+          attr(
+            '[data-filter]',
+            'aria-pressed',
+            ({data}, el) => String(el.dataset.filter === data.filter),
+          ),
+        ],
       })
     </script>
 
@@ -885,57 +828,55 @@
         update,
       } from './app.js'
 
-      define('records', () => ({
-        components: [{
-          present: data => {
-            const records = orderLargeRecords(
-              filterLargeRecords(data.recordFilter),
-              data.recordSort,
-            )
-            return {
-              filter: data.recordFilter,
-              sort: data.recordSort,
-              sortIndicator: data.recordSort === 'ascending' ? '↑' : '↓',
-              rows: records.map(record => record.label),
-              summary: `${records.length.toLocaleString('en-US')} records shown`,
+      define('records', {
+        present: data => {
+          const records = orderLargeRecords(
+            filterLargeRecords(data.recordFilter),
+            data.recordSort,
+          )
+          return {
+            filter: data.recordFilter,
+            sort: data.recordSort,
+            sortIndicator: data.recordSort === 'ascending' ? '↑' : '↓',
+            rows: records.map(record => record.label),
+            summary: `${records.length.toLocaleString('en-US')} records shown`,
+          }
+        },
+        template: document.querySelector('#records-template'),
+        bindings: [
+          repeat('.record-row', ({data}) => data.rows, [
+            text(':scope', ({item}) => item),
+          ]),
+          text('.record-summary', ({data}) => data.summary),
+          text('.record-sort-indicator', ({data}) => data.sortIndicator),
+          on('[data-record-sort]', 'click', () => {
+            update(data => ({
+              ...data,
+              recordSort: data.recordSort === 'ascending'
+                ? 'descending'
+                : 'ascending',
+            }))
+          }),
+          on('[data-record-filter]', 'click', (e, el) => {
+            const recordFilter = el.dataset.recordFilter
+            if (
+              recordFilter === 'all'
+              || recordFilter === 'alpha'
+              || recordFilter === 'beta'
+              || recordFilter === 'gamma'
+              || recordFilter === 'delta'
+            ) {
+              update(data => ({...data, recordFilter}))
             }
-          },
-          template: document.querySelector('#records-template'),
-          bindings: [
-            repeat('.record-row', ({data}) => data.rows, [
-              text(':scope', ({item}) => item),
-            ]),
-            text('.record-summary', ({data}) => data.summary),
-            text('.record-sort-indicator', ({data}) => data.sortIndicator),
-            on('[data-record-sort]', 'click', () => {
-              update(data => ({
-                ...data,
-                recordSort: data.recordSort === 'ascending'
-                  ? 'descending'
-                  : 'ascending',
-              }))
-            }),
-            on('[data-record-filter]', 'click', (e, el) => {
-              const recordFilter = el.dataset.recordFilter
-              if (
-                recordFilter === 'all'
-                || recordFilter === 'alpha'
-                || recordFilter === 'beta'
-                || recordFilter === 'gamma'
-                || recordFilter === 'delta'
-              ) {
-                update(data => ({...data, recordFilter}))
-              }
-            }),
-            attr(
-              '[data-record-filter]',
-              'aria-pressed',
-              ({data}, el) => String(el.dataset.recordFilter === data.filter),
-            ),
-            attr('[data-record-header]', 'aria-sort', ({data}) => data.sort),
-          ],
-        }],
-      }))
+          }),
+          attr(
+            '[data-record-filter]',
+            'aria-pressed',
+            ({data}, el) => String(el.dataset.recordFilter === data.filter),
+          ),
+          attr('[data-record-header]', 'aria-sort', ({data}) => data.sort),
+        ],
+      })
     </script>
 
     <template id="activity-page-template">
@@ -985,29 +926,16 @@
     </template>
 
     <script type="module">
-      import {define, resolve, text} from './app.js'
+      import {define, text} from './app.js'
 
-      define('activityPage', () => {
-        const activityList = resolve('activityList')
-
-        return {
-          components: [
-            {
-              present: data => ({
-                count: `${data.activities.length} updates`,
-              }),
-              template: document.querySelector('#activity-page-template'),
-              bindings: [
-                text('#activity > .heading .count', ({data}) => data.count),
-              ],
-            },
-            {
-              at: '.activity-panel > .content',
-              use: activityList,
-              select: data => data.activities,
-            },
-          ],
-        }
+      define('activityPage', {
+        present: data => ({
+          count: `${data.activities.length} updates`,
+        }),
+        template: document.querySelector('#activity-page-template'),
+        bindings: [
+          text('#activity > .heading .count', ({data}) => data.count),
+        ],
       })
     </script>
   </body>

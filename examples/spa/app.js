@@ -9,7 +9,7 @@
  * with one file without changing a template or a script.
  *
  * The first group exposes the Lumi bindings used by inline component-stack
- * entries. Component creation belongs to the demo's group planner. The rest
+ * entries. Component creation belongs to the demo's placement plan. The rest
  * belongs to this demo.
  */
 
@@ -23,7 +23,7 @@ export {
   text,
 } from '../../src/index.js'
 
-export {define, resolve} from './demo-components.js'
+export {define} from './demo-components.js'
 export {update} from './page.js'
 export {emailValidationMessage} from './validation.js'
 export {

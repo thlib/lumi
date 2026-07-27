@@ -610,21 +610,18 @@ composition is live. Templates may contain useful default content or a loader.
 Changing pages selects a different composition of component instances. It
 does not require a new kind of component.
 
-The SPA example makes that composition explicit in an application-owned group
-planner. A route definition provides an ordered `components` stack of
-independently reusable definitions and the slots where their instances belong.
-An entry may declare `template`, `bindings`, and `present` inline, or refer to
-a reusable component stack with `use`.
-When entries name the same slot, the later entry replaces the earlier one
-before anything mounts. The planner derives every surviving component's
-presentation, prepares the complete active group, and only then commits or
-switches the route subtree. It also registers the component slots as ownership
-boundaries before their containing components connect.
+The SPA example uses a small application-owned registry so each script can
+declare `template`, `bindings`, and `present` beside its native template. Its
+application module holds flat shell and route placement plans. Every plan entry
+explicitly names `at`, the registered definition to `use`, and an optional
+data-selection function. One plan loop derives all presentations and calls the
+mounted Lumi components, avoiding repeated render plumbing without adding
+another component or lifecycle model.
 
 This keeps the two structural responsibilities separate:
 
-- The page/group planner composes, retains, moves, and releases component
-  instances.
+- The application placement plan composes, retains, moves, and releases
+  component instances.
 - `repeat` reconciles repeated DOM occurrences inside one component.
 
 `child` remains available as a renderer binding for a locally owned nested

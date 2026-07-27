@@ -1,15 +1,10 @@
 // @ts-check
 
+import {component} from '../../src/index.js'
+
 /**
- * Demo-owned component orchestration.
- *
- * These utilities are ordinary application JavaScript, not Lumi APIs. Another
- * application using Lumi can organize its components with different utilities
- * or with a framework.
- *
- * A definition provides an ordered stack of inline component specifications
- * and reusable definitions. Definitions run on first use, so a stack may
- * resolve another stack that a later script in the document defines.
+ * Demo-owned registry that keeps behavior declarations beside native
+ * templates. Page composition and routing remain in application.js.
  */
 
 /**
@@ -18,67 +13,55 @@
  *   template: HTMLTemplateElement | null,
  *   bindings?: ReadonlyArray<import('../../src/types.js').Binding<any>>,
  *   present: (data: Data) => any,
- * }} InlineComponent
+ * }} DefinitionOptions
  */
 
 /**
- * @template [Data=any]
  * @typedef {{
- *   at?: string,
- *   select?: (data: Data) => any,
- * } & (
- *   {use: Definition}
- *   | InlineComponent<Data>
- * )} ComponentEntry
- */
-
-/**
- * @template [Data=any]
- * @typedef {{
- *   components: ReadonlyArray<ComponentEntry<Data>>,
+ *   mount: (target: Element | null) => import('../../src/types.js').MountedComponent<any>,
+ *   present: (data: any) => any,
  * }} Definition
  */
 
-/** @type {Map<string, () => Definition>} */
+/** @type {Map<string, Definition>} */
 const definitions = new Map()
 
-/** @type {Map<string, Definition>} */
-const resolved = new Map()
-
 /**
- * Declares one named component definition.
+ * Registers one component's template, behavior, and presentation function.
  *
  * @param {string} name
- * @param {() => Definition} define_
+ * @param {DefinitionOptions | (() => DefinitionOptions)} declaration
  */
-export function define(name, define_) {
+export function define(name, declaration) {
   if (definitions.has(name)) {
     throw new Error(`Component "${name}" is already defined`)
   }
 
-  definitions.set(name, define_)
+  const options = typeof declaration === 'function'
+    ? declaration()
+    : declaration
+  const renderer = component(options.bindings === undefined
+    ? {template: options.template}
+    : {template: options.template, bindings: options.bindings})
+
+  definitions.set(name, {
+    mount: renderer.mount,
+    present: options.present,
+  })
 }
 
 /**
- * Returns one defined component, creating it on first use.
+ * Resolves one previously registered component.
  *
  * @param {string} name
  * @returns {Definition}
  */
 export function resolve(name) {
-  const existing = resolved.get(name)
+  const definition = definitions.get(name)
 
-  if (existing !== undefined) {
-    return existing
-  }
-
-  const define_ = definitions.get(name)
-
-  if (define_ === undefined) {
+  if (definition === undefined) {
     throw new Error(`Component "${name}" is not defined`)
   }
 
-  const definition = define_()
-  resolved.set(name, definition)
   return definition
 }

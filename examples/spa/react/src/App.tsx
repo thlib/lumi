@@ -58,7 +58,7 @@ function App() {
   }, [route, memberId])
 
   return (
-    <div id="shell" className={navOpen ? 'nav-open' : undefined}>
+    <div id="shell" data-navigation-state={navOpen ? 'open' : undefined}>
       <div id="header">
         <Header navOpen={navOpen} toggleNav={() => setNavOpen(open => !open)} />
       </div>
@@ -171,12 +171,12 @@ function ProjectCards({items}: {items: readonly Project[]}) {
       {items.map(project => (
         <article className="project-card" key={project.id}>
           <div className="top">
-            <span className="accent" style={{backgroundColor: project.accent}} />
-            <span className={`status${project.status === 'Planning' ? ' planning' : ''}`}>{project.status}</span>
+            <span className="accent" data-project={project.id} />
+            <span className="status" data-status={project.status}>{project.status}</span>
           </div>
           <h3>{project.name}</h3><p>{project.description}</p>
           <div className="progress-label"><span>Progress</span><strong>{project.progress}%</strong></div>
-          <div className="progress-track"><span style={{width: `${project.progress}%`}} /></div>
+          <div className="progress-track"><span className="bar" data-project={project.id} /></div>
           <div className="footer"><span className="members">{project.members}</span><span>{project.due}</span></div>
         </article>
       ))}
@@ -189,7 +189,7 @@ function ActivityList({items}: {items: readonly Activity[]}) {
     <ol className="activity-list">
       {items.map(activity => (
         <li className="activity-item" key={activity.id}>
-          <span className="avatar" style={{backgroundColor: activity.tone}}>{activity.initials}</span>
+          <span className="avatar" data-person={activity.personId}>{activity.initials}</span>
           <div className="copy">
             <p>
               <a className="person" href={`#/teams/${activity.personId}`}>{activity.person}</a>{' '}
@@ -219,7 +219,7 @@ function Overview() {
       </div>
       <div className="metric-grid">
         {metrics.map(metric => (
-          <article className={`metric-card${metric.direction === 'positive' ? ' positive' : ''}`} key={metric.id}>
+          <article className="metric-card" data-direction={metric.direction} key={metric.id}>
             <div className="top"><span>{metric.label}</span></div>
             <strong>{metric.value}</strong><span className="change">{metric.change}</span>
           </article>
@@ -247,12 +247,12 @@ function Overview() {
 }
 
 function WeekCard({today}: {today: string}) {
-  const days = [['Mon', 42], ['Tue', 67], ['Wed', 55], ['Thu', 88], ['Fri', 76], ['Sat', 24], ['Sun', 18]] as const
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
   return (
     <aside className="panel week-card" aria-labelledby="week-title">
       <div className="top"><p className="eyebrow">This week</p><h2 id="week-title">Strong momentum</h2><p>Your team completed 28% more work than last week.</p></div>
       <div className="week-chart" aria-label="Weekly activity chart">
-        {days.map(([day, height]) => <span className={day === today ? 'today' : undefined} style={{height: `${height}%`}} key={day}><i>{day}</i></span>)}
+        {days.map(day => <span data-day-state={day === today ? 'today' : undefined} key={day}><i>{day}</i></span>)}
       </div>
     </aside>
   )
@@ -328,13 +328,13 @@ function ActivityPage() {
         <aside className="activity-summary">
           <section className="panel summary-card">
             <p className="eyebrow">Last 7 days</p><strong>42</strong><span>team updates</span>
-            <div className="mini-bars" aria-hidden="true">{[30, 55, 42, 75, 100, 62, 80].map((height, index) => <i style={{height: `${height}%`}} key={index} />)}</div>
+            <div className="mini-bars" aria-hidden="true">{Array.from({length: 7}, (_, index) => <i key={index} />)}</div>
           </section>
           <section className="panel contributor-card">
             <p className="eyebrow">Top contributors</p>
-            <Contributor tone="purple" id="norm-barlug" name="Norm Barlug" count="14" />
-            <Contributor tone="green" id="emmy-nother" name="Emmy Nother" count="11" />
-            <Contributor tone="orange" id="fazlo-kan" name="Fazlo Kan" count="9" />
+            <Contributor id="norm-barlug" name="Norm Barlug" count="14" />
+            <Contributor id="emmy-nother" name="Emmy Nother" count="11" />
+            <Contributor id="fazlo-kan" name="Fazlo Kan" count="9" />
           </section>
         </aside>
       </div>
@@ -342,9 +342,9 @@ function ActivityPage() {
   )
 }
 
-function Contributor({tone, id, name, count}: {tone: string; id: string; name: string; count: string}) {
+function Contributor({id, name, count}: {id: string; name: string; count: string}) {
   const initials = name.split(' ').map(part => part[0]).join('')
-  return <div><span className={`avatar ${tone}`}>{initials}</span><a href={`#/teams/${id}`}>{name}</a><em>{count}</em></div>
+  return <div><span className="avatar" data-person={id}>{initials}</span><a href={`#/teams/${id}`}>{name}</a><em>{count}</em></div>
 }
 
 function Teams({memberId, toasts, setToasts}: {
@@ -401,7 +401,7 @@ function Teams({memberId, toasts, setToasts}: {
             <div className="member-list">
               {members.map(member => (
                 <article className="member-row" key={member.id}>
-                  <span className="avatar" style={{backgroundColor: member.tone}}>{member.initials}</span>
+                  <span className="avatar" data-person={member.id}>{member.initials}</span>
                   <div className="identity"><a href={`#/teams/${member.id}`}>{member.name}</a><span>{member.email}</span></div>
                   <span className="team">{member.team}</span><span className="role">{member.role}</span>
                 </article>
@@ -418,7 +418,7 @@ function Teams({memberId, toasts, setToasts}: {
                 <button className="primary-button" type="submit">Send invitation</button>
               </form>
               <form className="panel team-form" onSubmit={e => {e.preventDefault(); showToast()}} noValidate>
-                <FormHeading orange icon={<><circle cx="8" cy="8" r="3" /><circle cx="17" cy="9" r="2.5" /><path d="M2.5 19c.5-4 2.3-6 5.5-6s5 2 5.5 6M14 14c3.8-.7 6.2 1 6.8 5" /></>} title="Create a team" copy="Group teammates around a shared area of work." />
+                <FormHeading kind="create-team" icon={<><circle cx="8" cy="8" r="3" /><circle cx="17" cy="9" r="2.5" /><path d="M2.5 19c.5-4 2.3-6 5.5-6s5 2 5.5 6M14 14c3.8-.7 6.2 1 6.8 5" /></>} title="Create a team" copy="Group teammates around a shared area of work." />
                 <label className="field"><span>Team name</span><input type="text" name="teamName" placeholder="e.g. Product design" required /></label>
                 <label className="field"><span>Description <em>Optional</em></span><textarea name="description" rows={3} placeholder="What does this team work on?" /></label>
                 <button className="primary-button" type="submit">Create team</button>
@@ -434,8 +434,8 @@ function Teams({memberId, toasts, setToasts}: {
   )
 }
 
-function FormHeading({icon, title, copy, orange = false}: {icon: ReactNode; title: string; copy: string; orange?: boolean}) {
-  return <div className="heading"><span className={`icon${orange ? ' orange' : ''}`} aria-hidden="true"><svg viewBox="0 0 24 24">{icon}</svg></span><div><h2>{title}</h2><p>{copy}</p></div></div>
+function FormHeading({icon, title, copy, kind}: {icon: ReactNode; title: string; copy: string; kind?: 'create-team'}) {
+  return <div className="heading"><span className="icon" data-form-kind={kind} aria-hidden="true"><svg viewBox="0 0 24 24">{icon}</svg></span><div><h2>{title}</h2><p>{copy}</p></div></div>
 }
 
 function MemberProfile({member}: {member: (typeof members)[number]}) {
@@ -444,7 +444,7 @@ function MemberProfile({member}: {member: (typeof members)[number]}) {
       <a className="back-link" href="#/teams"><span aria-hidden="true">←</span> All team members</a>
       <article className="panel member-profile-card">
         <div className="header">
-          <span className="avatar large" style={{backgroundColor: member.tone}}>{member.initials}</span>
+          <span className="avatar large" data-person={member.id}>{member.initials}</span>
           <div><p className="eyebrow">{member.team}</p><h1>{member.name}</h1><span>{member.role}</span></div>
         </div>
         <p className="bio">{member.bio}</p>

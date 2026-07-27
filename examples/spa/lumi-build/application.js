@@ -1,6 +1,6 @@
 // @ts-check
 
-import {resolve} from './demo-components.js'
+import {resolve} from './components.js'
 
 /** @typedef {'overview' | 'projects' | 'records' | 'activity' | 'teams'} Route */
 /** @typedef {{route: Route} & Record<string, any>} ApplicationData */

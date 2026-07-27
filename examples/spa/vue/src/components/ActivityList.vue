@@ -7,7 +7,7 @@ defineProps<{items: readonly Activity[]}>()
 <template>
   <ol class="activity-list">
     <li v-for="activity in items" :key="activity.id" class="activity-item">
-      <span class="avatar" :style="{backgroundColor: activity.tone}">
+      <span class="avatar" :data-person="activity.personId">
         {{ activity.initials }}
       </span>
       <div class="copy">

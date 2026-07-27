@@ -44,16 +44,15 @@ export class AppComponent {
   readonly metrics = metrics
   readonly filters: readonly ProjectFilter[] = ['all', 'active', 'planning']
   readonly recordFilters = recordFilters
-  readonly weeklyBars = [
-    {day: 'Mon', height: 42},
-    {day: 'Tue', height: 67},
-    {day: 'Wed', height: 55},
-    {day: 'Thu', height: 88},
-    {day: 'Fri', height: 76},
-    {day: 'Sat', height: 24},
-    {day: 'Sun', height: 18},
+  readonly weekdays = [
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+    'Sun',
   ] as const
-  readonly miniBars = [30, 55, 42, 75, 100, 62, 80]
 
   readonly route = signal<Route>('overview')
   readonly memberId = signal<string | null>(null)

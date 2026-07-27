@@ -23,7 +23,7 @@
 </template>
 
 <script type="module">
-  import {classToggle, repeat, style, text} from '../app.js'
+  import {attr, repeat, text} from '../app.js'
 
   export default {
     present: projects => ({projects}),
@@ -36,9 +36,9 @@
         text('.members', ({item}) => item.members),
         text('.due', ({item}) => item.due),
         text('.progress-label .value', ({item}) => `${item.progress}%`),
-        style('.accent', 'background-color', ({item}) => item.accent),
-        style('.progress-track .bar', 'width', ({item}) => `${item.progress}%`),
-        classToggle('.status', 'planning', ({item}) => item.status === 'Planning'),
+        attr('.accent', 'data-project', ({item}) => item.id),
+        attr('.progress-track .bar', 'data-project', ({item}) => item.id),
+        attr('.status', 'data-status', ({item}) => item.status),
       ]),
     ],
   }

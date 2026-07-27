@@ -57,13 +57,13 @@
           <p>Your team completed 28% more work than last week.</p>
         </div>
         <div class="week-chart" aria-label="Weekly activity chart">
-          <span data-day="Mon" style="height: 42%"><i>Mon</i></span>
-          <span data-day="Tue" style="height: 67%"><i>Tue</i></span>
-          <span data-day="Wed" style="height: 55%"><i>Wed</i></span>
-          <span data-day="Thu" style="height: 88%"><i>Thu</i></span>
-          <span data-day="Fri" style="height: 76%"><i>Fri</i></span>
-          <span data-day="Sat" style="height: 24%"><i>Sat</i></span>
-          <span data-day="Sun" style="height: 18%"><i>Sun</i></span>
+          <span data-day="Mon"><i>Mon</i></span>
+          <span data-day="Tue"><i>Tue</i></span>
+          <span data-day="Wed"><i>Wed</i></span>
+          <span data-day="Thu"><i>Thu</i></span>
+          <span data-day="Fri"><i>Fri</i></span>
+          <span data-day="Sat"><i>Sat</i></span>
+          <span data-day="Sun"><i>Sun</i></span>
         </div>
       </aside>
     </div>
@@ -72,7 +72,7 @@
 
 <script type="module">
   import {
-    classToggle,
+    attr,
     overviewDetails,
     repeat,
     text,
@@ -89,16 +89,16 @@
     bindings: [
       text('#overview > .heading .eyebrow', ({data}) => data.date),
       text('#overview-title', ({data}) => data.title),
-      ...weekDays.map(day => classToggle(
+      ...weekDays.map(day => attr(
         `.week-chart [data-day="${day}"]`,
-        'today',
-        ({data}) => data.today === day,
+        'data-day-state',
+        ({data}) => data.today === day ? 'today' : false,
       )),
       repeat('.metric-card', ({data}) => data.metrics, [
         text('.label', ({item}) => item.label),
         text('.value', ({item}) => item.value),
         text('.change', ({item}) => item.change),
-        classToggle(':scope', 'positive', ({item}) => item.direction === 'positive'),
+        attr(':scope', 'data-direction', ({item}) => item.direction),
       ]),
     ],
   }

@@ -12,7 +12,7 @@
 
 <script type="module">
   import {
-    classToggle,
+    attr,
     on,
     update,
   } from '../app.js'
@@ -23,7 +23,11 @@
     }),
     template: document.querySelector('#app-shell'),
     bindings: [
-      classToggle('#shell', 'nav-open', ({data}) => data.navOpen),
+      attr(
+        '#shell',
+        'data-navigation-state',
+        ({data}) => data.navOpen ? 'open' : false,
+      ),
       on('#backdrop', 'click', () => {
         update(data => ({...data, navOpen: false}))
       }),

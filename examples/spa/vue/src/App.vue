@@ -114,7 +114,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div id="shell" :class="{'nav-open': navOpen}">
+  <div id="shell" :data-navigation-state="navOpen ? 'open' : undefined">
     <div id="header">
       <header id="topbar">
         <div class="start">
@@ -167,7 +167,7 @@ onBeforeUnmount(() => {
           <a class="primary-button" href="#/projects"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h6l2-2h8v14H4v-12Z" /></svg>View projects</a>
         </div>
         <div class="metric-grid">
-          <article v-for="metric in metrics" :key="metric.id" :class="['metric-card', {'positive': metric.direction === 'positive'}]">
+          <article v-for="metric in metrics" :key="metric.id" class="metric-card" :data-direction="metric.direction">
             <div class="top"><span>{{ metric.label }}</span></div><strong>{{ metric.value }}</strong><span class="change">{{ metric.change }}</span>
           </article>
         </div>
@@ -183,7 +183,7 @@ onBeforeUnmount(() => {
           <aside class="panel week-card" aria-labelledby="week-title">
             <div class="top"><p class="eyebrow">This week</p><h2 id="week-title">Strong momentum</h2><p>Your team completed 28% more work than last week.</p></div>
             <div class="week-chart" aria-label="Weekly activity chart">
-              <span :class="{today: overview.today === 'Mon'}" style="height:42%"><i>Mon</i></span><span :class="{today: overview.today === 'Tue'}" style="height:67%"><i>Tue</i></span><span :class="{today: overview.today === 'Wed'}" style="height:55%"><i>Wed</i></span><span :class="{today: overview.today === 'Thu'}" style="height:88%"><i>Thu</i></span><span :class="{today: overview.today === 'Fri'}" style="height:76%"><i>Fri</i></span><span :class="{today: overview.today === 'Sat'}" style="height:24%"><i>Sat</i></span><span :class="{today: overview.today === 'Sun'}" style="height:18%"><i>Sun</i></span>
+              <span :data-day-state="overview.today === 'Mon' ? 'today' : undefined"><i>Mon</i></span><span :data-day-state="overview.today === 'Tue' ? 'today' : undefined"><i>Tue</i></span><span :data-day-state="overview.today === 'Wed' ? 'today' : undefined"><i>Wed</i></span><span :data-day-state="overview.today === 'Thu' ? 'today' : undefined"><i>Thu</i></span><span :data-day-state="overview.today === 'Fri' ? 'today' : undefined"><i>Fri</i></span><span :data-day-state="overview.today === 'Sat' ? 'today' : undefined"><i>Sat</i></span><span :data-day-state="overview.today === 'Sun' ? 'today' : undefined"><i>Sun</i></span>
             </div>
           </aside>
         </div>
@@ -225,8 +225,8 @@ onBeforeUnmount(() => {
         <div class="activity-layout">
           <section class="panel activity-panel" aria-label="All activity"><div class="activity-date"><span>Today</span><span class="line" /></div><ActivityList :items="activities" /></section>
           <aside class="activity-summary">
-            <section class="panel summary-card"><p class="eyebrow">Last 7 days</p><strong>42</strong><span>team updates</span><div class="mini-bars" aria-hidden="true"><i style="height:30%" /><i style="height:55%" /><i style="height:42%" /><i style="height:75%" /><i style="height:100%" /><i style="height:62%" /><i style="height:80%" /></div></section>
-            <section class="panel contributor-card"><p class="eyebrow">Top contributors</p><div><span class="avatar purple">NB</span><a href="#/teams/norm-barlug">Norm Barlug</a><em>14</em></div><div><span class="avatar green">EN</span><a href="#/teams/emmy-nother">Emmy Nother</a><em>11</em></div><div><span class="avatar orange">FK</span><a href="#/teams/fazlo-kan">Fazlo Kan</a><em>9</em></div></section>
+            <section class="panel summary-card"><p class="eyebrow">Last 7 days</p><strong>42</strong><span>team updates</span><div class="mini-bars" aria-hidden="true"><i /><i /><i /><i /><i /><i /><i /></div></section>
+            <section class="panel contributor-card"><p class="eyebrow">Top contributors</p><div><span class="avatar" data-person="norm-barlug">NB</span><a href="#/teams/norm-barlug">Norm Barlug</a><em>14</em></div><div><span class="avatar" data-person="emmy-nother">EN</span><a href="#/teams/emmy-nother">Emmy Nother</a><em>11</em></div><div><span class="avatar" data-person="fazlo-kan">FK</span><a href="#/teams/fazlo-kan">Fazlo Kan</a><em>9</em></div></section>
           </aside>
         </div>
       </section>
@@ -237,7 +237,7 @@ onBeforeUnmount(() => {
           <section class="panel member-directory" aria-labelledby="member-list-title">
             <div class="heading"><div><h2 id="member-list-title">All team members</h2><p>Everyone with access to the Luminate workspace.</p></div><span>Team</span><span>Role</span></div>
             <div class="member-list">
-              <article v-for="member in members" :key="member.id" class="member-row"><span class="avatar" :style="{backgroundColor: member.tone}">{{ member.initials }}</span><div class="identity"><a :href="`#/teams/${member.id}`">{{ member.name }}</a><span>{{ member.email }}</span></div><span class="team">{{ member.team }}</span><span class="role">{{ member.role }}</span></article>
+              <article v-for="member in members" :key="member.id" class="member-row"><span class="avatar" :data-person="member.id">{{ member.initials }}</span><div class="identity"><a :href="`#/teams/${member.id}`">{{ member.name }}</a><span>{{ member.email }}</span></div><span class="team">{{ member.team }}</span><span class="role">{{ member.role }}</span></article>
             </div>
           </section>
           <section class="team-actions">
@@ -250,7 +250,7 @@ onBeforeUnmount(() => {
                 <button class="primary-button" type="submit">Send invitation</button>
               </form>
               <form class="panel team-form" novalidate @submit.prevent="showToast">
-                <div class="heading"><span class="icon orange" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3" /><circle cx="17" cy="9" r="2.5" /><path d="M2.5 19c.5-4 2.3-6 5.5-6s5 2 5.5 6M14 14c3.8-.7 6.2 1 6.8 5" /></svg></span><div><h2>Create a team</h2><p>Group teammates around a shared area of work.</p></div></div>
+                <div class="heading"><span class="icon" data-form-kind="create-team" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3" /><circle cx="17" cy="9" r="2.5" /><path d="M2.5 19c.5-4 2.3-6 5.5-6s5 2 5.5 6M14 14c3.8-.7 6.2 1 6.8 5" /></svg></span><div><h2>Create a team</h2><p>Group teammates around a shared area of work.</p></div></div>
                 <label class="field"><span>Team name</span><input type="text" name="teamName" placeholder="e.g. Product design" required></label>
                 <label class="field"><span>Description <em>Optional</em></span><textarea name="description" rows="3" placeholder="What does this team work on?" /></label>
                 <button class="primary-button" type="submit">Create team</button>
@@ -262,7 +262,7 @@ onBeforeUnmount(() => {
         <div v-else id="profile">
           <a class="back-link" href="#/teams"><span aria-hidden="true">←</span> All team members</a>
           <article class="panel member-profile-card">
-            <div class="header"><span class="avatar large" :style="{backgroundColor: selectedMember.tone}">{{ selectedMember.initials }}</span><div><p class="eyebrow">{{ selectedMember.team }}</p><h1>{{ selectedMember.name }}</h1><span>{{ selectedMember.role }}</span></div></div>
+            <div class="header"><span class="avatar large" :data-person="selectedMember.id">{{ selectedMember.initials }}</span><div><p class="eyebrow">{{ selectedMember.team }}</p><h1>{{ selectedMember.name }}</h1><span>{{ selectedMember.role }}</span></div></div>
             <p class="bio">{{ selectedMember.bio }}</p>
             <dl class="member-details"><div><dt>Email</dt><dd><a :href="`mailto:${selectedMember.email}`">{{ selectedMember.email }}</a></dd></div><div><dt>Country</dt><dd>{{ selectedMember.country }}</dd></div><div><dt>Team</dt><dd>{{ selectedMember.team }}</dd></div></dl>
           </article>

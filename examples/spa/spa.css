@@ -464,7 +464,7 @@ main > :is(
   font-size: 10px;
 }
 
-.metric-card.positive .change {
+.metric-card[data-direction="positive"] .change {
   color: var(--green);
 }
 
@@ -520,6 +520,22 @@ main > :is(
   border-radius: 3px;
 }
 
+.project-card .accent[data-project="atlas"] {
+  background-color: #6c5ce7;
+}
+
+.project-card .accent[data-project="meridian"] {
+  background-color: #ef8354;
+}
+
+.project-card .accent[data-project="luminate"] {
+  background-color: #2a9d8f;
+}
+
+.project-card .accent[data-project="signal"] {
+  background-color: #3a86ff;
+}
+
 .status {
   padding: 4px 7px;
   color: #157563;
@@ -529,7 +545,7 @@ main > :is(
   font-weight: 700;
 }
 
-.project-card .status.planning {
+.project-card .status[data-status="Planning"] {
   color: #9b6130;
   background: #fff0df;
 }
@@ -577,6 +593,22 @@ main > :is(
   height: 100%;
   background: var(--violet);
   border-radius: inherit;
+}
+
+.progress-track .bar[data-project="atlas"] {
+  width: 72%;
+}
+
+.progress-track .bar[data-project="meridian"] {
+  width: 34%;
+}
+
+.progress-track .bar[data-project="luminate"] {
+  width: 88%;
+}
+
+.progress-track .bar[data-project="signal"] {
+  width: 18%;
 }
 
 .project-card .footer {
@@ -640,6 +672,50 @@ main > :is(
   flex: 0 0 auto;
   color: #4e4b5d;
   font-size: 9px;
+}
+
+.activity-item [data-person="norm-barlug"] {
+  background-color: #e8e4ff;
+}
+
+.activity-item [data-person="jaggi-boss"] {
+  background-color: #fff0d9;
+}
+
+.activity-item [data-person="freddy-fraggin"] {
+  background-color: #ffe8de;
+}
+
+.activity-item [data-person="fazlo-kan"] {
+  background-color: #e8f1ff;
+}
+
+.activity-item [data-person="emmy-nother"] {
+  background-color: #dff5f1;
+}
+
+.activity-item [data-person="erato-stenes"] {
+  background-color: #deedff;
+}
+
+.activity-item [data-person="tutu-yoyo"] {
+  background-color: #f1ecdd;
+}
+
+.activity-item [data-person="alfredo-church"] {
+  background-color: #eee8fa;
+}
+
+.activity-item [data-person="steff-banak"] {
+  background-color: #f1e8ff;
+}
+
+.activity-item [data-person="blaze-paskal"] {
+  background-color: #e4f2e8;
+}
+
+.activity-item [data-person="aida-loveleys"] {
+  background-color: #f5e6f0;
 }
 
 .activity-item .copy {
@@ -725,7 +801,35 @@ main > :is(
   border-radius: 4px 4px 2px 2px;
 }
 
-.week-chart .today {
+.week-chart span:nth-child(1) {
+  height: 42%;
+}
+
+.week-chart span:nth-child(2) {
+  height: 67%;
+}
+
+.week-chart span:nth-child(3) {
+  height: 55%;
+}
+
+.week-chart span:nth-child(4) {
+  height: 88%;
+}
+
+.week-chart span:nth-child(5) {
+  height: 76%;
+}
+
+.week-chart span:nth-child(6) {
+  height: 24%;
+}
+
+.week-chart span:nth-child(7) {
+  height: 18%;
+}
+
+.week-chart [data-day-state="today"] {
   background: #8a78ef;
 }
 
@@ -925,6 +1029,61 @@ main > :is(
   font-weight: 750;
 }
 
+.member-row [data-person="aida-loveleys"],
+.member-profile-card [data-person="aida-loveleys"] {
+  background-color: #f5e6f0;
+}
+
+.member-row [data-person="norm-barlug"],
+.member-profile-card [data-person="norm-barlug"] {
+  background-color: #e8e4ff;
+}
+
+.member-row [data-person="freddy-fraggin"],
+.member-profile-card [data-person="freddy-fraggin"] {
+  background-color: #ffe8de;
+}
+
+.member-row [data-person="erato-stenes"],
+.member-profile-card [data-person="erato-stenes"] {
+  background-color: #dff5f1;
+}
+
+.member-row [data-person="tutu-yoyo"],
+.member-profile-card [data-person="tutu-yoyo"] {
+  background-color: #deedff;
+}
+
+.member-row [data-person="emmy-nother"],
+.member-profile-card [data-person="emmy-nother"] {
+  background-color: #f1e8ff;
+}
+
+.member-row [data-person="steff-banak"],
+.member-profile-card [data-person="steff-banak"] {
+  background-color: #e4f2e8;
+}
+
+.member-row [data-person="blaze-paskal"],
+.member-profile-card [data-person="blaze-paskal"] {
+  background-color: #fff0d9;
+}
+
+.member-row [data-person="jaggi-boss"],
+.member-profile-card [data-person="jaggi-boss"] {
+  background-color: #e8f1ff;
+}
+
+.member-row [data-person="fazlo-kan"],
+.member-profile-card [data-person="fazlo-kan"] {
+  background-color: #f6e7db;
+}
+
+.member-row [data-person="alfredo-church"],
+.member-profile-card [data-person="alfredo-church"] {
+  background-color: #eee8fa;
+}
+
 .member-row .identity {
   display: grid;
   min-width: 0;
@@ -1009,7 +1168,7 @@ main > :is(
   border-radius: 10px;
 }
 
-.team-form > .heading .icon.orange {
+.team-form > .heading .icon[data-form-kind="create-team"] {
   color: #a55c2d;
   background: #fff0e5;
 }
@@ -1338,6 +1497,34 @@ main > :is(
   border-radius: 3px 3px 1px 1px;
 }
 
+.mini-bars i:nth-child(1) {
+  height: 30%;
+}
+
+.mini-bars i:nth-child(2) {
+  height: 55%;
+}
+
+.mini-bars i:nth-child(3) {
+  height: 42%;
+}
+
+.mini-bars i:nth-child(4) {
+  height: 75%;
+}
+
+.mini-bars i:nth-child(5) {
+  height: 100%;
+}
+
+.mini-bars i:nth-child(6) {
+  height: 62%;
+}
+
+.mini-bars i:nth-child(7) {
+  height: 80%;
+}
+
 .mini-bars i:nth-child(5) {
   background: var(--violet);
 }
@@ -1361,15 +1548,15 @@ main > :is(
   font-size: 8px;
 }
 
-.contributor-card .avatar.purple {
+.contributor-card .avatar[data-person="norm-barlug"] {
   background: #e8e4ff;
 }
 
-.contributor-card .avatar.green {
+.contributor-card .avatar[data-person="emmy-nother"] {
   background: #dff5f1;
 }
 
-.contributor-card .avatar.orange {
+.contributor-card .avatar[data-person="fazlo-kan"] {
   background: #ffe8de;
 }
 
@@ -1455,7 +1642,7 @@ main > :is(
     padding-top: 25px;
   }
 
-  #shell.nav-open #sidebar {
+  #shell[data-navigation-state="open"] #sidebar {
     transform: translateX(0);
   }
 
@@ -1472,7 +1659,7 @@ main > :is(
     transition: opacity 200ms, visibility 200ms;
   }
 
-  #shell.nav-open #backdrop {
+  #shell[data-navigation-state="open"] #backdrop {
     visibility: visible;
     opacity: 1;
   }

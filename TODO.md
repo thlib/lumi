@@ -41,8 +41,22 @@ demo-app in all examples
 
 lumi example should be the native one?
 
+- each spa in examples/spa that has a build or bundle stage should have it's own build or bundle script in their own folder ( for example called build.js or bundle.js or whatever is appropriate), they should not share them
+
+shim <template> to support `src` to fetch a `.html` file into itself.
+
+aren't things like `tone-cream` absolutely smelly? the class should instead describe the _meaning_ and the css should pick the color for the meaning, this allows better dark/light theme too.
+
+also I do want opening tags to be multi-line when they are twice as long as the standard size at which they normally become multi-line.
 
 
+- remove `style` from `lumi` and also remove `classToggle` from lumi, because they are just attributes, how the attribute figures out the toggling or setting is outside of lumi
+
+- remove people id's from css
+- remove widths from css
+- remove classes that are colors
+- remove `background-color`
+- remove the unused styles
 
 
 

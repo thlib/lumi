@@ -8,8 +8,8 @@ defineProps<{items: readonly Project[]}>()
   <div class="project-grid">
     <article v-for="project in items" :key="project.id" class="project-card">
       <div class="top">
-        <span class="accent" :style="{backgroundColor: project.accent}" />
-        <span :class="['status', {'planning': project.status === 'Planning'}]">
+        <span class="accent" :data-project="project.id" />
+        <span class="status" :data-status="project.status">
           {{ project.status }}
         </span>
       </div>
@@ -19,7 +19,7 @@ defineProps<{items: readonly Project[]}>()
         <span>Progress</span><strong>{{ project.progress }}%</strong>
       </div>
       <div class="progress-track">
-        <span :style="{width: `${project.progress}%`}" />
+        <span class="bar" :data-project="project.id" />
       </div>
       <div class="footer">
         <span class="members">{{ project.members }}</span>

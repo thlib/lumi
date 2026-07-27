@@ -28,7 +28,7 @@
     </template>
 
     <script type="module">
-      import {classToggle, on} from '../../../dist/lumi.js'
+      import {attr, on} from '../../../dist/lumi.js'
       import {define, update} from './demo-app.js'
 
       define('appShell', {
@@ -37,7 +37,11 @@
         }),
         template: document.querySelector('#app-shell'),
         bindings: [
-          classToggle('#shell', 'nav-open', ({data}) => data.navOpen),
+          attr(
+            '#shell',
+            'data-navigation-state',
+            ({data}) => data.navOpen ? 'open' : false,
+          ),
           on('#backdrop', 'click', () => {
             update(data => ({...data, navOpen: false}))
           }),
@@ -278,7 +282,7 @@
 
               <form class="panel team-form" novalidate>
                 <div class="heading">
-                  <span class="icon orange" aria-hidden="true">
+                  <span class="icon" data-form-kind="create-team" aria-hidden="true">
                     <svg viewBox="0 0 24 24">
                       <circle cx="8" cy="8" r="3"></circle>
                       <circle cx="17" cy="9" r="2.5"></circle>
@@ -371,7 +375,6 @@
         on,
         prop,
         repeat,
-        style,
         text,
       } from '../../../dist/lumi.js'
       import {
@@ -408,7 +411,7 @@
                 text('.team', ({item}) => item.team),
                 text('.role', ({item}) => item.role),
                 attr('.name', 'href', ({item}) => `#/teams/${item.id}`),
-                style('.avatar', 'background-color', ({item}) => item.tone),
+                attr('.avatar', 'data-person', ({item}) => item.id),
               ]),
               text('#profile .avatar', ({data}) => data.selectedMember.initials),
               text('#profile .name', ({data}) => data.selectedMember.name),
@@ -476,10 +479,10 @@
                 'href',
                 ({data}) => `mailto:${data.selectedMember.email}`,
               ),
-              style(
+              attr(
                 '#profile .avatar',
-                'background-color',
-                ({data}) => data.selectedMember.tone,
+                'data-person',
+                ({data}) => data.selectedMember.id,
               ),
           ],
         }
@@ -558,9 +561,8 @@
 
     <script type="module">
       import {
-        classToggle,
+        attr,
         repeat,
-        style,
         text,
       } from '../../../dist/lumi.js'
       import {define} from './demo-app.js'
@@ -576,9 +578,9 @@
             text('.members', ({item}) => item.members),
             text('.due', ({item}) => item.due),
             text('.progress-label .value', ({item}) => `${item.progress}%`),
-            style('.accent', 'background-color', ({item}) => item.accent),
-            style('.progress-track .bar', 'width', ({item}) => `${item.progress}%`),
-            classToggle('.status', 'planning', ({item}) => item.status === 'Planning'),
+            attr('.accent', 'data-project', ({item}) => item.id),
+            attr('.progress-track .bar', 'data-project', ({item}) => item.id),
+            attr('.status', 'data-status', ({item}) => item.status),
           ]),
         ],
       })
@@ -601,7 +603,7 @@
     </template>
 
     <script type="module">
-      import {attr, repeat, style, text} from '../../../dist/lumi.js'
+      import {attr, repeat, text} from '../../../dist/lumi.js'
       import {define} from './demo-app.js'
 
       define('activityList', {
@@ -614,7 +616,7 @@
             text('.action', ({item}) => item.action),
             text('.target', ({item}) => item.target),
             text('time', ({item}) => item.time),
-            style('.avatar', 'background-color', ({item}) => item.tone),
+            attr('.avatar', 'data-person', ({item}) => item.personId),
             attr('.person', 'href', ({item}) => `#/teams/${item.personId}`),
           ]),
         ],
@@ -680,13 +682,13 @@
               <p>Your team completed 28% more work than last week.</p>
             </div>
             <div class="week-chart" aria-label="Weekly activity chart">
-              <span data-day="Mon" style="height: 42%"><i>Mon</i></span>
-              <span data-day="Tue" style="height: 67%"><i>Tue</i></span>
-              <span data-day="Wed" style="height: 55%"><i>Wed</i></span>
-              <span data-day="Thu" style="height: 88%"><i>Thu</i></span>
-              <span data-day="Fri" style="height: 76%"><i>Fri</i></span>
-              <span data-day="Sat" style="height: 24%"><i>Sat</i></span>
-              <span data-day="Sun" style="height: 18%"><i>Sun</i></span>
+              <span data-day="Mon"><i>Mon</i></span>
+              <span data-day="Tue"><i>Tue</i></span>
+              <span data-day="Wed"><i>Wed</i></span>
+              <span data-day="Thu"><i>Thu</i></span>
+              <span data-day="Fri"><i>Fri</i></span>
+              <span data-day="Sat"><i>Sat</i></span>
+              <span data-day="Sun"><i>Sun</i></span>
             </div>
           </aside>
         </div>
@@ -695,7 +697,7 @@
 
     <script type="module">
       import {
-        classToggle,
+        attr,
         repeat,
         text,
       } from '../../../dist/lumi.js'
@@ -712,16 +714,16 @@
         bindings: [
           text('#overview > .heading .eyebrow', ({data}) => data.date),
           text('#overview-title', ({data}) => data.title),
-          ...weekDays.map(day => classToggle(
+          ...weekDays.map(day => attr(
             `.week-chart [data-day="${day}"]`,
-            'today',
-            ({data}) => data.today === day,
+            'data-day-state',
+            ({data}) => data.today === day ? 'today' : false,
           )),
           repeat('.metric-card', ({data}) => data.metrics, [
             text('.label', ({item}) => item.label),
             text('.value', ({item}) => item.value),
             text('.change', ({item}) => item.change),
-            classToggle(':scope', 'positive', ({item}) => item.direction === 'positive'),
+            attr(':scope', 'data-direction', ({item}) => item.direction),
           ]),
         ],
       })
@@ -919,20 +921,20 @@
               <strong>42</strong>
               <span>team updates</span>
               <div class="mini-bars" aria-hidden="true">
-                <i style="height: 30%"></i>
-                <i style="height: 55%"></i>
-                <i style="height: 42%"></i>
-                <i style="height: 75%"></i>
-                <i style="height: 100%"></i>
-                <i style="height: 62%"></i>
-                <i style="height: 80%"></i>
+                <i></i>
+                <i></i>
+                <i></i>
+                <i></i>
+                <i></i>
+                <i></i>
+                <i></i>
               </div>
             </section>
             <section class="panel contributor-card">
               <p class="eyebrow">Top contributors</p>
-              <div><span class="avatar purple">NB</span><a href="#/teams/norm-barlug">Norm Barlug</a><em>14</em></div>
-              <div><span class="avatar green">EN</span><a href="#/teams/emmy-nother">Emmy Nother</a><em>11</em></div>
-              <div><span class="avatar orange">FK</span><a href="#/teams/fazlo-kan">Fazlo Kan</a><em>9</em></div>
+              <div><span class="avatar" data-person="norm-barlug">NB</span><a href="#/teams/norm-barlug">Norm Barlug</a><em>14</em></div>
+              <div><span class="avatar" data-person="emmy-nother">EN</span><a href="#/teams/emmy-nother">Emmy Nother</a><em>11</em></div>
+              <div><span class="avatar" data-person="fazlo-kan">FK</span><a href="#/teams/fazlo-kan">Fazlo Kan</a><em>9</em></div>
             </section>
           </aside>
         </div>

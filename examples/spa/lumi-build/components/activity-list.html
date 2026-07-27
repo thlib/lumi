@@ -15,7 +15,7 @@
 </template>
 
 <script type="module">
-  import {attr, repeat, style, text} from '../app.js'
+  import {attr, repeat, text} from '../app.js'
 
   export default {
     present: activities => ({activities}),
@@ -27,7 +27,7 @@
         text('.action', ({item}) => item.action),
         text('.target', ({item}) => item.target),
         text('time', ({item}) => item.time),
-        style('.avatar', 'background-color', ({item}) => item.tone),
+        attr('.avatar', 'data-person', ({item}) => item.personId),
         attr('.person', 'href', ({item}) => `#/teams/${item.personId}`),
       ]),
     ],

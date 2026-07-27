@@ -1,0 +1,21 @@
+<template id="app-shell">
+  <div id="shell" data-attr="data-navigation-state: $.data.navigationState">
+    <div id="header">
+      <template data-include="header-view"></template>
+    </div>
+
+    <aside id="sidebar">
+      <template data-include="navigation-view"></template>
+    </aside>
+
+    <button id="backdrop" type="button" aria-label="Close navigation" data-navigation="close"></button>
+
+    <main tabindex="-1">
+      <template data-include="overview-view"></template>
+      <template data-include="projects-view"></template>
+      <template data-include="records-view"></template>
+      <template data-include="activity-page"></template>
+      <template data-include="teams-view"></template>
+    </main>
+  </div>
+</template>

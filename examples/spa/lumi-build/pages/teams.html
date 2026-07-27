@@ -87,7 +87,7 @@
 
           <form class="panel team-form" novalidate>
             <div class="heading">
-              <span class="icon orange" aria-hidden="true">
+              <span class="icon" data-form-kind="create-team" aria-hidden="true">
                 <svg viewBox="0 0 24 24">
                   <circle cx="8" cy="8" r="3"></circle>
                   <circle cx="17" cy="9" r="2.5"></circle>
@@ -181,7 +181,6 @@
     on,
     prop,
     repeat,
-    style,
     text,
     update,
   } from '../app.js'
@@ -214,7 +213,7 @@
             text('.team', ({item}) => item.team),
             text('.role', ({item}) => item.role),
             attr('.name', 'href', ({item}) => `#/teams/${item.id}`),
-            style('.avatar', 'background-color', ({item}) => item.tone),
+            attr('.avatar', 'data-person', ({item}) => item.id),
           ]),
           text('#profile .avatar', ({data}) => data.selectedMember.initials),
           text('#profile .name', ({data}) => data.selectedMember.name),
@@ -282,10 +281,10 @@
             'href',
             ({data}) => `mailto:${data.selectedMember.email}`,
           ),
-          style(
+          attr(
             '#profile .avatar',
-            'background-color',
-            ({data}) => data.selectedMember.tone,
+            'data-person',
+            ({data}) => data.selectedMember.id,
           ),
       ],
     }

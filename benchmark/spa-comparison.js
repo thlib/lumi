@@ -124,6 +124,15 @@ const frameworks = Object.freeze([
     urlPath: 'lumi-build',
   },
   {
+    id: 'lumi-ts',
+    label: 'Lumi TS data paths',
+    packageFile: resolve(root, 'package.json'),
+    buildDirectory: root,
+    buildScript: 'build:spa:ts',
+    publicRoot: resolve(root, 'examples/spa/lumi-ts/dist'),
+    urlPath: 'lumi-ts',
+  },
+  {
     id: 'vue',
     label: 'Vue',
     packageFile: resolve(root, 'examples/spa/vue/package.json'),

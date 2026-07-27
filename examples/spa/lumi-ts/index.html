@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#17152d">
+    <meta
+      name="description"
+      content="Redirects to the bundled Lumi SPA used during development."
+    >
+    <title>Luminate</title>
+    <script>
+      const target = new URL('./dist/index.html', window.location.href)
+      target.search = window.location.search
+      target.hash = window.location.hash
+      window.location.replace(target)
+    </script>
+  </head>
+  <body>
+    <p><a href="./dist/index.html">Open the bundled Lumi SPA</a></p>
+  </body>
+</html>

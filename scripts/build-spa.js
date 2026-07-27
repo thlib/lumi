@@ -3,12 +3,11 @@
 /**
  * Builds the bundled Lumi SPA from native HTML view documents.
  *
- * Each file in the variant's components/ and pages/ directories keeps one
- * template beside its inline module behavior and any local styles. Reusable
- * views live in components/ while route-wide views live in pages/. The build
- * extracts the final top-level module from every document as an esbuild
- * virtual module, bundles those modules with the application, and assembles
- * the remaining native HTML into one document.
+ * Reusable views live in components/ while route-wide views live in pages/.
+ * The JavaScript variant keeps behavior modules inline with those documents;
+ * the TypeScript variant keeps declarative markup in HTML and composes its
+ * Lumi bindings from ordinary `.ts` modules. The build bundles the selected
+ * behavior entry and assembles the native HTML into one document.
  *
  * `--serve` keeps the same bundle pipeline active for development and serves
  * the selected variant's dist/ directory directly.
@@ -24,6 +23,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { basename, dirname, extname, join, relative } from 'node:path'
+import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { build, context } from 'esbuild'
 
@@ -33,11 +33,12 @@ const variant = process.argv
   .slice(2)
   .find(argument => !argument.startsWith('--'))
 
-if (variant !== 'lumi-build') {
-  throw new Error('Choose the bundled SPA variant: lumi-build')
+if (variant !== 'lumi-build' && variant !== 'lumi-ts') {
+  throw new Error('Choose a bundled SPA variant: lumi-build or lumi-ts')
 }
 
 const source = join(spa, variant)
+const typescript = variant === 'lumi-ts'
 const componentsDirectory = join(source, 'components')
 const pagesDirectory = join(source, 'pages')
 const documentDirectories = [
@@ -46,6 +47,7 @@ const documentDirectories = [
 ]
 const shellFile = join(source, 'shell.html')
 const stylesheetFile = join(spa, 'spa.css')
+const typeScriptConfig = join(source, 'tsconfig.json')
 const output = join(source, 'dist')
 const serve = process.argv.includes('--serve')
 const unknownArguments = process.argv
@@ -90,8 +92,9 @@ if (serve) {
 }
 
 /**
- * Treats the inline behavior in every view document as a JavaScript module
- * while keeping its template and style markup in HTML.
+ * Loads native view documents and exposes the selected variant's behavior
+ * modules to esbuild. JavaScript behavior is extracted from the HTML while
+ * TypeScript behavior is imported from the source tree.
  *
  * @returns {import('esbuild').Plugin}
  */
@@ -100,6 +103,13 @@ function viewDocumentsPlugin() {
     name: 'lumi-view-documents',
 
     setup(build) {
+      if (typescript) {
+        build.onStart(() => {
+          const errors = typeScriptErrors()
+          return errors.length === 0 ? undefined : {errors}
+        })
+      }
+
       build.onResolve({filter: /^lumi-spa-entry$/}, () => ({
         path: 'entry',
         namespace: 'lumi-spa',
@@ -109,6 +119,22 @@ function viewDocumentsPlugin() {
         {filter: /^entry$/, namespace: 'lumi-spa'},
         () => {
           const documentFiles = readDocumentFiles()
+
+          if (typescript) {
+            return {
+              contents: "import './app.ts'",
+              loader: 'ts',
+              resolveDir: source,
+              watchDirs: documentDirectories,
+              watchFiles: [
+                shellFile,
+                stylesheetFile,
+                typeScriptConfig,
+                ...documentFiles,
+              ],
+            }
+          }
+
           const imports = documentFiles.map((file, index) => {
             const name = relative(source, file)
             const specifier = JSON.stringify(`lumi-document:${name}`)
@@ -116,7 +142,7 @@ function viewDocumentsPlugin() {
           })
 
           imports.push(
-            "import {installDefinitions} from './demo-components.js'",
+            "import {installDefinitions} from './components.js'",
           )
           imports.push("import './app.js'")
 
@@ -153,7 +179,7 @@ function viewDocumentsPlugin() {
         {filter: /\.html$/, namespace: 'lumi-document'},
         args => ({
           contents: readDocument(args.path).module,
-          loader: 'js',
+          loader: typescript ? 'ts' : 'js',
           resolveDir: dirname(args.path),
           watchFiles: [args.path],
         }),
@@ -203,6 +229,24 @@ function readDocumentFiles() {
  */
 function readDocument(file) {
   const document = readFileSync(file, 'utf8')
+
+  if (typescript) {
+    const markup = document.trim()
+
+    if (!markup.startsWith('<template')) {
+      throw new Error(`${file} must start with a native <template>`)
+    }
+
+    if (/<script(?:\s|>)/i.test(markup)) {
+      throw new Error(`${file} must keep behavior in TypeScript modules`)
+    }
+
+    return {
+      markup,
+      module: '',
+    }
+  }
+
   const match = document.match(
     /\n<script type="module">\n([\s\S]*?)\n<\/script>\s*$/,
   )
@@ -228,6 +272,35 @@ function readDocument(file) {
     markup,
     module,
   }
+}
+
+/**
+ * Type-checks the standalone TypeScript modules with the same project that
+ * editors use.
+ *
+ * @returns {import('esbuild').PartialMessage[]}
+ */
+function typeScriptErrors() {
+  const compiler = join(repository, 'node_modules/typescript/bin/tsc')
+  const result = spawnSync(
+    process.execPath,
+    [compiler, '--project', typeScriptConfig],
+    {cwd: repository, encoding: 'utf8'},
+  )
+
+  if (result.status === 0) {
+    return []
+  }
+
+  const output = `${result.stdout}${result.stderr}`
+    .replaceAll(`${repository}/`, '')
+    .trim()
+
+  return [{
+    text: output === ''
+      ? `TypeScript exited with status ${String(result.status)}`
+      : output,
+  }]
 }
 
 function emitHtmlAndStyles() {

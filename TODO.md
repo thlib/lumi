@@ -29,9 +29,25 @@
   request replaces the module graph. Its sourcemap resolves against the
   published source, so devtools still show original code. Pin a version: an
   unpinned CDN URL follows the latest release.
-- document no BEM, use id for singleton, use native when possible, use part names and component names in classes.
-- shorten name based on context, more context = shorter name, so event in an event location can be `e`, normally 3 letter abbreviations work well.
-I like to use the letter `e` for the `event` variable and `el` for `element` for example.
-- lumi spa should be in typescript while lumi itself can remain js with jsDoc
-- keep lumi as jsdoc and js, change lumi spa to ts
-- no need for exactlyOne I think.
+- add 3 languages english, mandarin chinese, hindi, use i18n where you have t(txt) and n(txt, count) and ideally some standard (I assume .po files are a bit dated now?) way to host translation strings. where the txt is not english, it's an english like contextual placeholder, for example instead of saying "letter" it adds context to what that letter actually means using a `prefix_` (I wonder why english can't remain the translation string with an additional argument that gives context?), or actually make it 4. en + zh-Hans + ar + ua (ukraine)
+
+squash all unpushed commits in lumi to a single well named commit
+
+component styles in component files
+
+emailValidationMessage could be done better
+
+demo-app in all examples
+
+lumi example should be the native one?
+
+lumi-elements doesn't seem to use the components at all...
+
+
+
+
+
+
+
+
+

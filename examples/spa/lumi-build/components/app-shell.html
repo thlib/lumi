@@ -1,0 +1,32 @@
+<template id="app-shell">
+  <div id="shell">
+    <div id="header"></div>
+
+    <aside id="sidebar"></aside>
+
+    <button id="backdrop" type="button" aria-label="Close navigation"></button>
+
+    <main tabindex="-1"></main>
+  </div>
+</template>
+
+<script type="module">
+  import {
+    classToggle,
+    on,
+    update,
+  } from '../app.js'
+
+  export default {
+    present: data => ({
+      navOpen: data.navOpen,
+    }),
+    template: document.querySelector('#app-shell'),
+    bindings: [
+      classToggle('#shell', 'nav-open', ({data}) => data.navOpen),
+      on('#backdrop', 'click', () => {
+        update(data => ({...data, navOpen: false}))
+      }),
+    ],
+  }
+</script>

@@ -27,7 +27,7 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
 
-  examples/framework-spa/angular:
+  examples/spa/angular:
     dependencies:
       '@angular/common':
         specifier: ^21.0.0
@@ -61,7 +61,7 @@ importers:
         specifier: ~5.9.0
         version: 5.9.3
 
-  examples/framework-spa/react:
+  examples/spa/react:
     dependencies:
       react:
         specifier: ^19.2.0
@@ -86,7 +86,7 @@ importers:
         specifier: ^7.0.0
         version: 7.3.6(@types/node@26.1.1)(sass@1.97.3)
 
-  examples/framework-spa/vue:
+  examples/spa/vue:
     dependencies:
       vue:
         specifier: ^3.5.0

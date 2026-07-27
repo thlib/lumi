@@ -173,10 +173,13 @@ TypeScript consumer contract run as part of `pnpm run lint`.
   ([source](./examples/counter)): the same behavior using application-owned
   `data-path` attributes and a cached RFC 9535 JSONPath adapter. It shows an
   optional declarative convention, not a Lumi requirement.
-- [Component-based SPA](https://thlib.github.io/lumi/examples/spa/)
-  ([source](./examples/spa)): a larger dependency-free application using
-  colocated templates and explicit presentation mappings.
-- [Framework comparison SPAs](./examples/framework-spa): equivalent React, Vue,
+- [Native-module SPA](./examples/spa/lumi-native): templates and adjacent
+  behavior in one `index.html`, backed by one unbundled demo module.
+- [Component-build SPA](./examples/spa/lumi-build): one native HTML document
+  per component, assembled and bundled for development and production.
+- [Custom-element SPA](./examples/spa/lumi-elements): browser-native templates
+  using registered `<lu-*>` element roots.
+- [Framework comparison SPAs](./examples/spa): equivalent React, Vue,
   and Angular applications sharing the SPA's content and visual design without
   importing Lumi.
 
@@ -194,16 +197,12 @@ details, and methodology. The [benchmark source](./benchmark/spa-comparison.js)
 and [raw samples](./benchmark/results/spa-performance.json) are also available.
 Run it locally with `pnpm benchmark:spa`.
 
-Every template in the SPA declares its behavior in a `<script type="module">`
-beside it, and each of those scripts imports from one entry, `app.js`. Running
-from source, that entry is a native module graph; `pnpm run build:spa` bundles
-the same entry into `examples/spa/dist/` without changing a template or a
-script, and the benchmark serves that build.
-
-The SPA's `demo-components.js` module contains ordinary JavaScript
-orchestration utilities owned by that demo: `define` and `resolve`. They are
-not Lumi APIs, another SPA using Lumi could organize its application with
-different utilities or a framework.
+The three Lumi variants make their authoring and runtime tradeoffs explicit.
+Lumi native uses a browser-loaded module graph. Lumi build associates native
+component documents by filename during bundling, without runtime `define()`
+calls. Lumi elements registers `lu-` custom elements without an application
+build while retaining Lumi's explicit page update. All three are measured
+independently by the SPA benchmark.
 
 ## Application binding conventions
 

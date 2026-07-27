@@ -1,0 +1,35 @@
+<template id="activity-list">
+  <ol class="activity-list">
+    <li class="activity-item">
+      <span class="avatar">AL</span>
+      <div class="copy">
+        <p>
+          <a class="person">Person</a>
+          <span class="action">updated</span>
+          <b class="target">an item</b>
+        </p>
+        <time>Just now</time>
+      </div>
+    </li>
+  </ol>
+</template>
+
+<script type="module">
+  import {attr, repeat, style, text} from '../app.js'
+
+  export default {
+    present: activities => ({activities}),
+    template: document.querySelector('#activity-list'),
+    bindings: [
+      repeat('.activity-item', ({data}) => data.activities, [
+        text('.avatar', ({item}) => item.initials),
+        text('.person', ({item}) => item.person),
+        text('.action', ({item}) => item.action),
+        text('.target', ({item}) => item.target),
+        text('time', ({item}) => item.time),
+        style('.avatar', 'background-color', ({item}) => item.tone),
+        attr('.person', 'href', ({item}) => `#/teams/${item.personId}`),
+      ]),
+    ],
+  }
+</script>

@@ -1,7 +1,11 @@
 node_modules/
 dist/
-!examples/framework-spa/*/dist/
-!examples/framework-spa/*/dist/**
+!examples/spa/react/dist/
+!examples/spa/react/dist/**
+!examples/spa/vue/dist/
+!examples/spa/vue/dist/**
+!examples/spa/angular/dist/
+!examples/spa/angular/dist/**
 test-results/
 .angular/
 *.tsbuildinfo

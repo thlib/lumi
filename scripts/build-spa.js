@@ -1,41 +1,280 @@
 // @ts-check
 
 /**
- * Builds the SPA example into examples/spa/dist/.
+ * Builds the bundled Lumi SPA from native HTML view documents.
  *
- * The example runs from source without a build step: index.html loads
- * ./app.js as a native module and every template script imports from that one
- * entry. This build bundles the same entry into one minified file and copies
- * index.html unchanged, because both forms resolve ./app.js and ./spa.css
- * beside index.html. The benchmark serves this directory so Lumi is measured
- * the way the framework applications it compares against are measured.
+ * Each file in the variant's components/ and pages/ directories keeps one
+ * template beside its inline module behavior and any local styles. Reusable
+ * views live in components/ while route-wide views live in pages/. The build
+ * extracts the final top-level module from every document as an esbuild
+ * virtual module, bundles those modules with the application, and assembles
+ * the remaining native HTML into one document.
+ *
+ * `--serve` keeps the same bundle pipeline active for development and serves
+ * the selected variant's dist/ directory directly.
  */
 
-import { cpSync, mkdirSync, rmSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { basename, dirname, extname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { build } from 'esbuild'
+import { build, context } from 'esbuild'
 
 const repository = dirname(dirname(fileURLToPath(import.meta.url)))
-const source = join(repository, 'examples/spa')
+const spa = join(repository, 'examples/spa')
+const variant = process.argv
+  .slice(2)
+  .find(argument => !argument.startsWith('--'))
+
+if (variant !== 'lumi-build') {
+  throw new Error('Choose the bundled SPA variant: lumi-build')
+}
+
+const source = join(spa, variant)
+const componentsDirectory = join(source, 'components')
+const pagesDirectory = join(source, 'pages')
+const documentDirectories = [
+  componentsDirectory,
+  ...(existsSync(pagesDirectory) ? [pagesDirectory] : []),
+]
+const shellFile = join(source, 'shell.html')
+const stylesheetFile = join(spa, 'spa.css')
 const output = join(source, 'dist')
+const serve = process.argv.includes('--serve')
+const unknownArguments = process.argv
+  .slice(2)
+  .filter(argument => argument !== '--serve' && argument !== variant)
 
-rmSync(output, { recursive: true, force: true })
-mkdirSync(output, { recursive: true })
+if (unknownArguments.length > 0) {
+  throw new Error(`Unknown SPA build argument: ${unknownArguments.join(' ')}`)
+}
 
-await build({
-  entryPoints: [join(source, 'app.js')],
+rmSync(output, {recursive: true, force: true})
+mkdirSync(output, {recursive: true})
+
+/** @type {import('esbuild').BuildOptions} */
+const options = {
+  entryPoints: ['lumi-spa-entry'],
   bundle: true,
   format: 'esm',
   target: 'es2022',
-  minify: true,
+  minify: !serve,
   sourcemap: true,
   outfile: join(output, 'app.js'),
   logLevel: 'info',
-})
-
-for (const file of ['index.html', 'spa.css']) {
-  cpSync(join(source, file), join(output, file))
+  plugins: [viewDocumentsPlugin()],
 }
 
-console.log(`SPA example built into ${output}`)
+if (serve) {
+  const buildContext = await context(options)
+  const server = await buildContext.serve({
+    servedir: output,
+    host: '127.0.0.1',
+    port: Number.parseInt(process.env.LUMI_SPA_PORT ?? '8008', 10),
+  })
+  const host = server.hosts[0] ?? '127.0.0.1'
+
+  console.log(
+    `Bundled ${variant} SPA available at http://${host}:${server.port}/`,
+  )
+} else {
+  await build(options)
+  console.log(`${variant} SPA built into ${output}`)
+}
+
+/**
+ * Treats the inline behavior in every view document as a JavaScript module
+ * while keeping its template and style markup in HTML.
+ *
+ * @returns {import('esbuild').Plugin}
+ */
+function viewDocumentsPlugin() {
+  return {
+    name: 'lumi-view-documents',
+
+    setup(build) {
+      build.onResolve({filter: /^lumi-spa-entry$/}, () => ({
+        path: 'entry',
+        namespace: 'lumi-spa',
+      }))
+
+      build.onLoad(
+        {filter: /^entry$/, namespace: 'lumi-spa'},
+        () => {
+          const documentFiles = readDocumentFiles()
+          const imports = documentFiles.map((file, index) => {
+            const name = relative(source, file)
+            const specifier = JSON.stringify(`lumi-document:${name}`)
+            return `import component${index} from ${specifier}`
+          })
+
+          imports.push(
+            "import {installDefinitions} from './demo-components.js'",
+          )
+          imports.push("import './app.js'")
+
+          const declarations = documentFiles.map((file, index) => {
+            const filename = basename(file, '.html')
+            return `  [${JSON.stringify(camelCase(filename))}, component${index}],`
+          })
+          imports.push(
+            'installDefinitions([\n'
+            + `${declarations.join('\n')}\n`
+            + '])',
+          )
+
+          return {
+            contents: imports.join('\n'),
+            loader: 'js',
+            resolveDir: source,
+            watchDirs: documentDirectories,
+            watchFiles: [
+              shellFile,
+              stylesheetFile,
+              ...documentFiles,
+            ],
+          }
+        },
+      )
+
+      build.onResolve({filter: /^lumi-document:/}, args => ({
+        path: join(source, args.path.slice('lumi-document:'.length)),
+        namespace: 'lumi-document',
+      }))
+
+      build.onLoad(
+        {filter: /\.html$/, namespace: 'lumi-document'},
+        args => ({
+          contents: readDocument(args.path).module,
+          loader: 'js',
+          resolveDir: dirname(args.path),
+          watchFiles: [args.path],
+        }),
+      )
+
+      build.onEnd(result => {
+        if (result.errors.length === 0) {
+          emitHtmlAndStyles()
+        }
+      })
+    },
+  }
+}
+
+/**
+ * @returns {string[]}
+ */
+function readDocumentFiles() {
+  const files = documentDirectories.flatMap(directory => {
+    return readdirSync(directory, {withFileTypes: true})
+      .filter(entry => entry.isFile() && extname(entry.name) === '.html')
+      .map(entry => join(directory, entry.name))
+  })
+  const names = new Set()
+
+  for (const file of files) {
+    const name = basename(file, '.html')
+    if (names.has(name)) {
+      throw new Error(
+        `Duplicate component or page document name: ${name}`,
+      )
+    }
+    names.add(name)
+  }
+
+  return files
+    .sort()
+}
+
+/**
+ * The behavior module is deliberately the final top-level element. Keeping
+ * that small source contract avoids inventing component syntax or parsing and
+ * reserializing the component's native HTML.
+ *
+ * @param {string} file
+ * @returns {{markup: string, module: string}}
+ */
+function readDocument(file) {
+  const document = readFileSync(file, 'utf8')
+  const match = document.match(
+    /\n<script type="module">\n([\s\S]*?)\n<\/script>\s*$/,
+  )
+
+  if (match === null || match.index === undefined) {
+    throw new Error(
+      `${file} must end with one <script type="module"> behavior block`,
+    )
+  }
+
+  const markup = document.slice(0, match.index).trim()
+  const module = match[1]
+
+  if (module === undefined) {
+    throw new Error(`${file} has an empty component module match`)
+  }
+
+  if (!markup.startsWith('<template')) {
+    throw new Error(`${file} must start with a native <template>`)
+  }
+
+  return {
+    markup,
+    module,
+  }
+}
+
+function emitHtmlAndStyles() {
+  const shell = readFileSync(shellFile, 'utf8')
+  const closingBody = '\n  </body>'
+
+  if (!shell.includes(closingBody)) {
+    throw new Error(`${shellFile} does not contain a closing body element`)
+  }
+
+  const documentMarkup = readDocumentFiles()
+    .map(file => indent(readDocument(file).markup, 4))
+    .join('\n\n')
+  const assembled = shell.replace(
+    closingBody,
+    `\n\n${documentMarkup}${closingBody}`,
+  )
+  const productionHtml = assembled.replace(
+    'href="../spa.css"',
+    'href="./spa.css"',
+  )
+
+  if (productionHtml === assembled) {
+    throw new Error(`${shellFile} does not reference the shared stylesheet`)
+  }
+
+  writeFileSync(join(output, 'index.html'), productionHtml)
+  cpSync(stylesheetFile, join(output, 'spa.css'))
+}
+
+/**
+ * @param {string} value
+ * @param {number} spaces
+ * @returns {string}
+ */
+function indent(value, spaces) {
+  const prefix = ' '.repeat(spaces)
+  return value
+    .split('\n')
+    .map(line => `${prefix}${line}`)
+    .join('\n')
+}
+
+/**
+ * @param {string} value
+ * @returns {string}
+ */
+function camelCase(value) {
+  return value.replace(/-([a-z])/g, (_, character) => character.toUpperCase())
+}

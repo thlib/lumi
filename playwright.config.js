@@ -36,7 +36,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'node test/browser/server.js',
+    command: 'pnpm run build:spa && node test/browser/server.js',
     url: `${browserBaseUrl}/test/browser/fixture.html`,
     reuseExistingServer: !process.env.CI,
   },

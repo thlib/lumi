@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#17152d">
+    <meta name="description" content="The Luminate SPA implemented with Vue.">
+    <title>Overview · Luminate</title>
+    <script type="module">
+      if (/\/examples\/spa\/vue\/(?:index\.html)?$/.test(location.pathname)) {
+        location.replace('./dist/index.html')
+      } else {
+        import('/src/main.ts')
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+</html>

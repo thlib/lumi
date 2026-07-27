@@ -1,3 +1,4 @@
+/* Visual design shared by the Lumi, React, Vue, and Angular SPAs. */
 :root {
   color-scheme: light;
   --ink: #1b1a2d;
@@ -319,7 +320,14 @@ main {
   outline: 0;
 }
 
-main > section {
+main > :is(
+  section,
+  lu-overview,
+  lu-projects,
+  lu-records,
+  lu-activity-page,
+  lu-teams
+) {
   width: min(1180px, 100%);
   margin: 0 auto;
   animation: page-in 220ms ease-out both;
@@ -339,19 +347,40 @@ main > section {
   justify-content: space-between;
 }
 
-main > section > .heading {
+main > :is(
+  section,
+  lu-overview,
+  lu-projects,
+  lu-records,
+  lu-activity-page,
+  lu-teams
+) > .heading {
   gap: 30px;
   margin-bottom: 30px;
 }
 
-main > section > .heading h1 {
+main > :is(
+  section,
+  lu-overview,
+  lu-projects,
+  lu-records,
+  lu-activity-page,
+  lu-teams
+) > .heading h1 {
   margin: 7px 0 6px;
   font-size: clamp(27px, 3vw, 34px);
   letter-spacing: -0.035em;
   line-height: 1.1;
 }
 
-main > section > .heading p:not(.eyebrow),
+main > :is(
+  section,
+  lu-overview,
+  lu-projects,
+  lu-records,
+  lu-activity-page,
+  lu-teams
+) > .heading p:not(.eyebrow),
 .focus > .heading p,
 .panel > .heading p,
 .team-actions > .heading p {
@@ -746,7 +775,8 @@ main > section > .heading p:not(.eyebrow),
   box-shadow: 0 1px 3px rgb(30 27 50 / 10%);
 }
 
-.project-toolbar + .content {
+.project-toolbar + .content,
+.project-toolbar + .project-grid {
   margin-top: 20px;
 }
 
@@ -817,7 +847,14 @@ main > section > .heading p:not(.eyebrow),
   background: var(--soft);
 }
 
-main > section > .heading .count {
+main > :is(
+  section,
+  lu-overview,
+  lu-projects,
+  lu-records,
+  lu-activity-page,
+  lu-teams
+) > .heading .count {
   padding: 7px 11px;
   color: #5e4cc6;
   background: #efecff;
@@ -1452,11 +1489,25 @@ main > section > .heading .count {
     padding-left: 16px;
   }
 
-  main > section > .heading {
+  main > :is(
+    section,
+    lu-overview,
+    lu-projects,
+    lu-records,
+    lu-activity-page,
+    lu-teams
+  ) > .heading {
     align-items: flex-start;
   }
 
-  main > section > .heading .primary-button {
+  main > :is(
+    section,
+    lu-overview,
+    lu-projects,
+    lu-records,
+    lu-activity-page,
+    lu-teams
+  ) > .heading .primary-button {
     width: 39px;
     padding: 0;
     overflow: hidden;
@@ -1465,7 +1516,14 @@ main > section > .heading .count {
     white-space: nowrap;
   }
 
-  main > section > .heading .primary-button svg {
+  main > :is(
+    section,
+    lu-overview,
+    lu-projects,
+    lu-records,
+    lu-activity-page,
+    lu-teams
+  ) > .heading .primary-button svg {
     flex: 0 0 auto;
     color: #fff;
     stroke: #fff;

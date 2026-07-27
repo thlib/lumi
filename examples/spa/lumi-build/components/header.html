@@ -1,0 +1,66 @@
+<template id="header-view">
+  <header id="topbar">
+    <div class="start">
+      <button
+        class="icon-button"
+        id="menu"
+        type="button"
+        aria-label="Open navigation"
+        aria-controls="navigation"
+        aria-expanded="false"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 7h16M4 12h16M4 17h16"></path>
+        </svg>
+      </button>
+
+      <a class="brand" href="#/overview" aria-label="Luminate overview">
+        <svg class="mark" viewBox="0 0 36 36" aria-hidden="true">
+          <path d="M18 3l3.6 11.4L33 18l-11.4 3.6L18 33l-3.6-11.4L3 18l11.4-3.6L18 3Z"></path>
+          <circle cx="18" cy="18" r="3.8"></circle>
+        </svg>
+        <span>luminate</span>
+      </a>
+
+      <span class="divider" aria-hidden="true"></span>
+      <div class="workspace-switcher">
+        <span class="avatar">N</span>
+        <span class="name">Luminate</span>
+      </div>
+    </div>
+
+    <div class="end">
+      <a class="user-menu" href="#/teams/freddy-fraggin">
+        <span class="avatar">FF</span>
+        <span class="name">Freddy Fraggin</span>
+      </a>
+    </div>
+  </header>
+</template>
+
+<script type="module">
+  import {attr, on, text, update} from '../app.js'
+
+  export default {
+    present: data => ({
+      workspace: 'Luminate',
+      userName: 'Freddy Fraggin',
+      userInitials: 'FF',
+      navOpen: data.navOpen,
+    }),
+    template: document.querySelector('#header-view'),
+    bindings: [
+      text('.workspace-switcher .name', ({data}) => data.workspace),
+      text('.user-menu .name', ({data}) => data.userName),
+      text('.user-menu .avatar', ({data}) => data.userInitials),
+      attr(
+        '[aria-controls="navigation"]',
+        'aria-expanded',
+        ({data}) => String(data.navOpen),
+      ),
+      on('[aria-controls="navigation"]', 'click', () => {
+        update(data => ({...data, navOpen: !data.navOpen}))
+      }),
+    ],
+  }
+</script>

@@ -1661,12 +1661,11 @@ test('allows application code to inject standard JSONPath nodelists', () => {
       text(
         '[data-text]',
         ({item}, el) => {
-          const values = jsonPath(
-            item,
-            el.getAttribute('data-text') ?? undefined,
-          )
           return /** @type {any} */ (
-            values.length === 1 ? values[0] : undefined
+            jsonPath(
+              item,
+              el.getAttribute('data-text') ?? undefined,
+            )[0]
           )
         },
       ),

@@ -1,0 +1,23 @@
+{
+  "recordFilters": [
+    "all",
+    "alpha",
+    "beta",
+    "gamma",
+    "delta"
+  ],
+  "groups": [
+    "alpha",
+    "beta",
+    "gamma",
+    "delta"
+  ],
+  "owners": [
+    "Aida Loveleys",
+    "Norm Barlug",
+    "Freddy Fraggin",
+    "Emmy Nother",
+    "Fazlo Kan"
+  ],
+  "recordCount": 20000
+}

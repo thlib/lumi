@@ -2,6 +2,48 @@
 
 import { expect, test } from '@playwright/test'
 
+for (const framework of ['vue', 'react', 'angular']) {
+  test(`the ${framework} SPA opens from its shared examples path`, async ({
+    page,
+  }) => {
+    /** @type {string[]} */
+    const problems = []
+    page.on('pageerror', error => problems.push(String(error)))
+    page.on('console', message => {
+      if (message.type() === 'error') {
+        problems.push(message.text())
+      }
+    })
+
+    await page.goto(`/examples/spa/${framework}/index.html`)
+
+    await expect(page.locator('main h1')).toBeVisible()
+    expect(problems).toEqual([])
+  })
+}
+
+for (const variant of ['lumi-native', 'lumi-build', 'lumi-elements']) {
+  test(`the ${variant} SPA starts from its intended output`, async ({page}) => {
+    /** @type {string[]} */
+    const problems = []
+    page.on('pageerror', error => problems.push(String(error)))
+    page.on('console', message => {
+      if (message.type() === 'error') {
+        problems.push(message.text())
+      }
+    })
+
+    const output = variant === 'lumi-build' ? '/dist' : ''
+    await page.goto(`/examples/spa/${variant}${output}/index.html#/overview`)
+
+    await expect(page.locator('#overview-title')).toBeVisible()
+    if (variant === 'lumi-elements') {
+      await expect(page.locator('lu-header')).toHaveCount(1)
+    }
+    expect(problems).toEqual([])
+  })
+}
+
 test('the SPA example drives its behavior through Lumi event bindings', async ({
   page,
 }) => {
@@ -15,7 +57,10 @@ test('the SPA example drives its behavior through Lumi event bindings', async ({
   })
 
   await page.setViewportSize({width: 800, height: 900})
-  await page.goto('/examples/spa/index.html#/overview')
+  await page.goto('/examples/spa/lumi-build/index.html#/overview')
+  await expect(page).toHaveURL(
+    /\/examples\/spa\/lumi-build\/dist\/index\.html#\/overview$/,
+  )
 
   const shell = page.locator('#shell')
   await expect(shell).toBeVisible()

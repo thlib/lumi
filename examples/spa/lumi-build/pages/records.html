@@ -1,0 +1,93 @@
+<template id="records-view">
+  <section id="records" aria-labelledby="records-title">
+    <div class="heading">
+      <div>
+        <p class="eyebrow">Performance dataset</p>
+        <h1 id="records-title">Records</h1>
+        <p>Filter and sort a deterministic 20,000-row dataset without virtualization.</p>
+      </div>
+    </div>
+    <div class="record-toolbar">
+      <div class="filters" aria-label="Filter records">
+        <button type="button" data-record-filter="all" aria-pressed="true">All</button>
+        <button type="button" data-record-filter="alpha" aria-pressed="false">Alpha</button>
+        <button type="button" data-record-filter="beta" aria-pressed="false">Beta</button>
+        <button type="button" data-record-filter="gamma" aria-pressed="false">Gamma</button>
+        <button type="button" data-record-filter="delta" aria-pressed="false">Delta</button>
+      </div>
+      <p class="record-summary">20,000 records shown</p>
+    </div>
+    <div class="record-list-wrap panel">
+      <div class="record-list-header" data-record-header aria-sort="ascending">
+        <button type="button" data-record-sort>
+          Record <span class="record-sort-indicator" aria-hidden="true">↑</span>
+        </button>
+      </div>
+      <ol class="record-list">
+        <li class="record-row">record-00001 · alpha · Aida Loveleys · 97</li>
+      </ol>
+    </div>
+  </section>
+</template>
+
+<script type="module">
+  import {
+    attr,
+    filterLargeRecords,
+    on,
+    orderLargeRecords,
+    repeat,
+    text,
+    update,
+  } from '../app.js'
+
+  export default {
+    present: data => {
+      const records = orderLargeRecords(
+        filterLargeRecords(data.recordFilter),
+        data.recordSort,
+      )
+      return {
+        filter: data.recordFilter,
+        sort: data.recordSort,
+        sortIndicator: data.recordSort === 'ascending' ? '↑' : '↓',
+        rows: records.map(record => record.label),
+        summary: `${records.length.toLocaleString('en-US')} records shown`,
+      }
+    },
+    template: document.querySelector('#records-view'),
+    bindings: [
+      repeat('.record-row', ({data}) => data.rows, [
+        text(':scope', ({item}) => item),
+      ]),
+      text('.record-summary', ({data}) => data.summary),
+      text('.record-sort-indicator', ({data}) => data.sortIndicator),
+      on('[data-record-sort]', 'click', () => {
+        update(data => ({
+          ...data,
+          recordSort: data.recordSort === 'ascending'
+            ? 'descending'
+            : 'ascending',
+        }))
+      }),
+      on('[data-record-filter]', 'click', (e, el) => {
+        const recordFilter = el.dataset.recordFilter
+        if (
+          recordFilter === 'all'
+          || recordFilter === 'alpha'
+          || recordFilter === 'beta'
+          || recordFilter === 'gamma'
+          || recordFilter === 'delta'
+        ) {
+          update(data => ({...data, recordFilter}))
+        }
+      }),
+      attr(
+        '[data-record-filter]',
+        'aria-pressed',
+        ({data}, el) => String(el.dataset.recordFilter === data.filter),
+      ),
+      attr('[data-record-header]', 'aria-sort', ({data}) => data.sort),
+    ],
+  }
+</script>

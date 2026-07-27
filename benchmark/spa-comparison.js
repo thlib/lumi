@@ -24,6 +24,7 @@ const root = resolve(import.meta.dirname, '..')
  *   buildDirectory: string | null,
  *   buildScript?: string,
  *   publicRoot: string,
+ *   urlPath: string,
  * }} Framework
  *
  * @typedef {{
@@ -106,39 +107,60 @@ const root = resolve(import.meta.dirname, '..')
 /** @type {readonly Framework[]} */
 const frameworks = Object.freeze([
   {
-    id: 'lumi',
-    label: 'Lumi',
+    id: 'lumi-native',
+    label: 'Lumi native',
+    packageFile: resolve(root, 'package.json'),
+    buildDirectory: null,
+    publicRoot: resolve(root, 'examples/spa/lumi-native'),
+    urlPath: 'examples/spa/lumi-native',
+  },
+  {
+    id: 'lumi-build',
+    label: 'Lumi build',
     packageFile: resolve(root, 'package.json'),
     buildDirectory: root,
     buildScript: 'build:spa',
-    publicRoot: resolve(root, 'examples/spa/dist'),
+    publicRoot: resolve(root, 'examples/spa/lumi-build/dist'),
+    urlPath: 'lumi-build',
   },
   {
-    id: 'react',
-    label: 'React',
-    packageFile: resolve(root, 'examples/framework-spa/react/package.json'),
-    buildDirectory: resolve(root, 'examples/framework-spa/react'),
-    publicRoot: resolve(root, 'examples/framework-spa/react/dist'),
+    id: 'lumi-elements',
+    label: 'Lumi elements',
+    packageFile: resolve(root, 'package.json'),
+    buildDirectory: null,
+    publicRoot: resolve(root, 'examples/spa/lumi-elements'),
+    urlPath: 'examples/spa/lumi-elements',
   },
   {
     id: 'vue',
     label: 'Vue',
-    packageFile: resolve(root, 'examples/framework-spa/vue/package.json'),
-    buildDirectory: resolve(root, 'examples/framework-spa/vue'),
-    publicRoot: resolve(root, 'examples/framework-spa/vue/dist'),
+    packageFile: resolve(root, 'examples/spa/vue/package.json'),
+    buildDirectory: resolve(root, 'examples/spa/vue'),
+    publicRoot: resolve(root, 'examples/spa/vue/dist'),
+    urlPath: 'vue',
+  },
+  {
+    id: 'react',
+    label: 'React',
+    packageFile: resolve(root, 'examples/spa/react/package.json'),
+    buildDirectory: resolve(root, 'examples/spa/react'),
+    publicRoot: resolve(root, 'examples/spa/react/dist'),
+    urlPath: 'react',
   },
   {
     id: 'angular',
     label: 'Angular',
-    packageFile: resolve(root, 'examples/framework-spa/angular/package.json'),
-    buildDirectory: resolve(root, 'examples/framework-spa/angular'),
+    packageFile: resolve(root, 'examples/spa/angular/package.json'),
+    buildDirectory: resolve(root, 'examples/spa/angular'),
     publicRoot: resolve(
       root,
-      'examples/framework-spa/angular/dist/luminate-spa-angular/browser',
+      'examples/spa/angular/dist/luminate-spa-angular/browser',
     ),
+    urlPath: 'angular',
   },
 ])
 
+const LUMI_BASELINE = 'lumi-build'
 const TASK_THRESHOLD_MS = 10
 
 const contentTypes = new Map([
@@ -240,7 +262,7 @@ async function runBenchmarks(origin, options) {
     for (const framework of ordered) {
       process.stdout.write(
         `  sample ${sampleIndex + 1}/${options.samples}: `
-        + `${framework.label.padEnd(7)} ... `,
+        + `${framework.label.padEnd(13)} ... `,
       )
       const browser = await launchBenchmarkBrowser()
       let result
@@ -249,7 +271,7 @@ async function runBenchmarks(origin, options) {
         browserVersion ||= await browser.version()
         result = await runSample(
           browser,
-          `${origin}/${framework.id}/?sample=${sampleIndex + 1}`,
+          `${origin}/${framework.urlPath}/?sample=${sampleIndex + 1}`,
           options,
           sampleIndex >= Math.max(0, options.samples - options.recordSamples),
         )
@@ -641,7 +663,7 @@ async function runSample(browser, url, options, measureRecordFilter) {
 async function createReport(result, options, browserVersion) {
   const packageDetails = await Promise.all(frameworks.map(async framework => {
     const packageJson = JSON.parse(await readFile(framework.packageFile, 'utf8'))
-    const dependencyName = framework.id === 'lumi'
+    const dependencyName = framework.id.startsWith('lumi-')
       ? null
       : framework.id === 'angular'
         ? '@angular/core'
@@ -781,7 +803,7 @@ async function createReport(result, options, browserVersion) {
   }).join('\n')
   const recordFilterRows = frameworks.map(framework => {
     const values = recordValue(summary, framework.id)
-    const lumi = recordValue(summary, 'lumi')
+    const lumi = recordValue(summary, LUMI_BASELINE)
     return `| ${framework.label} ${recordValue(versions, framework.id)} `
       + `| ${formatTiming(values.recordFilterMsPerUpdate)} `
       + `| ${formatRatio(
@@ -789,11 +811,15 @@ async function createReport(result, options, browserVersion) {
         lumi.recordFilterMsPerUpdate.median,
       )} |`
   }).join('\n')
+  const recordSampleCount = recordValue(
+    summary,
+    LUMI_BASELINE,
+  ).recordFilterMsPerUpdate.count
   const relativeRows = frameworks.map(framework => {
     const values = recordValue(summary, framework.id)
-    const lumi = recordValue(summary, 'lumi')
+    const lumi = recordValue(summary, LUMI_BASELINE)
     const frameworkAssets = recordValue(assets, framework.id)
-    const lumiAssets = recordValue(assets, 'lumi')
+    const lumiAssets = recordValue(assets, LUMI_BASELINE)
     return `| ${framework.label} `
       + `| ${formatRatio(values.loadMs.median, lumi.loadMs.median)} `
       + `| ${formatRatio(
@@ -838,10 +864,10 @@ ${resultRows}
 
 This separate workload renders all 20,000 deterministic records without
 virtualization, then filters between two 5,000-row groups and the complete
-dataset. It uses ${recordValue(summary, 'lumi').recordFilterMsPerUpdate.count}
-fresh-browser samples per framework to bound the workload's memory use.
+dataset. It uses ${recordSampleCount} fresh-browser samples per framework to
+bound the workload's memory use.
 
-| Framework | Record filter ms/update | Relative to Lumi |
+| Framework | Record filter ms/update | Relative to Lumi build |
 | --- | ---: | ---: |
 ${recordFilterRows}
 
@@ -855,9 +881,9 @@ compressed transfer, not the benchmark server's uncompressed transfer.
 | --- | ---: | ---: | ---: |
 ${assetRows}
 
-## Relative to Lumi
+## Relative to Lumi build
 
-Values below 1.00× are lower than Lumi; values above 1.00× are higher.
+Values below 1.00× are lower than Lumi build; values above 1.00× are higher.
 
 | Framework | Cold load | Route update | Filter update | Gzip assets |
 | --- | ---: | ---: | ---: | ---: |
@@ -905,9 +931,9 @@ application code splitting.
 
 ## Methodology
 
-- Every application is served from a production build, rebuilt unless
-  \`--skip-build\` is passed. Lumi's example is bundled and minified with
-  esbuild from the same unbundled source the repository serves directly.
+- Built applications are rebuilt unless \`--skip-build\` is passed. Lumi native
+  is served as its browser-loaded module graph; Lumi build and Lumi elements
+  are assembled and minified with esbuild.
 - Framework order rotates between samples. Browser HTTP cache is disabled.
 - Each framework sample uses a fresh browser process, bounding retained state
   from the intentionally large Records workload.
@@ -963,7 +989,7 @@ application code splitting.
     ...frameworks.map(framework => {
       const value = recordValue(summary, framework.id)
       const frameworkAssets = recordValue(assets, framework.id)
-      return `  ${framework.label.padEnd(7)} `
+      return `  ${framework.label.padEnd(13)} `
         + `load ${formatNumber(value.loadMs.median).padStart(7)} ms | `
         + `route ${formatNumber(
           value.routeMsPerUpdate.median,
@@ -1203,16 +1229,25 @@ function mapUrlToFile(pathname) {
     return null
   }
 
-  const match = /^\/(lumi|react|vue|angular)(?:\/(.*))?$/.exec(decoded)
-  if (match !== null) {
-    const framework = frameworks.find(candidate => candidate.id === match[1])
-    if (framework === undefined) {
-      return null
+  for (const framework of frameworks) {
+    const prefix = `/${framework.urlPath}`
+    if (decoded !== prefix && !decoded.startsWith(`${prefix}/`)) {
+      continue
     }
-    const relative = match[2] === undefined || match[2] === ''
+    const remainder = decoded.slice(prefix.length).replace(/^\//, '')
+    const relative = remainder === ''
       ? 'index.html'
-      : match[2]
+      : remainder
     return resolveInside(framework.publicRoot, relative)
+  }
+
+  if (
+    decoded.startsWith('/dist/')
+    || decoded === '/examples/spa/spa.css'
+    || decoded === '/examples/spa/data-content.json'
+    || decoded === '/examples/spa/data-records.json'
+  ) {
+    return resolveInside(root, decoded.slice(1))
   }
 
   return null

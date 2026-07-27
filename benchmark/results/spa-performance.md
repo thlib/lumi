@@ -1,6 +1,6 @@
 # SPA performance comparison
 
-Generated 2026-07-27T11:23:24.968Z on linux 6.6.87.2-microsoft-standard-WSL2, Node v24.14.1,
+Generated 2026-07-27T17:43:45.667Z on linux 6.17.0-1030-oem, Node v24.14.1,
 Chromium 149.0.7827.55. Lower timing and size values are better.
 
 ## Results
@@ -10,24 +10,28 @@ across 5 cache-disabled samples.
 
 | Framework | Cold load ms | FCP ms | Route ms/update | Filter ms/update | Tasks >10 ms count / total ms | Initial DOM nodes | DOM node delta |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Lumi 0.1.0 | 23.4 (50.9) | 72.0 (80.0) | 0.495 (0.547) | 0.097 (0.117) | 1 / 29.2 | 218 | 0 |
-| React 19.2.8 | 10.5 (12.0) | 88.0 (88.0) | 0.709 (0.735) | 0.129 (0.167) | 1 / 38.9 | 197 | 0 |
-| Vue 3.5.40 | 10.0 (11.9) | 76.0 (92.0) | 0.622 (0.745) | 0.077 (0.118) | 1 / 23.5 | 197 | 0 |
-| Angular 21.2.18 | 30.4 (31.2) | 76.0 (80.0) | 0.747 (0.761) | 1.643 (1.660) | 0 / 0.0 | 199 | 0 |
+| Lumi native 0.1.0 | 31.1 (33.1) | 76.0 (80.0) | 0.327 (0.334) | 0.076 (0.079) | 1 / 23.0 | 218 | 0 |
+| Lumi build 0.1.0 | 28.1 (28.3) | 76.0 (88.0) | 0.338 (0.508) | 0.074 (0.089) | 1 / 22.5 | 208 | 0 |
+| Lumi elements 0.1.0 | 60.9 (62.1) | 72.0 (76.0) | 0.346 (0.396) | 0.078 (0.088) | 1 / 23.6 | 219 | 0 |
+| Vue 3.5.40 | 10.1 (10.6) | 84.0 (96.0) | 0.522 (0.585) | 0.058 (0.080) | 1 / 17.5 | 197 | 0 |
+| React 19.2.8 | 9.5 (10.4) | 92.0 (104.0) | 0.721 (0.738) | 0.127 (0.136) | 1 / 38.4 | 197 | 0 |
+| Angular 21.2.18 | 35.8 (36.4) | 88.0 (100.0) | 0.637 (0.748) | 1.655 (1.702) | 0 / 0.0 | 199 | 0 |
 
 ## 20k-row filter
 
 This separate workload renders all 20,000 deterministic records without
 virtualization, then filters between two 5,000-row groups and the complete
-dataset. It uses 2
-fresh-browser samples per framework to bound the workload's memory use.
+dataset. It uses 2 fresh-browser samples per framework to
+bound the workload's memory use.
 
-| Framework | Record filter ms/update | Relative to Lumi |
+| Framework | Record filter ms/update | Relative to Lumi build |
 | --- | ---: | ---: |
-| Lumi 0.1.0 | 12.0 (13.4) | 1.00× |
-| React 19.2.8 | 21.4 (23.7) | 1.78× |
-| Vue 3.5.40 | 16.1 (18.7) | 1.34× |
-| Angular 21.2.18 | 164.6 (167.4) | 13.67× |
+| Lumi native 0.1.0 | 14.5 (14.7) | 1.02× |
+| Lumi build 0.1.0 | 14.1 (14.4) | 1.00× |
+| Lumi elements 0.1.0 | 13.9 (14.0) | 0.98× |
+| Vue 3.5.40 | 15.9 (16.0) | 1.12× |
+| React 19.2.8 | 22.4 (23.3) | 1.59× |
+| Angular 21.2.18 | 165.7 (166.8) | 11.72× |
 
 ## Initial asset footprint
 
@@ -37,21 +41,25 @@ compressed transfer, not the benchmark server's uncompressed transfer.
 
 | Framework | Files | Raw | Gzip |
 | --- | ---: | ---: | ---: |
-| Lumi | 3 | 102.3 KiB | 27.0 KiB |
-| React | 4 | 235.3 KiB | 73.0 KiB |
-| Vue | 4 | 106.4 KiB | 38.9 KiB |
-| Angular | 3 | 167.2 KiB | 54.9 KiB |
+| Lumi native | 4 | 105.0 KiB | 27.0 KiB |
+| Lumi build | 3 | 94.1 KiB | 26.3 KiB |
+| Lumi elements | 4 | 105.9 KiB | 27.2 KiB |
+| Vue | 4 | 108.2 KiB | 39.3 KiB |
+| React | 4 | 236.6 KiB | 73.3 KiB |
+| Angular | 3 | 168.4 KiB | 55.2 KiB |
 
-## Relative to Lumi
+## Relative to Lumi build
 
-Values below 1.00× are lower than Lumi; values above 1.00× are higher.
+Values below 1.00× are lower than Lumi build; values above 1.00× are higher.
 
 | Framework | Cold load | Route update | Filter update | Gzip assets |
 | --- | ---: | ---: | ---: | ---: |
-| Lumi | 1.00× | 1.00× | 1.00× | 1.00× |
-| React | 0.45× | 1.43× | 1.33× | 2.70× |
-| Vue | 0.43× | 1.25× | 0.80× | 1.44× |
-| Angular | 1.30× | 1.51× | 17.00× | 2.04× |
+| Lumi native | 1.11× | 0.97× | 1.02× | 1.02× |
+| Lumi build | 1.00× | 1.00× | 1.00× | 1.00× |
+| Lumi elements | 2.17× | 1.03× | 1.05× | 1.03× |
+| Vue | 0.36× | 1.55× | 0.78× | 1.50× |
+| React | 0.34× | 2.13× | 1.70× | 2.79× |
+| Angular | 1.27× | 1.89× | 22.27× | 2.10× |
 
 ## Stress validation
 
@@ -61,23 +69,25 @@ same overview state after warmup and after the complete stress run.
 
 | Framework | Route updates | Filter updates | DOM delta range | Median heap delta |
 | --- | ---: | ---: | ---: | ---: |
-| Lumi | 1000 | 1500 | 0 to 0 | +276.0 KiB |
-| React | 1000 | 1500 | 0 to 0 | +440.2 KiB |
-| Vue | 1000 | 1500 | 0 to 0 | +359.0 KiB |
-| Angular | 1000 | 1500 | 0 to 0 | +606.4 KiB |
+| Lumi native | 1000 | 1500 | 0 to 0 | +276.9 KiB |
+| Lumi build | 1000 | 1500 | 0 to 0 | +276.0 KiB |
+| Lumi elements | 1000 | 1500 | 0 to 0 | +281.6 KiB |
+| Vue | 1000 | 1500 | 0 to 0 | +374.3 KiB |
+| React | 1000 | 1500 | 0 to 0 | +460.1 KiB |
+| Angular | 1000 | 1500 | 0 to 0 | +623.1 KiB |
 
 ## Reading the result
 
-- Vue recorded the lowest median cold-load time
-  (10.0 ms).
-- Lumi recorded the lowest median route-update time
-  (0.495 ms/update).
+- React recorded the lowest median cold-load time
+  (9.5 ms).
+- Lumi native recorded the lowest median route-update time
+  (0.327 ms/update).
 - Vue recorded the lowest median project-filter time
-  (0.077 ms/update).
-- Lumi recorded the lowest median 20k-row filter time
-  (12.0 ms/update).
-- Lumi requested the smallest initial compressed asset set
-  (27.0 KiB).
+  (0.058 ms/update).
+- Lumi elements recorded the lowest median 20k-row filter time
+  (13.9 ms/update).
+- Lumi build requested the smallest initial compressed asset set
+  (26.3 KiB).
 
 Do not treat small differences as universal framework rankings. This suite
 compares the repository's equivalent Luminate implementations, on one machine,
@@ -87,9 +97,9 @@ application code splitting.
 
 ## Methodology
 
-- Every application is served from a production build, rebuilt unless
-  `--skip-build` is passed. Lumi's example is bundled and minified with
-  esbuild from the same unbundled source the repository serves directly.
+- Built applications are rebuilt unless `--skip-build` is passed. Lumi native
+  is served as its browser-loaded module graph; Lumi build and Lumi elements
+  are assembled and minified with esbuild.
 - Framework order rotates between samples. Browser HTTP cache is disabled.
 - Each framework sample uses a fresh browser process, bounding retained state
   from the intentionally large Records workload.

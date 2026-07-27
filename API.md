@@ -571,17 +571,13 @@ the matched element and injects the application's path behavior:
 import {repeat, text} from '@thlib/lumi'
 import {jsonPath} from './examples/data-path.js'
 
-function exactlyOne(values) {
-  return values.length === 1 ? values[0] : undefined
-}
-
 function bindDataPaths() {
   return [
     repeat('[data-repeat]', ({item}, el) => {
       return jsonPath(item, el.dataset.repeat)
     }),
     text('[data-text]', ({item}, el) => {
-      return exactlyOne(jsonPath(item, el.dataset.text))
+      return jsonPath(item, el.dataset.text)[0]
     }),
   ]
 }
@@ -596,7 +592,7 @@ const definition = component({
 
 The path behavior belongs to JSONPath, not Lumi. The adapter caches parsed
 queries and preserves JSONPath's nodelist cardinality. `repeat` consumes the
-whole nodelist while `text` selects exactly one result. Paths are evaluated
+whole nodelist while `text` takes the first result. Paths are evaluated
 against the current item, which is the component data outside a repeated
 region. Another application may use direct projections, external binding
 maps, another metadata convention, or no helper at all.

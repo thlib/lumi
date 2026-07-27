@@ -1,0 +1,74 @@
+<template id="navigation-view">
+  <nav id="navigation" aria-label="Primary navigation">
+    <div class="body">
+      <p class="eyebrow">Workspace</p>
+      <a class="link" href="#/overview">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="4" width="6" height="6" rx="1"></rect>
+          <rect x="14" y="4" width="6" height="6" rx="1"></rect>
+          <rect x="4" y="14" width="6" height="6" rx="1"></rect>
+          <rect x="14" y="14" width="6" height="6" rx="1"></rect>
+        </svg>
+        <span>Overview</span>
+      </a>
+      <a class="link" href="#/projects">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 7.5h6l2-2h8v14H4v-12Z"></path>
+        </svg>
+        <span>Projects</span>
+        <span class="count">4</span>
+      </a>
+      <a class="link" href="#/records">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 5h14M5 12h14M5 19h14"></path>
+        </svg>
+        <span>Records</span>
+      </a>
+      <a class="link" href="#/activity">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 12h3l2-6 4 12 2-6h5"></path>
+        </svg>
+        <span>Activity</span>
+      </a>
+
+      <p class="eyebrow manage">Manage</p>
+      <a class="link" href="#/teams">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="9" cy="8" r="3"></circle>
+          <path d="M3.5 19c.5-4 2.3-6 5.5-6s5 2 5.5 6M16 8h5M18.5 5.5v5"></path>
+        </svg>
+        <span>Teams</span>
+      </a>
+    </div>
+
+  </nav>
+</template>
+
+<script type="module">
+  import {attr, on, text, update} from '../app.js'
+
+  // Each link already carries its route in href, so the bindings read the
+  // document rather than a parallel attribute.
+  export default {
+    present: data => ({
+      route: data.route,
+      projectCount: data.projects.length,
+    }),
+    template: document.querySelector('#navigation-view'),
+    bindings: [
+      text('.link .count', ({data}) => data.projectCount),
+      on('.link', 'click', (e, el) => {
+        if (el.getAttribute('href') === window.location.hash) {
+          update(data => ({...data, navOpen: false}))
+        }
+      }),
+      attr(
+        '.link',
+        'aria-current',
+        ({data}, el) => (
+          el.getAttribute('href') === `#/${data.route}` ? 'page' : false
+        ),
+      ),
+    ],
+  }
+</script>

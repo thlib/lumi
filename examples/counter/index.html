@@ -15,10 +15,6 @@
       }
       const slot = document.querySelector('#counter-slot')
 
-      function exactlyOne(values) {
-        return values.length === 1 ? values[0] : undefined
-      }
-
       const counter = component({
         template: document.querySelector('#counter'),
         bindings: [
@@ -28,9 +24,7 @@
           ),
           text(
             '[data-text]',
-            ({item}, el) => {
-              return exactlyOne(jsonPath(item, el.dataset.text))
-            },
+            ({item}, el) => jsonPath(item, el.dataset.text)[0],
           ),
           prop(
             '[data-increment]',

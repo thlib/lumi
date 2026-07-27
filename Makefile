@@ -8,7 +8,7 @@ PNPM ?= pnpm
 BROWSERS ?= chromium firefox
 PORT ?= 8008
 
-.PHONY: help install build types bundle spa size lint test test-browser \
+.PHONY: help install build types bundle spa spa-dev size lint test test-browser \
 	test-package browsers check bench spa-bench serve clean
 
 help: ## List the available targets
@@ -28,8 +28,11 @@ types: ## Emit only the TypeScript declarations
 bundle: ## Emit only the minified browser bundle
 	$(PNPM) run build:bundle
 
-spa: ## Build the SPA example into examples/spa/dist
+spa: ## Build the bundled Lumi SPA variants
 	$(PNPM) run build:spa
+
+spa-dev: ## Rebuild and serve the bundled Lumi SPA during development
+	$(PNPM) run dev:spa
 
 size: bundle ## Report the browser bundle size, raw and gzipped
 	@printf 'dist/lumi.js  %s bytes raw  %s bytes gzipped\n' \
@@ -60,6 +63,9 @@ spa-bench: ## Run the SPA comparison benchmark
 
 serve: ## Serve the repository on port 8008 to browse examples/
 	@echo "Examples: http://localhost:$(PORT)/examples/counter/"
+	@echo "Lumi native: http://localhost:$(PORT)/examples/spa/lumi-native/"
+	@echo "Lumi build: http://localhost:$(PORT)/examples/spa/lumi-build/dist/"
+	@echo "Lumi elements: http://localhost:$(PORT)/examples/spa/lumi-elements/dist/"
 	python -m http.server $(PORT)
 
 clean: ## Remove build output

@@ -4,9 +4,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { JSDOM } from 'jsdom'
 import {text} from '../src/index.js'
-import {mountApplication} from '../examples/spa/application.js'
-import {define} from '../examples/spa/demo-components.js'
-import { emailValidationMessage } from '../examples/spa/validation.js'
+import {
+  define,
+  emailValidationMessage,
+  mountApplication,
+} from '../examples/spa/lumi-native/demo-app.js'
 
 test('describes the invite email validity state', () => {
   const { document } = new JSDOM().window
@@ -44,7 +46,9 @@ test('disconnects SPA routing before unmount and permits reconnection', async ()
   })
 
   try {
-    const {connectPage} = await import('../examples/spa/page.js')
+    const {connectPage} = await import(
+      '../examples/spa/lumi-native/demo-app.js'
+    )
     let firstUpdateCount = 0
     let secondUpdateCount = 0
     /** @type {string | undefined} */
@@ -164,7 +168,7 @@ test('keeps only the active SPA page connected to the document', () => {
 
   /**
    * @param {string} name
-   * @returns {import('../examples/spa/demo-components.js').DefinitionOptions}
+   * @returns {import('../examples/spa/lumi-native/demo-app.js').DefinitionOptions}
    */
   function definition(name) {
     const slots = name === 'overview'
@@ -245,7 +249,7 @@ function createTemplate(document, markup) {
 /**
  * @param {Document} document
  * @param {string} markup
- * @returns {import('../examples/spa/demo-components.js').DefinitionOptions}
+ * @returns {import('../examples/spa/lumi-native/demo-app.js').DefinitionOptions}
  */
 function emptyDefinition(document, markup) {
   return {

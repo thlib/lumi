@@ -15,6 +15,7 @@ import {
   members,
   metrics,
   normalizeHash,
+  overviewDetails,
   projects,
   routeFromHash,
   type ProjectFilter,
@@ -62,6 +63,8 @@ export class AppComponent {
   readonly recordSort = signal<RecordSortDirection>('ascending')
   readonly toasts = signal<Toast[]>([])
   readonly emailError = signal('')
+  readonly now = signal(new Date())
+  readonly overview = computed(() => overviewDetails(this.now()))
 
   readonly selectedMember = computed(() => {
     return this.members.find(member => member.id === this.memberId())
@@ -95,8 +98,10 @@ export class AppComponent {
     }
 
     addEventListener('hashchange', handleHashChange)
+    const clock = window.setInterval(() => this.now.set(new Date()), 60_000)
     this.destroyRef.onDestroy(() => {
       removeEventListener('hashchange', handleHashChange)
+      window.clearInterval(clock)
       this.toastTimers.forEach(timer => clearTimeout(timer))
     })
 

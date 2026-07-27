@@ -164,7 +164,7 @@ reactivity, scheduling, and ecosystem is outside the intended use case.
 The template is ordinary HTML:
 
 ```html
-<template id="counter-template">
+<template id="counter">
   <section class="counter">
     <output>count is <span data-path="$.count">0</span></output>
     <button
@@ -229,7 +229,7 @@ adapter:
 const slot = document.querySelector('#counter-slot')
 
 const counter = component({
-  template: document.querySelector('#counter-template'),
+  template: document.querySelector('#counter'),
   bindings: [
     text(
       '[data-path]',

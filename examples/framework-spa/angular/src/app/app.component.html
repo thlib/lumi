@@ -48,7 +48,7 @@
     @if (route() === 'overview') {
       <section id="overview" aria-labelledby="overview-title">
         <div class="heading">
-          <div><p class="eyebrow">Friday, July 24</p><h1 id="overview-title">Good morning, Freddy</h1><p>Here's what's happening across your workspace today.</p></div>
+          <div><p class="eyebrow">{{ overview().date }}</p><h1 id="overview-title">{{ overview().title }}</h1><p>Here's what's happening across your workspace today.</p></div>
           <a class="primary-button" href="#/projects"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h6l2-2h8v14H4v-12Z"></path></svg>View projects</a>
         </div>
         <div class="metric-grid">
@@ -79,7 +79,7 @@
             <div class="top"><p class="eyebrow">This week</p><h2 id="week-title">Strong momentum</h2><p>Your team completed 28% more work than last week.</p></div>
             <div class="week-chart" aria-label="Weekly activity chart">
               @for (bar of weeklyBars; track bar.day) {
-                <span [class.today]="bar.day === 'Fri'" [style.height.%]="bar.height"><i>{{ bar.day }}</i></span>
+                <span [class.today]="bar.day === overview().today" [style.height.%]="bar.height"><i>{{ bar.day }}</i></span>
               }
             </div>
           </aside>

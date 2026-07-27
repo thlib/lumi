@@ -15,7 +15,7 @@
       const slot = document.querySelector('#counter-slot')
 
       const counter = component({
-        template: document.querySelector('#counter-template'),
+        template: document.querySelector('#counter'),
         bindings: [
           text('output span', ({data}) => data.count),
           repeat('ul > li', ({data}) => data.items, [
@@ -53,7 +53,7 @@
       <div id="counter-slot"></div>
     </main>
 
-    <template id="counter-template">
+    <template id="counter">
       <section class="counter">
         <output>count is <span>0</span></output>
         <button class="increment" type="button">Increment</button>

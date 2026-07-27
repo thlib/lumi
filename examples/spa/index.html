@@ -15,7 +15,7 @@
   <body>
     <div id="app"></div>
 
-    <template id="app-shell-template">
+    <template id="app-shell">
       <div id="shell">
         <div id="header"></div>
 
@@ -39,7 +39,7 @@
         present: data => ({
           navOpen: data.navOpen,
         }),
-        template: document.querySelector('#app-shell-template'),
+        template: document.querySelector('#app-shell'),
         bindings: [
           classToggle('#shell', 'nav-open', ({data}) => data.navOpen),
           on('#backdrop', 'click', () => {
@@ -49,7 +49,7 @@
       })
     </script>
 
-    <template id="header-template">
+    <template id="header-view">
       <header id="topbar">
         <div class="start">
           <button
@@ -99,7 +99,7 @@
           userInitials: 'FF',
           navOpen: data.navOpen,
         }),
-        template: document.querySelector('#header-template'),
+        template: document.querySelector('#header-view'),
         bindings: [
           text('.workspace-switcher .name', ({data}) => data.workspace),
           text('.user-menu .name', ({data}) => data.userName),
@@ -116,7 +116,7 @@
       })
     </script>
 
-    <template id="navigation-template">
+    <template id="navigation-view">
       <nav id="navigation" aria-label="Primary navigation">
         <div class="body">
           <p class="eyebrow">Workspace</p>
@@ -172,7 +172,7 @@
           route: data.route,
           projectCount: data.projects.length,
         }),
-        template: document.querySelector('#navigation-template'),
+        template: document.querySelector('#navigation-view'),
         bindings: [
           text('.link .count', ({data}) => data.projectCount),
           on('.link', 'click', (e, el) => {
@@ -191,7 +191,7 @@
       })
     </script>
 
-    <template id="teams-template">
+    <template id="teams-view">
       <section id="teams">
         <div id="directory">
           <div class="heading">
@@ -398,7 +398,7 @@
               selectedMember: selectedMember ?? data.members[0],
             }
           },
-          template: document.querySelector('#teams-template'),
+          template: document.querySelector('#teams-view'),
           bindings: [
               text('#directory > .heading .count', ({data}) => data.memberCount),
               repeat('.member-row', ({data}) => data.members, [
@@ -532,7 +532,7 @@
       })
     </script>
 
-    <template id="project-list-template">
+    <template id="project-list">
       <div class="project-grid">
         <article class="project-card">
           <div class="top">
@@ -561,7 +561,7 @@
 
       define('projectList', {
         present: projects => ({projects}),
-        template: document.querySelector('#project-list-template'),
+        template: document.querySelector('#project-list'),
         bindings: [
           repeat('.project-card', ({data}) => data.projects, [
             text('.status', ({item}) => item.status),
@@ -578,7 +578,7 @@
       })
     </script>
 
-    <template id="activity-list-template">
+    <template id="activity-list">
       <ol class="activity-list">
         <li class="activity-item">
           <span class="avatar">AL</span>
@@ -599,7 +599,7 @@
 
       define('activityList', {
         present: activities => ({activities}),
-        template: document.querySelector('#activity-list-template'),
+        template: document.querySelector('#activity-list'),
         bindings: [
           repeat('.activity-item', ({data}) => data.activities, [
             text('.avatar', ({item}) => item.initials),
@@ -614,12 +614,12 @@
       })
     </script>
 
-    <template id="overview-template">
+    <template id="overview-view">
       <section id="overview" aria-labelledby="overview-title">
         <div class="heading">
           <div>
-            <p class="eyebrow">Friday, July 24</p>
-            <h1 id="overview-title">Good morning, Freddy</h1>
+            <p class="eyebrow"></p>
+            <h1 id="overview-title">Welcome, Freddy</h1>
             <p>Here's what's happening across your workspace today.</p>
           </div>
           <a class="primary-button" href="#/projects">
@@ -673,13 +673,13 @@
               <p>Your team completed 28% more work than last week.</p>
             </div>
             <div class="week-chart" aria-label="Weekly activity chart">
-              <span style="height: 42%"><i>Mon</i></span>
-              <span style="height: 67%"><i>Tue</i></span>
-              <span style="height: 55%"><i>Wed</i></span>
-              <span style="height: 88%"><i>Thu</i></span>
-              <span class="today" style="height: 76%"><i>Fri</i></span>
-              <span style="height: 24%"><i>Sat</i></span>
-              <span style="height: 18%"><i>Sun</i></span>
+              <span data-day="Mon" style="height: 42%"><i>Mon</i></span>
+              <span data-day="Tue" style="height: 67%"><i>Tue</i></span>
+              <span data-day="Wed" style="height: 55%"><i>Wed</i></span>
+              <span data-day="Thu" style="height: 88%"><i>Thu</i></span>
+              <span data-day="Fri" style="height: 76%"><i>Fri</i></span>
+              <span data-day="Sat" style="height: 24%"><i>Sat</i></span>
+              <span data-day="Sun" style="height: 18%"><i>Sun</i></span>
             </div>
           </aside>
         </div>
@@ -693,17 +693,24 @@
         repeat,
         text,
       } from './app.js'
+      import {overviewDetails} from './data.js'
+
+      const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
       define('overview', {
         present: data => ({
-          title: 'Good morning, Freddy',
-          date: 'Friday, July 24',
+          ...overviewDetails(data.now),
           metrics: data.metrics,
         }),
-        template: document.querySelector('#overview-template'),
+        template: document.querySelector('#overview-view'),
         bindings: [
           text('#overview > .heading .eyebrow', ({data}) => data.date),
           text('#overview-title', ({data}) => data.title),
+          ...weekDays.map(day => classToggle(
+            `.week-chart [data-day="${day}"]`,
+            'today',
+            ({data}) => data.today === day,
+          )),
           repeat('.metric-card', ({data}) => data.metrics, [
             text('.label', ({item}) => item.label),
             text('.value', ({item}) => item.value),
@@ -714,7 +721,7 @@
       })
     </script>
 
-    <template id="projects-template">
+    <template id="projects-view">
       <section id="projects" aria-labelledby="projects-title">
         <div class="heading">
           <div>
@@ -759,7 +766,7 @@
             summary: `${projects.length} ${suffix} shown`,
           }
         },
-        template: document.querySelector('#projects-template'),
+        template: document.querySelector('#projects-view'),
         bindings: [
           text('.project-toolbar .summary', ({data}) => data.summary),
           // Each button carries its filter, so both the handler and projection
@@ -784,7 +791,7 @@
       })
     </script>
 
-    <template id="records-template">
+    <template id="records-view">
       <section id="records" aria-labelledby="records-title">
         <div class="heading">
           <div>
@@ -842,7 +849,7 @@
             summary: `${records.length.toLocaleString('en-US')} records shown`,
           }
         },
-        template: document.querySelector('#records-template'),
+        template: document.querySelector('#records-view'),
         bindings: [
           repeat('.record-row', ({data}) => data.rows, [
             text(':scope', ({item}) => item),
@@ -879,7 +886,7 @@
       })
     </script>
 
-    <template id="activity-page-template">
+    <template id="activity-page">
       <section id="activity" aria-labelledby="activity-title">
         <div class="heading">
           <div>
@@ -932,7 +939,7 @@
         present: data => ({
           count: `${data.activities.length} updates`,
         }),
-        template: document.querySelector('#activity-page-template'),
+        template: document.querySelector('#activity-page'),
         bindings: [
           text('#activity > .heading .count', ({data}) => data.count),
         ],

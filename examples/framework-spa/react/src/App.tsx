@@ -15,6 +15,7 @@ import {
   members,
   metrics,
   normalizeHash,
+  overviewDetails,
   projects,
   routeFromHash,
   type Activity,
@@ -203,10 +204,17 @@ function ActivityList({items}: {items: readonly Activity[]}) {
 }
 
 function Overview() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const clock = window.setInterval(() => setNow(new Date()), 60_000)
+    return () => window.clearInterval(clock)
+  }, [])
+  const overview = overviewDetails(now)
+
   return (
     <section id="overview" aria-labelledby="overview-title">
       <div className="heading">
-        <div><p className="eyebrow">Friday, July 24</p><h1 id="overview-title">Good morning, Freddy</h1><p>Here's what's happening across your workspace today.</p></div>
+        <div><p className="eyebrow">{overview.date}</p><h1 id="overview-title">{overview.title}</h1><p>Here's what's happening across your workspace today.</p></div>
         <a className="primary-button" href="#/projects"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h6l2-2h8v14H4v-12Z" /></svg>View projects</a>
       </div>
       <div className="metric-grid">
@@ -232,19 +240,19 @@ function Overview() {
           </div>
           <ActivityList items={activities.slice(0, 3)} />
         </section>
-        <WeekCard />
+        <WeekCard today={overview.today} />
       </div>
     </section>
   )
 }
 
-function WeekCard() {
+function WeekCard({today}: {today: string}) {
   const days = [['Mon', 42], ['Tue', 67], ['Wed', 55], ['Thu', 88], ['Fri', 76], ['Sat', 24], ['Sun', 18]] as const
   return (
     <aside className="panel week-card" aria-labelledby="week-title">
       <div className="top"><p className="eyebrow">This week</p><h2 id="week-title">Strong momentum</h2><p>Your team completed 28% more work than last week.</p></div>
       <div className="week-chart" aria-label="Weekly activity chart">
-        {days.map(([day, height]) => <span className={day === 'Fri' ? 'today' : undefined} style={{height: `${height}%`}} key={day}><i>{day}</i></span>)}
+        {days.map(([day, height]) => <span className={day === today ? 'today' : undefined} style={{height: `${height}%`}} key={day}><i>{day}</i></span>)}
       </div>
     </aside>
   )

@@ -79,6 +79,33 @@ export const routeLabels = Object.freeze({
   teams: 'Manage teams',
 })
 
+const fullDate = new Intl.DateTimeFormat('en-US', {
+  weekday: 'long',
+  month: 'long',
+  day: 'numeric',
+})
+const shortWeekday = new Intl.DateTimeFormat('en-US', {weekday: 'short'})
+
+/**
+ * Returns the date-sensitive copy used by the overview page.
+ *
+ * @param {Date} [now]
+ */
+export function overviewDetails(now = new Date()) {
+  const hour = now.getHours()
+  const dayPeriod = hour < 12
+    ? 'morning'
+    : hour < 18
+      ? 'afternoon'
+      : 'evening'
+
+  return Object.freeze({
+    title: `Good ${dayPeriod}, Freddy`,
+    date: fullDate.format(now),
+    today: shortWeekday.format(now),
+  })
+}
+
 export const projects = Object.freeze([
   {
     id: 'atlas',
@@ -86,7 +113,7 @@ export const projects = Object.freeze([
     description: 'A focused mobile experience for field teams.',
     status: /** @type {const} */ ('Active'),
     progress: 72,
-    due: 'Due Aug 14',
+    due: 'Due in 6 days',
     accent: '#6c5ce7',
     members: 'AL · NB · FF',
   },
@@ -96,7 +123,7 @@ export const projects = Object.freeze([
     description: 'Go-to-market planning for the autumn release.',
     status: /** @type {const} */ ('Planning'),
     progress: 34,
-    due: 'Due Sep 02',
+    due: 'Due in 3 weeks',
     accent: '#ef8354',
     members: 'ES · EN · +4',
   },
@@ -106,7 +133,7 @@ export const projects = Object.freeze([
     description: 'Shared foundations for product and marketing.',
     status: /** @type {const} */ ('Active'),
     progress: 88,
-    due: 'Due Jul 30',
+    due: 'Due tomorrow',
     accent: '#2a9d8f',
     members: 'SB · BP · FK',
   },
@@ -116,7 +143,7 @@ export const projects = Object.freeze([
     description: 'Customer interviews and opportunity mapping.',
     status: /** @type {const} */ ('Planning'),
     progress: 18,
-    due: 'Due Sep 18',
+    due: 'Due next month',
     accent: '#3a86ff',
     members: 'JB · TY · AC',
   },
@@ -371,7 +398,7 @@ export const metrics = Object.freeze([
     id: 'tasks-completed',
     label: 'Tasks completed',
     value: '184',
-    change: '+12.4% from June',
+    change: '+12.4% from last month',
     direction: /** @type {const} */ ('positive'),
   },
   {

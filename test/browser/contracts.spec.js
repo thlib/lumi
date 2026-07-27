@@ -37,7 +37,7 @@ test('text and TrustedHTML properties work with Trusted Types enforced', async (
       ],
     )
     const template = /** @type {HTMLTemplateElement | null} */ (
-      document.querySelector('#trusted-types-template')
+      document.querySelector('#trusted-types')
     )
     const mounted = component({
       template,

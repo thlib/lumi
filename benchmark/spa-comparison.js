@@ -354,8 +354,15 @@ async function runSample(browser, url, options, measureRecordFilter) {
         recordFilterCycles,
         measureRecordFilter,
       }) => {
+        const hour = new Date().getHours()
         const routeTitles = {
-          overview: 'Good morning, Freddy',
+          overview: `Good ${
+            hour < 12
+              ? 'morning'
+              : hour < 18
+                ? 'afternoon'
+                : 'evening'
+          }, Freddy`,
           projects: 'Projects',
           activity: 'Team activity',
           teams: 'Manage teams',

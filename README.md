@@ -143,7 +143,7 @@ type CounterData = {
 }
 
 const options: ComponentOptions<CounterData> = {
-  template: document.querySelector('#counter-template'),
+  template: document.querySelector('#counter'),
   bindings: [
     text('output', ({data}, output) => {
       // data is CounterData; output is HTMLOutputElement.

@@ -9,6 +9,7 @@ import {
   members,
   metrics,
   normalizeHash,
+  overviewDetails,
   projects,
   routeFromHash,
   type ProjectFilter,
@@ -32,7 +33,9 @@ const recordFilter = ref<RecordFilter>('all')
 const recordSort = ref<RecordSortDirection>('ascending')
 const toasts = ref<Toast[]>([])
 const emailError = ref('')
+const now = ref(new Date())
 let nextToastId = 1
+let clock: number | undefined
 const toastTimers = new Map<string, number>()
 
 const selectedMember = computed(() => members.find(member => member.id === memberId.value))
@@ -43,6 +46,7 @@ const visibleRecords = computed(() => orderLargeRecords(
   filterLargeRecords(recordFilter.value),
   recordSort.value,
 ))
+const overview = computed(() => overviewDetails(now.value))
 
 function handleHashChange() {
   route.value = routeFromHash(location.hash)
@@ -96,9 +100,15 @@ watch([route, memberId], () => {
   document.title = documentTitle(route.value, memberId.value)
 }, {immediate: true})
 
-onMounted(() => addEventListener('hashchange', handleHashChange))
+onMounted(() => {
+  addEventListener('hashchange', handleHashChange)
+  clock = window.setInterval(() => {
+    now.value = new Date()
+  }, 60_000)
+})
 onBeforeUnmount(() => {
   removeEventListener('hashchange', handleHashChange)
+  clearInterval(clock)
   toastTimers.forEach(timer => clearTimeout(timer))
 })
 </script>
@@ -153,7 +163,7 @@ onBeforeUnmount(() => {
     <main tabindex="-1">
       <section v-if="route === 'overview'" id="overview" aria-labelledby="overview-title">
         <div class="heading">
-          <div><p class="eyebrow">Friday, July 24</p><h1 id="overview-title">Good morning, Freddy</h1><p>Here's what's happening across your workspace today.</p></div>
+          <div><p class="eyebrow">{{ overview.date }}</p><h1 id="overview-title">{{ overview.title }}</h1><p>Here's what's happening across your workspace today.</p></div>
           <a class="primary-button" href="#/projects"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h6l2-2h8v14H4v-12Z" /></svg>View projects</a>
         </div>
         <div class="metric-grid">
@@ -173,7 +183,7 @@ onBeforeUnmount(() => {
           <aside class="panel week-card" aria-labelledby="week-title">
             <div class="top"><p class="eyebrow">This week</p><h2 id="week-title">Strong momentum</h2><p>Your team completed 28% more work than last week.</p></div>
             <div class="week-chart" aria-label="Weekly activity chart">
-              <span style="height:42%"><i>Mon</i></span><span style="height:67%"><i>Tue</i></span><span style="height:55%"><i>Wed</i></span><span style="height:88%"><i>Thu</i></span><span class="today" style="height:76%"><i>Fri</i></span><span style="height:24%"><i>Sat</i></span><span style="height:18%"><i>Sun</i></span>
+              <span :class="{today: overview.today === 'Mon'}" style="height:42%"><i>Mon</i></span><span :class="{today: overview.today === 'Tue'}" style="height:67%"><i>Tue</i></span><span :class="{today: overview.today === 'Wed'}" style="height:55%"><i>Wed</i></span><span :class="{today: overview.today === 'Thu'}" style="height:88%"><i>Thu</i></span><span :class="{today: overview.today === 'Fri'}" style="height:76%"><i>Fri</i></span><span :class="{today: overview.today === 'Sat'}" style="height:24%"><i>Sat</i></span><span :class="{today: overview.today === 'Sun'}" style="height:18%"><i>Sun</i></span>
             </div>
           </aside>
         </div>

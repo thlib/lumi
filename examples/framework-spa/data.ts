@@ -65,6 +65,34 @@ export const routeLabels: Record<Route, string> = {
   teams: 'Manage teams',
 }
 
+export interface OverviewDetails {
+  title: string
+  date: string
+  today: string
+}
+
+const fullDate = new Intl.DateTimeFormat('en-US', {
+  weekday: 'long',
+  month: 'long',
+  day: 'numeric',
+})
+const shortWeekday = new Intl.DateTimeFormat('en-US', {weekday: 'short'})
+
+export function overviewDetails(now = new Date()): OverviewDetails {
+  const hour = now.getHours()
+  const dayPeriod = hour < 12
+    ? 'morning'
+    : hour < 18
+      ? 'afternoon'
+      : 'evening'
+
+  return {
+    title: `Good ${dayPeriod}, Freddy`,
+    date: fullDate.format(now),
+    today: shortWeekday.format(now),
+  }
+}
+
 export const projects: readonly Project[] = [
   {
     id: 'atlas',
@@ -72,7 +100,7 @@ export const projects: readonly Project[] = [
     description: 'A focused mobile experience for field teams.',
     status: 'Active',
     progress: 72,
-    due: 'Due Aug 14',
+    due: 'Due in 6 days',
     accent: '#6c5ce7',
     members: 'AL · NB · FF',
   },
@@ -82,7 +110,7 @@ export const projects: readonly Project[] = [
     description: 'Go-to-market planning for the autumn release.',
     status: 'Planning',
     progress: 34,
-    due: 'Due Sep 02',
+    due: 'Due in 3 weeks',
     accent: '#ef8354',
     members: 'ES · EN · +4',
   },
@@ -92,7 +120,7 @@ export const projects: readonly Project[] = [
     description: 'Shared foundations for product and marketing.',
     status: 'Active',
     progress: 88,
-    due: 'Due Jul 30',
+    due: 'Due tomorrow',
     accent: '#2a9d8f',
     members: 'SB · BP · FK',
   },
@@ -102,7 +130,7 @@ export const projects: readonly Project[] = [
     description: 'Customer interviews and opportunity mapping.',
     status: 'Planning',
     progress: 18,
-    due: 'Due Sep 18',
+    due: 'Due next month',
     accent: '#3a86ff',
     members: 'JB · TY · AC',
   },
@@ -248,7 +276,7 @@ export const members: readonly Member[] = [
 
 export const metrics: readonly Metric[] = [
   {id: 'active-projects', label: 'Active projects', value: '8', change: '+2 this month', direction: 'positive'},
-  {id: 'tasks-completed', label: 'Tasks completed', value: '184', change: '+12.4% from June', direction: 'positive'},
+  {id: 'tasks-completed', label: 'Tasks completed', value: '184', change: '+12.4% from last month', direction: 'positive'},
   {id: 'team-focus', label: 'Team focus', value: '86%', change: 'On track', direction: 'positive'},
   {id: 'review-queue', label: 'Review queue', value: '5', change: '2 due today', direction: 'neutral'},
 ]

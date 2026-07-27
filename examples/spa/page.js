@@ -71,6 +71,7 @@
  *   filter: ProjectFilter,
  *   recordFilter: RecordFilter,
  *   recordSort: RecordSortDirection,
+ *   now: Date,
  *   records: ReadonlyArray<{
  *     id: string,
  *     name: string,
@@ -107,6 +108,7 @@ let data = {
   filter: 'all',
   recordFilter: 'all',
   recordSort: 'ascending',
+  now: new Date(),
   records: largeRecords,
   projects,
   activities,
@@ -139,6 +141,9 @@ export function connectPage(lumiPage) {
     document.querySelector('main')?.focus({ preventScroll: true })
   }
 
+  const clock = window.setInterval(() => {
+    update(current => ({...current, now: new Date()}))
+  }, 60_000)
   let isConnected = true
 
   function disconnect() {
@@ -147,6 +152,7 @@ export function connectPage(lumiPage) {
     }
 
     window.removeEventListener('hashchange', handleHashChange)
+    window.clearInterval(clock)
     page = null
     isConnected = false
   }

@@ -3,9 +3,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { JSDOM } from 'jsdom'
-import {component, repeat, text} from '../src/index.js'
+import {repeat, text} from '../src/index.js'
 import {mountApplication} from '../examples/spa/application.js'
-import {define, resolve} from '../examples/spa/demo-components.js'
+import {define} from '../examples/spa/demo-components.js'
 import {mountGroup} from '../examples/spa/group.js'
 import { emailValidationMessage } from '../examples/spa/validation.js'
 
@@ -99,36 +99,19 @@ test('keeps only the active SPA page connected to the document', () => {
   /** @type {Record<string, number>} */
   const presentationCount = {}
 
-  define('header', definition('header'))
-  define('navigation', definition('navigation'))
-
-  define('appShell', () => {
-    const header = /** @type {import('../examples/spa/demo-components.js').LeafDefinition} */ (
-      resolve('header')
-    )
-    const navigation = /** @type {import('../examples/spa/demo-components.js').LeafDefinition} */ (
-      resolve('navigation')
-    )
-
-    return {
+  define('appShell', () => ({
+    components: [{
       present(data) {
         countPresentation('appShell')
-        return {
-          route: data.route,
-          header: header.present(data),
-          navigation: navigation.present(data),
-        }
+        return {route: data.route}
       },
-
-      component: component({
-        template: createTemplate(document, `
-          <div id="shell">
-            <main></main>
-          </div>
-        `),
-      }),
-    }
-  })
+      template: createTemplate(document, `
+        <div id="shell">
+          <main></main>
+        </div>
+      `),
+    }],
+  }))
 
   define('overview', definition('overview'))
   define('projects', definition('projects'))
@@ -182,18 +165,17 @@ test('keeps only the active SPA page connected to the document', () => {
    */
   function definition(name) {
     return () => ({
-      present(data) {
-        countPresentation(name)
-        return `${name}: ${data.value}`
-      },
-
-      component: component({
+      components: [{
+        present(data) {
+          countPresentation(name)
+          return `${name}: ${data.value}`
+        },
         template: createTemplate(
           document,
           `<section data-page="${name}">Not presented</section>`,
         ),
         bindings: [text('[data-page]', ({data}) => data)],
-      }),
+      }],
     })
   }
 
@@ -222,8 +204,8 @@ test('composes independently reusable components with isolated DOM ownership', (
   const {document} = window
   /** @type {import('../examples/spa/demo-components.js').Definition<any>} */
   const list = {
-    present: data => data,
-    component: component({
+    components: [{
+      present: data => data,
       template: createTemplate(
         document,
         '<ul class="list"><li class="item">Default</li></ul>',
@@ -233,13 +215,13 @@ test('composes independently reusable components with isolated DOM ownership', (
           text(':scope', ({item}) => item),
         ]),
       ],
-    }),
+    }],
   }
   let overriddenConnections = 0
   /** @type {import('../examples/spa/demo-components.js').Definition<any>} */
   const overridden = {
-    present: data => data,
-    component: component({
+    components: [{
+      present: data => data,
       template: createTemplate(document, '<p class="overridden">Wrong</p>'),
       bindings: [{
         connect() {
@@ -252,26 +234,24 @@ test('composes independently reusable components with isolated DOM ownership', (
           }
         },
       }],
-    }),
+    }],
   }
   /** @type {import('../examples/spa/demo-components.js').Definition<any>} */
   const page = {
     components: [
       {
         present: data => data.title,
-        component: component({
-          template: createTemplate(document, `
-            <section>
-              <h1 class="title">Default</h1>
-              <div class="list-slot"></div>
-            </section>
-          `),
-          bindings: [
-            text('.title', ({data}) => data),
-            // This selector must not cross the planned component boundary.
-            text('.item', () => 'Owned by the page'),
-          ],
-        }),
+        template: createTemplate(document, `
+          <section>
+            <h1 class="title">Default</h1>
+            <div class="list-slot"></div>
+          </section>
+        `),
+        bindings: [
+          text('.title', ({data}) => data),
+          // This selector must not cross the planned component boundary.
+          text('.item', () => 'Owned by the page'),
+        ],
       },
       {at: '.list-slot', use: overridden},
       {
@@ -306,13 +286,13 @@ test('composes independently reusable components with isolated DOM ownership', (
   window.close()
 })
 
-test('prepares every component group member before committing any member', () => {
+test('prepares every component group entry before committing any entry', () => {
   const window = new JSDOM().window
   const {document} = window
   /** @type {import('../examples/spa/demo-components.js').Definition<any>} */
   const detail = {
-    present: data => data,
-    component: component({
+    components: [{
+      present: data => data,
       template: createTemplate(document, '<p class="detail">Default</p>'),
       bindings: [
         text('.detail', ({data}) => {
@@ -323,22 +303,20 @@ test('prepares every component group member before committing any member', () =>
           return data
         }),
       ],
-    }),
+    }],
   }
   /** @type {import('../examples/spa/demo-components.js').Definition<any>} */
   const page = {
     components: [
       {
         present: data => data.title,
-        component: component({
-          template: createTemplate(document, `
-            <section>
-              <h1 class="title">Default</h1>
-              <div class="detail-slot"></div>
-            </section>
-          `),
-          bindings: [text('.title', ({data}) => data)],
-        }),
+        template: createTemplate(document, `
+          <section>
+            <h1 class="title">Default</h1>
+            <div class="detail-slot"></div>
+          </section>
+        `),
+        bindings: [text('.title', ({data}) => data)],
       },
       {
         at: '.detail-slot',

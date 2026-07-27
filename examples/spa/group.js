@@ -1,6 +1,7 @@
 // @ts-check
 
 import {
+  component,
   mountWithBoundaries,
   prepareMounted,
 } from '../../src/component.js'
@@ -29,13 +30,15 @@ import {
 /**
  * @typedef {{
  *   mounted: import('../../src/types.js').MountedComponent<any>,
- *   definition: import('./demo-components.js').LeafDefinition,
+ *   present: (data: any) => any,
  *   select: (data: any) => any,
  * }} MountedMember
  */
 
 /** @type {WeakMap<MountedGroup, (data: any) => import('../../src/types.js').PreparedUpdate>} */
 const prepareByGroup = new WeakMap()
+/** @type {WeakMap<object, import('../../src/types.js').Component<any>>} */
+const componentByEntry = new WeakMap()
 
 /**
  * Mounts one leaf or composite component definition.
@@ -116,7 +119,7 @@ export function mountGroup(definition, target, options = {}) {
       // Every presentation is derived before any component starts preparing.
       // This keeps presentation failures independent from renderer state.
       const presentations = members.map(member => {
-        return member.definition.present(member.select(data))
+        return member.present(member.select(data))
       })
 
       for (let index = 0; index < members.length; index += 1) {
@@ -255,20 +258,8 @@ function mountDefinition(
   outlets,
   mountedMembers,
 ) {
-  if (isLeafDefinition(definition)) {
-    const {mounted, boundaries} = mountWithBoundaries(
-      definition.component,
-      target,
-      outlets,
-    )
-    mountedMembers.push({mounted, definition, select})
-    return boundaries
-  }
-
-  if (!isCompositeDefinition(definition)) {
-    throw new TypeError(
-      'A component definition requires component or components',
-    )
+  if (!isDefinition(definition)) {
+    throw new TypeError('A component definition requires "components"')
   }
 
   const entries = effectiveEntries(definition.components)
@@ -284,8 +275,8 @@ function mountDefinition(
     ...placedEntries.map(entry => /** @type {string} */ (entry.at)),
   ]
   /** @type {ReadonlyArray<Element>} */
-  const boundaries = mountDefinition(
-    definitionFromEntry(rootEntry),
+  const boundaries = mountEntry(
+    rootEntry,
     target,
     selectedBy(select, rootEntry.select),
     selectors,
@@ -300,8 +291,8 @@ function mountDefinition(
       throw new Error('Invalid component stack entry')
     }
 
-    mountDefinition(
-      definitionFromEntry(entry),
+    mountEntry(
+      entry,
       boundary,
       selectedBy(select, entry.select),
       [],
@@ -310,6 +301,49 @@ function mountDefinition(
   }
 
   return boundaries.slice(0, outlets.length)
+}
+
+/**
+ * @param {import('./demo-components.js').ComponentEntry} entry
+ * @param {Element} target
+ * @param {(data: any) => any} select
+ * @param {ReadonlyArray<string>} outlets
+ * @param {MountedMember[]} mountedMembers
+ * @returns {ReadonlyArray<Element>}
+ */
+function mountEntry(entry, target, select, outlets, mountedMembers) {
+  if (Reflect.has(entry, 'use')) {
+    return mountDefinition(
+      /** @type {{use: Definition}} */ (entry).use,
+      target,
+      select,
+      outlets,
+      mountedMembers,
+    )
+  }
+
+  if (!isInlineComponent(entry)) {
+    throw new TypeError(
+      'A component stack entry requires either "use" or template and present',
+    )
+  }
+
+  let definition = componentByEntry.get(entry)
+
+  if (definition === undefined) {
+    definition = component(entry.bindings === undefined
+      ? {template: entry.template}
+      : {template: entry.template, bindings: entry.bindings})
+    componentByEntry.set(entry, definition)
+  }
+
+  const {mounted, boundaries} = mountWithBoundaries(
+    definition,
+    target,
+    outlets,
+  )
+  mountedMembers.push({mounted, present: entry.present, select})
+  return boundaries
 }
 
 /**
@@ -330,7 +364,7 @@ function effectiveEntries(entries) {
       throw new TypeError('Invalid component stack entry')
     }
 
-    definitionFromEntry(entry)
+    assertComponentEntry(entry)
 
     if (
       entry.at !== undefined
@@ -348,26 +382,19 @@ function effectiveEntries(entries) {
 }
 
 /**
- * Resolves either a reusable `use` reference or an inline leaf definition.
+ * Validates one reusable reference or inline component specification.
  *
  * @param {import('./demo-components.js').ComponentEntry} entry
- * @returns {Definition}
  */
-function definitionFromEntry(entry) {
+function assertComponentEntry(entry) {
   const hasUse = Reflect.has(entry, 'use')
-  const hasInlineLeaf = isLeafDefinition(
-    /** @type {Definition} */ (/** @type {unknown} */ (entry)),
-  )
+  const hasInlineComponent = isInlineComponent(entry)
 
-  if (hasUse === hasInlineLeaf) {
+  if (hasUse === hasInlineComponent) {
     throw new TypeError(
-      'A component stack entry requires either "use" or component and present',
+      'A component stack entry requires either "use" or template and present',
     )
   }
-
-  return hasUse
-    ? /** @type {{use: Definition}} */ (entry).use
-    : /** @type {import('./demo-components.js').LeafDefinition} */ (entry)
 }
 
 /**
@@ -383,20 +410,24 @@ function selectedBy(parent, select) {
 }
 
 /**
- * @param {Definition} definition
- * @returns {definition is import('./demo-components.js').LeafDefinition}
+ * @param {unknown} entry
+ * @returns {entry is import('./demo-components.js').InlineComponent}
  */
-function isLeafDefinition(definition) {
-  return Reflect.has(definition, 'component')
-    && Reflect.has(definition, 'present')
+function isInlineComponent(entry) {
+  return typeof entry === 'object'
+    && entry !== null
+    && Reflect.has(entry, 'template')
+    && Reflect.has(entry, 'present')
 }
 
 /**
- * @param {Definition} definition
- * @returns {definition is {components: ReadonlyArray<import('./demo-components.js').ComponentEntry>}}
+ * @param {unknown} definition
+ * @returns {definition is Definition}
  */
-function isCompositeDefinition(definition) {
-  return Reflect.has(definition, 'components')
+function isDefinition(definition) {
+  return typeof definition === 'object'
+    && definition !== null
+    && Reflect.has(definition, 'components')
     && Array.isArray(Reflect.get(definition, 'components'))
 }
 

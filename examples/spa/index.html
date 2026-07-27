@@ -30,7 +30,6 @@
     <script type="module">
       import {
         classToggle,
-        component,
         define,
         on,
         resolve,
@@ -47,15 +46,13 @@
               present: data => ({
                 navOpen: data.navOpen,
               }),
-              component: component({
-                template: document.querySelector('#app-shell-template'),
-                bindings: [
-                  classToggle('#shell', 'nav-open', ({data}) => data.navOpen),
-                  on('#backdrop', 'click', () => {
-                    update(data => ({...data, navOpen: false}))
-                  }),
-                ],
-              }),
+              template: document.querySelector('#app-shell-template'),
+              bindings: [
+                classToggle('#shell', 'nav-open', ({data}) => data.navOpen),
+                on('#backdrop', 'click', () => {
+                  update(data => ({...data, navOpen: false}))
+                }),
+              ],
             },
             {at: '#header', use: header},
             {at: '#sidebar', use: navigation},
@@ -105,17 +102,16 @@
     </template>
 
     <script type="module">
-      import {attr, component, define, on, text, update} from './app.js'
+      import {attr, define, on, text, update} from './app.js'
 
       define('header', () => ({
-        present: data => ({
-          workspace: 'Luminate',
-          userName: 'Freddy Fraggin',
-          userInitials: 'FF',
-          navOpen: data.navOpen,
-        }),
-
-        component: component({
+        components: [{
+          present: data => ({
+            workspace: 'Luminate',
+            userName: 'Freddy Fraggin',
+            userInitials: 'FF',
+            navOpen: data.navOpen,
+          }),
           template: document.querySelector('#header-template'),
           bindings: [
             text('.workspace-switcher .name', ({data}) => data.workspace),
@@ -130,7 +126,7 @@
               update(data => ({...data, navOpen: !data.navOpen}))
             }),
           ],
-        }),
+        }],
       }))
     </script>
 
@@ -181,17 +177,16 @@
     </template>
 
     <script type="module">
-      import {attr, component, define, on, text, update} from './app.js'
+      import {attr, define, on, text, update} from './app.js'
 
       // Each link already carries its route in href, so the bindings read the
       // document rather than a parallel attribute.
       define('navigation', () => ({
-        present: data => ({
-          route: data.route,
-          projectCount: data.projects.length,
-        }),
-
-        component: component({
+        components: [{
+          present: data => ({
+            route: data.route,
+            projectCount: data.projects.length,
+          }),
           template: document.querySelector('#navigation-template'),
           bindings: [
             text('.link .count', ({data}) => data.projectCount),
@@ -208,7 +203,7 @@
               ),
             ),
           ],
-        }),
+        }],
       }))
     </script>
 
@@ -391,7 +386,6 @@
     <script type="module">
       import {
         attr,
-        component,
         define,
         emailValidationMessage,
         on,
@@ -407,21 +401,20 @@
         const toastTimers = new Map()
 
         return {
-          present: data => {
-            const selectedMember = data.members.find(
-              member => member.id === data.selectedMemberId,
-            )
+          components: [{
+            present: data => {
+              const selectedMember = data.members.find(
+                member => member.id === data.selectedMemberId,
+              )
 
-            return {
-              toasts: data.toasts,
-              memberCount: `${data.members.length} members`,
-              members: data.members,
-              hasSelectedMember: selectedMember !== undefined,
-              selectedMember: selectedMember ?? data.members[0],
-            }
-          },
-
-          component: component({
+              return {
+                toasts: data.toasts,
+                memberCount: `${data.members.length} members`,
+                members: data.members,
+                hasSelectedMember: selectedMember !== undefined,
+                selectedMember: selectedMember ?? data.members[0],
+              }
+            },
             template: document.querySelector('#teams-template'),
             bindings: [
               text('#directory > .heading .count', ({data}) => data.memberCount),
@@ -506,7 +499,7 @@
                 ({data}) => data.selectedMember.tone,
               ),
             ],
-          }),
+          }],
         }
 
         /**
@@ -582,12 +575,11 @@
     </template>
 
     <script type="module">
-      import {classToggle, component, define, repeat, style, text} from './app.js'
+      import {classToggle, define, repeat, style, text} from './app.js'
 
       define('projectList', () => ({
-        present: projects => ({projects}),
-
-        component: component({
+        components: [{
+          present: projects => ({projects}),
           template: document.querySelector('#project-list-template'),
           bindings: [
             repeat('.project-card', ({data}) => data.projects, [
@@ -602,7 +594,7 @@
               classToggle('.status', 'planning', ({item}) => item.status === 'Planning'),
             ]),
           ],
-        }),
+        }],
       }))
     </script>
 
@@ -623,12 +615,11 @@
     </template>
 
     <script type="module">
-      import {attr, component, define, repeat, style, text} from './app.js'
+      import {attr, define, repeat, style, text} from './app.js'
 
       define('activityList', () => ({
-        present: activities => ({activities}),
-
-        component: component({
+        components: [{
+          present: activities => ({activities}),
           template: document.querySelector('#activity-list-template'),
           bindings: [
             repeat('.activity-item', ({data}) => data.activities, [
@@ -641,7 +632,7 @@
               attr('.person', 'href', ({item}) => `#/teams/${item.personId}`),
             ]),
           ],
-        }),
+        }],
       }))
     </script>
 
@@ -720,7 +711,6 @@
     <script type="module">
       import {
         classToggle,
-        component,
         define,
         repeat,
         resolve,
@@ -739,19 +729,17 @@
                 date: 'Friday, July 24',
                 metrics: data.metrics,
               }),
-              component: component({
-                template: document.querySelector('#overview-template'),
-                bindings: [
-                  text('#overview > .heading .eyebrow', ({data}) => data.date),
-                  text('#overview-title', ({data}) => data.title),
-                  repeat('.metric-card', ({data}) => data.metrics, [
-                    text('.label', ({item}) => item.label),
-                    text('.value', ({item}) => item.value),
-                    text('.change', ({item}) => item.change),
-                    classToggle(':scope', 'positive', ({item}) => item.direction === 'positive'),
-                  ]),
-                ],
-              }),
+              template: document.querySelector('#overview-template'),
+              bindings: [
+                text('#overview > .heading .eyebrow', ({data}) => data.date),
+                text('#overview-title', ({data}) => data.title),
+                repeat('.metric-card', ({data}) => data.metrics, [
+                  text('.label', ({item}) => item.label),
+                  text('.value', ({item}) => item.value),
+                  text('.change', ({item}) => item.change),
+                  classToggle(':scope', 'positive', ({item}) => item.direction === 'positive'),
+                ]),
+              ],
             },
             {
               at: '.focus > .content',
@@ -794,7 +782,6 @@
     <script type="module">
       import {
         attr,
-        component,
         define,
         on,
         resolve,
@@ -821,30 +808,28 @@
                   summary: `${projects.length} ${suffix} shown`,
                 }
               },
-              component: component({
-                template: document.querySelector('#projects-template'),
-                bindings: [
-                  text('.project-toolbar .summary', ({data}) => data.summary),
-                  // Each button carries its filter, so both the handler and
-                  // projection read it from the native data attribute.
-                  on('[data-filter]', 'click', (e, el) => {
-                    const filter = el.dataset.filter
+              template: document.querySelector('#projects-template'),
+              bindings: [
+                text('.project-toolbar .summary', ({data}) => data.summary),
+                // Each button carries its filter, so both the handler and
+                // projection read it from the native data attribute.
+                on('[data-filter]', 'click', (e, el) => {
+                  const filter = el.dataset.filter
 
-                    if (
-                      filter === 'all'
-                      || filter === 'active'
-                      || filter === 'planning'
-                    ) {
-                      update(data => ({...data, filter}))
-                    }
-                  }),
-                  attr(
-                    '[data-filter]',
-                    'aria-pressed',
-                    ({data}, el) => String(el.dataset.filter === data.filter),
-                  ),
-                ],
-              }),
+                  if (
+                    filter === 'all'
+                    || filter === 'active'
+                    || filter === 'planning'
+                  ) {
+                    update(data => ({...data, filter}))
+                  }
+                }),
+                attr(
+                  '[data-filter]',
+                  'aria-pressed',
+                  ({data}, el) => String(el.dataset.filter === data.filter),
+                ),
+              ],
             },
             {
               at: '#projects > .content',
@@ -891,7 +876,6 @@
     <script type="module">
       import {
         attr,
-        component,
         define,
         filterLargeRecords,
         on,
@@ -902,21 +886,20 @@
       } from './app.js'
 
       define('records', () => ({
-        present: data => {
-          const records = orderLargeRecords(
-            filterLargeRecords(data.recordFilter),
-            data.recordSort,
-          )
-          return {
-            filter: data.recordFilter,
-            sort: data.recordSort,
-            sortIndicator: data.recordSort === 'ascending' ? '↑' : '↓',
-            rows: records.map(record => record.label),
-            summary: `${records.length.toLocaleString('en-US')} records shown`,
-          }
-        },
-
-        component: component({
+        components: [{
+          present: data => {
+            const records = orderLargeRecords(
+              filterLargeRecords(data.recordFilter),
+              data.recordSort,
+            )
+            return {
+              filter: data.recordFilter,
+              sort: data.recordSort,
+              sortIndicator: data.recordSort === 'ascending' ? '↑' : '↓',
+              rows: records.map(record => record.label),
+              summary: `${records.length.toLocaleString('en-US')} records shown`,
+            }
+          },
           template: document.querySelector('#records-template'),
           bindings: [
             repeat('.record-row', ({data}) => data.rows, [
@@ -951,7 +934,7 @@
             ),
             attr('[data-record-header]', 'aria-sort', ({data}) => data.sort),
           ],
-        }),
+        }],
       }))
     </script>
 
@@ -1002,7 +985,7 @@
     </template>
 
     <script type="module">
-      import {component, define, resolve, text} from './app.js'
+      import {define, resolve, text} from './app.js'
 
       define('activityPage', () => {
         const activityList = resolve('activityList')
@@ -1013,12 +996,10 @@
               present: data => ({
                 count: `${data.activities.length} updates`,
               }),
-              component: component({
-                template: document.querySelector('#activity-page-template'),
-                bindings: [
-                  text('#activity > .heading .count', ({data}) => data.count),
-                ],
-              }),
+              template: document.querySelector('#activity-page-template'),
+              bindings: [
+                text('#activity > .heading .count', ({data}) => data.count),
+              ],
             },
             {
               at: '.activity-panel > .content',

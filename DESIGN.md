@@ -613,8 +613,8 @@ does not require a new kind of component.
 The SPA example makes that composition explicit in an application-owned group
 planner. A route definition provides an ordered `components` stack of
 independently reusable definitions and the slots where their instances belong.
-An entry may declare its `component` and `present` function inline, or refer to
-a reusable definition with `use`.
+An entry may declare `template`, `bindings`, and `present` inline, or refer to
+a reusable component stack with `use`.
 When entries name the same slot, the later entry replaces the earlier one
 before anything mounts. The planner derives every surviving component's
 presentation, prepares the complete active group, and only then commits or

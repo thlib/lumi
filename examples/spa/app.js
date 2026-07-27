@@ -8,14 +8,14 @@
  * page to a single module graph and lets the optional bundled build replace it
  * with one file without changing a template or a script.
  *
- * The first group of exports is Lumi's public API, re-exported unchanged. The
- * rest belongs to this demo.
+ * The first group exposes the Lumi bindings used by inline component-stack
+ * entries. Component creation belongs to the demo's group planner. The rest
+ * belongs to this demo.
  */
 
 export {
   attr,
   classToggle,
-  component,
   on,
   prop,
   repeat,

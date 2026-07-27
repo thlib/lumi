@@ -610,6 +610,23 @@ composition is live. Templates may contain useful default content or a loader.
 Changing pages selects a different composition of component instances. It
 does not require a new kind of component.
 
+The SPA example makes that composition explicit in an application-owned group
+planner. A route definition lists independently reusable component definitions
+and the slots where their instances belong. The planner derives every member's
+presentation, prepares the complete active group, and only then commits or
+switches the route subtree. It also registers the member slots as component
+ownership boundaries before their containing components connect.
+
+This keeps the two structural responsibilities separate:
+
+- The page/group planner composes, retains, moves, and releases component
+  instances.
+- `repeat` reconciles repeated DOM occurrences inside one component.
+
+`child` remains available as a renderer binding for a locally owned nested
+component, but route composition does not need to encode application pages as
+nested component bindings.
+
 A shared component should keep its DOM identity when it moves from one layout
 region to another. Placement should prefer:
 

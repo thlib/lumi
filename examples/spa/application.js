@@ -1,10 +1,11 @@
 // @ts-check
 
 import {resolve} from './demo-components.js'
+import {mountGroup, updateGroups} from './group.js'
 
 /** @typedef {'overview' | 'projects' | 'records' | 'activity' | 'teams'} Route */
 /** @typedef {{route: Route} & Record<string, unknown>} ApplicationData */
-/** @typedef {import('../../src/types.js').MountedComponent<any>} Mounted */
+/** @typedef {import('./group.js').MountedGroup} Mounted */
 /** @typedef {import('./demo-components.js').Definition} Definition */
 
 const pageNames = Object.freeze({
@@ -31,7 +32,7 @@ const pageNames = Object.freeze({
  */
 export function mountApplication(target) {
   const shell = resolve('appShell')
-  const mountedShell = shell.component.mount(target)
+  const mountedShell = mountGroup(shell, target, {outlets: ['main']})
   const pageSlot = mountedShell.root.querySelector('main')
   /** @type {Record<Route, Definition>} */
   const pages = /** @type {Record<Route, Definition>} */ ({})
@@ -72,24 +73,22 @@ export function mountApplication(target) {
         throw new Error(`Page "${data.route}" is not defined`)
       }
 
-      // Calculate every selected presentation before mutating any component.
-      // Each definition presents its own children, so one page update is two
-      // presentations regardless of how deeply components nest.
-      const pagePresentation = page.present(data)
-      const shellPresentation = shell.present(data)
-
       let activePage = mountedPages[data.route]
 
       if (activePage === undefined) {
-        activePage = page.component.mount(pageSlot)
+        // Build an unvisited route while disconnected. Its complete component
+        // group prepares before it replaces the currently visible route.
+        const staging = pageSlot.ownerDocument.createElement('div')
+        activePage = mountGroup(page, staging)
         mountedPages[data.route] = activePage
-      } else if (activeRoute !== data.route) {
-        pageSlot.replaceChildren(activePage.root)
       }
-      activeRoute = data.route
 
-      activePage.update(pagePresentation)
-      mountedShell.update(shellPresentation)
+      updateGroups([activePage, mountedShell], data)
+
+      if (activeRoute !== data.route) {
+        pageSlot.replaceChildren(activePage.root)
+        activeRoute = data.route
+      }
     },
 
     unmount() {

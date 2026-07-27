@@ -8,9 +8,10 @@
  * or with a framework.
  *
  * A definition pairs one Lumi component with the projection that turns
- * application data into the snapshot that component renders. Definitions run
- * on first use, so a component may resolve a child that a later script in the
- * document defines.
+ * application data into the snapshot that component renders. A definition
+ * may also compose reusable definitions into its empty member slots.
+ * Definitions run on first use, so a group may resolve a member that a later
+ * script in the document defines.
  */
 
 /**
@@ -18,6 +19,11 @@
  * @typedef {{
  *   component: import('../../src/types.js').Component<any>,
  *   present: (data: Data) => any,
+ *   members?: ReadonlyArray<{
+ *     at: string,
+ *     definition: Definition,
+ *     select?: (data: Data) => any,
+ *   }>,
  * }} Definition
  */
 

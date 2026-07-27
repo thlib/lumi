@@ -29,7 +29,6 @@
 
     <script type="module">
       import {
-        child,
         classToggle,
         component,
         define,
@@ -45,8 +44,6 @@
         return {
           present: data => ({
             navOpen: data.navOpen,
-            header: header.present(data),
-            navigation: navigation.present(data),
           }),
 
           component: component({
@@ -56,10 +53,13 @@
               on('#backdrop', 'click', () => {
                 update(data => ({...data, navOpen: false}))
               }),
-              child('#header', header.component, data => data.header),
-              child('#sidebar', navigation.component, data => data.navigation),
             ],
           }),
+
+          members: [
+            {at: '#header', definition: header},
+            {at: '#sidebar', definition: navigation},
+          ],
         }
       })
     </script>
@@ -719,7 +719,6 @@
 
     <script type="module">
       import {
-        child,
         classToggle,
         component,
         define,
@@ -737,15 +736,11 @@
             title: 'Good morning, Freddy',
             date: 'Friday, July 24',
             metrics: data.metrics,
-            projects: projectList.present(data.projects.slice(0, 3)),
-            activities: activityList.present(data.activities.slice(0, 3)),
           }),
 
           component: component({
             template: document.querySelector('#overview-template'),
             bindings: [
-              child('.focus > .content', projectList.component, data => data.projects),
-              child('.activity-panel > .content', activityList.component, data => data.activities),
               text('#overview > .heading .eyebrow', ({data}) => data.date),
               text('#overview-title', ({data}) => data.title),
               repeat('.metric-card', ({data}) => data.metrics, [
@@ -756,6 +751,19 @@
               ]),
             ],
           }),
+
+          members: [
+            {
+              at: '.focus > .content',
+              definition: projectList,
+              select: data => data.projects.slice(0, 3),
+            },
+            {
+              at: '.activity-panel > .content',
+              definition: activityList,
+              select: data => data.activities.slice(0, 3),
+            },
+          ],
         }
       })
     </script>
@@ -786,7 +794,6 @@
     <script type="module">
       import {
         attr,
-        child,
         component,
         define,
         on,
@@ -797,18 +804,18 @@
 
       define('projects', () => {
         const projectList = resolve('projectList')
+        const selectedProjects = data => data.projects.filter(
+          project => data.filter === 'all'
+            || project.status.toLowerCase() === data.filter,
+        )
 
         return {
           present: data => {
-            const projects = data.projects.filter(
-              project => data.filter === 'all'
-                || project.status.toLowerCase() === data.filter,
-            )
+            const projects = selectedProjects(data)
             const suffix = projects.length === 1 ? 'project' : 'projects'
 
             return {
               filter: data.filter,
-              projects: projectList.present(projects),
               summary: `${projects.length} ${suffix} shown`,
             }
           },
@@ -816,7 +823,6 @@
           component: component({
             template: document.querySelector('#projects-template'),
             bindings: [
-              child('#projects > .content', projectList.component, data => data.projects),
               text('.project-toolbar .summary', ({data}) => data.summary),
               // Each button carries the filter it selects, so this stays a data
               // attribute: the handler and the projection both read its value.
@@ -838,6 +844,14 @@
               ),
             ],
           }),
+
+          members: [
+            {
+              at: '#projects > .content',
+              definition: projectList,
+              select: selectedProjects,
+            },
+          ],
         }
       })
     </script>
@@ -988,7 +1002,7 @@
     </template>
 
     <script type="module">
-      import {child, component, define, resolve, text} from './app.js'
+      import {component, define, resolve, text} from './app.js'
 
       define('activityPage', () => {
         const activityList = resolve('activityList')
@@ -996,16 +1010,22 @@
         return {
           present: data => ({
             count: `${data.activities.length} updates`,
-            activities: activityList.present(data.activities),
           }),
 
           component: component({
             template: document.querySelector('#activity-page-template'),
             bindings: [
-              child('.activity-panel > .content', activityList.component, data => data.activities),
               text('#activity > .heading .count', ({data}) => data.count),
             ],
           }),
+
+          members: [
+            {
+              at: '.activity-panel > .content',
+              definition: activityList,
+              select: data => data.activities,
+            },
+          ],
         }
       })
     </script>

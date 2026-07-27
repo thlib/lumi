@@ -14,7 +14,6 @@
 
 export {
   attr,
-  child,
   classToggle,
   component,
   on,

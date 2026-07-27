@@ -1,6 +1,6 @@
 // @ts-check
 
-import { assertElement, cloneTemplateRoot } from './dom.js'
+import { assertElement, cloneTemplateRoot, findElement } from './dom.js'
 import { connectEventBindings, getEventBindingDescriptor } from './events.js'
 import {
   connectDomBindings,
@@ -17,6 +17,21 @@ import {
  * @type {WeakMap<object, (data: unknown) => import('./types.js').PreparedUpdate>}
  */
 const prepareByMounted = new WeakMap()
+
+/**
+ * Package-internal mount entry points. Application-level planners can use
+ * these to declare component-owned member slots before bindings connect,
+ * without widening the public Component contract.
+ *
+ * @type {WeakMap<object, (
+ *   target: Element | null,
+ *   boundarySelectors: ReadonlyArray<string>,
+ * ) => {
+ *   mounted: import('./types.js').MountedComponent<unknown>,
+ *   boundaries: ReadonlyArray<Element>,
+ * }>}
+ */
+const mountByComponent = new WeakMap()
 
 /**
  * Prepares one nested component update without committing its DOM writes.
@@ -41,6 +56,42 @@ export function prepareMounted(mounted, data) {
 }
 
 /**
+ * Mounts a component while reserving selected containers for independently
+ * planned component groups. The reserved containers receive the same DOM and
+ * event ownership boundaries as child bindings, but their member lifecycle is
+ * owned by the calling planner.
+ *
+ * @internal
+ * @template Data
+ * @param {import('./types.js').Component<Data>} definition
+ * @param {Element | null} target
+ * @param {ReadonlyArray<string>} boundarySelectors
+ * @returns {{
+ *   mounted: import('./types.js').MountedComponent<Data>,
+ *   boundaries: ReadonlyArray<Element>,
+ * }}
+ */
+export function mountWithBoundaries(
+  definition,
+  target,
+  boundarySelectors,
+) {
+  const mount = mountByComponent.get(definition)
+
+  if (mount === undefined) {
+    throw new TypeError('Expected a Lumi component definition')
+  }
+
+  const result = mount(target, boundarySelectors)
+  return {
+    mounted: /** @type {import('./types.js').MountedComponent<Data>} */ (
+      result.mounted
+    ),
+    boundaries: result.boundaries,
+  }
+}
+
+/**
  * Defines a reusable component without changing its template.
  *
  * @template Data
@@ -50,30 +101,75 @@ export function prepareMounted(mounted, data) {
 export function component(options) {
   const bindings = options.bindings ?? []
 
-  return Object.freeze({
-    mount(target) {
-      assertElement(target, 'mount target')
-      const root = cloneTemplateRoot(options.template)
-      const previousChildren = Array.from(target.childNodes)
-      target.replaceChildren(root)
+  /**
+   * @param {Element | null} target
+   * @param {ReadonlyArray<string>} boundarySelectors
+   */
+  function mount(target, boundarySelectors) {
+    assertElement(target, 'mount target')
+    const root = cloneTemplateRoot(options.template)
+    const boundaries = boundarySelectors.map(selector => {
+      return findElement(root, selector)
+    })
 
-      try {
-        return connectComponent(root, bindings)
-      } catch (error) {
-        target.replaceChildren(...previousChildren)
-        throw error
+    if (new Set(boundaries).size !== boundaries.length) {
+      throw new Error('Lumi component group boundaries must be unique')
+    }
+
+    for (let index = 0; index < boundaries.length; index += 1) {
+      if (boundaries[index]?.childElementCount !== 0) {
+        throw new Error(
+          `Lumi component group boundary "${boundarySelectors[index]}" `
+          + 'must not contain an element',
+        )
       }
+    }
+
+    const previousChildren = Array.from(target.childNodes)
+    target.replaceChildren(root)
+
+    try {
+      return {
+        mounted: connectComponent(root, bindings, boundaries),
+        boundaries,
+      }
+    } catch (error) {
+      target.replaceChildren(...previousChildren)
+      throw error
+    }
+  }
+
+  const definition = Object.freeze({
+    /** @param {Element | null} target */
+    mount(target) {
+      return mount(target, []).mounted
     },
   })
+
+  mountByComponent.set(
+    definition,
+    (target, boundarySelectors) => {
+      const result = mount(target, boundarySelectors)
+      return {
+        mounted: /** @type {import('./types.js').MountedComponent<unknown>} */ (
+          result.mounted
+        ),
+        boundaries: result.boundaries,
+      }
+    },
+  )
+
+  return definition
 }
 
 /**
  * @template Data
  * @param {Element} root
  * @param {ReadonlyArray<import('./types.js').Binding<Data>>} bindings
+ * @param {ReadonlyArray<Element>} [groupBoundaries]
  * @returns {import('./types.js').MountedComponent<Data>}
  */
-function connectComponent(root, bindings) {
+function connectComponent(root, bindings, groupBoundaries = []) {
   let isMounted = true
   let isRendering = false
   let isFaulted = false
@@ -87,7 +183,7 @@ function connectComponent(root, bindings) {
   /** @type {Array<import('./events.js').EventBindingDescriptor>} */
   const eventBindings = []
   /** @type {Element[]} */
-  const ownedSubtrees = []
+  const ownedSubtrees = [...groupBoundaries]
   /** @type {Array<import('./types.js').PreparedUpdate>} */
   const prepared = []
   let isSettled = true

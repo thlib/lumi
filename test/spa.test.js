@@ -3,9 +3,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { JSDOM } from 'jsdom'
-import {component, text} from '../src/index.js'
+import {component, repeat, text} from '../src/index.js'
 import {mountApplication} from '../examples/spa/application.js'
 import {define, resolve} from '../examples/spa/demo-components.js'
+import {mountGroup} from '../examples/spa/group.js'
 import { emailValidationMessage } from '../examples/spa/validation.js'
 
 test('describes the invite email validity state', () => {
@@ -210,6 +211,128 @@ test('keeps only the active SPA page connected to the document', () => {
     assert.ok(root instanceof window.HTMLElement)
     return root
   }
+})
+
+test('composes independently reusable components with isolated DOM ownership', () => {
+  const window = new JSDOM().window
+  const {document} = window
+  /** @type {import('../examples/spa/demo-components.js').Definition<any>} */
+  const list = {
+    present: data => data,
+    component: component({
+      template: createTemplate(
+        document,
+        '<ul class="list"><li class="item">Default</li></ul>',
+      ),
+      bindings: [
+        repeat('.item', ({data}) => data, [
+          text(':scope', ({item}) => item),
+        ]),
+      ],
+    }),
+  }
+  /** @type {import('../examples/spa/demo-components.js').Definition<any>} */
+  const page = {
+    present: data => data.title,
+    component: component({
+      template: createTemplate(document, `
+        <section>
+          <h1 class="title">Default</h1>
+          <div class="list-slot"></div>
+        </section>
+      `),
+      bindings: [
+        text('.title', ({data}) => data),
+        // This selector must not cross the planned member boundary.
+        text('.item', () => 'Owned by the page'),
+      ],
+    }),
+    members: [{
+      at: '.list-slot',
+      definition: list,
+      select: data => data.items,
+    }],
+  }
+  const target = document.createElement('div')
+  const mounted = mountGroup(page, target)
+
+  mounted.update({title: 'Projects', items: ['One', 'Two']})
+
+  assert.equal(mounted.root.querySelector('.title')?.textContent, 'Projects')
+  assert.deepEqual(
+    Array.from(mounted.root.querySelectorAll('.item'), item => item.textContent),
+    ['One', 'Two'],
+  )
+
+  mounted.update({title: 'Updated', items: ['Three']})
+
+  assert.equal(mounted.root.querySelector('.title')?.textContent, 'Updated')
+  assert.deepEqual(
+    Array.from(mounted.root.querySelectorAll('.item'), item => item.textContent),
+    ['Three'],
+  )
+
+  mounted.unmount()
+  assert.equal(target.childElementCount, 0)
+  window.close()
+})
+
+test('prepares every component group member before committing any member', () => {
+  const window = new JSDOM().window
+  const {document} = window
+  /** @type {import('../examples/spa/demo-components.js').Definition<any>} */
+  const detail = {
+    present: data => data,
+    component: component({
+      template: createTemplate(document, '<p class="detail">Default</p>'),
+      bindings: [
+        text('.detail', ({data}) => {
+          if (data === 'Rejected') {
+            throw new Error('Rejected detail')
+          }
+
+          return data
+        }),
+      ],
+    }),
+  }
+  /** @type {import('../examples/spa/demo-components.js').Definition<any>} */
+  const page = {
+    present: data => data.title,
+    component: component({
+      template: createTemplate(document, `
+        <section>
+          <h1 class="title">Default</h1>
+          <div class="detail-slot"></div>
+        </section>
+      `),
+      bindings: [text('.title', ({data}) => data)],
+    }),
+    members: [{
+      at: '.detail-slot',
+      definition: detail,
+      select: data => data.detail,
+    }],
+  }
+  const target = document.createElement('div')
+  const mounted = mountGroup(page, target)
+
+  mounted.update({title: 'Before', detail: 'Ready'})
+
+  assert.throws(
+    () => mounted.update({title: 'Must not commit', detail: 'Rejected'}),
+    /Rejected detail/,
+  )
+  assert.equal(mounted.root.querySelector('.title')?.textContent, 'Before')
+  assert.equal(mounted.root.querySelector('.detail')?.textContent, 'Ready')
+
+  mounted.update({title: 'After', detail: 'Recovered'})
+
+  assert.equal(mounted.root.querySelector('.title')?.textContent, 'After')
+  assert.equal(mounted.root.querySelector('.detail')?.textContent, 'Recovered')
+
+  mounted.unmount()
+  window.close()
 })
 
 /**

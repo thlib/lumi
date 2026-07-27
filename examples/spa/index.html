@@ -42,23 +42,23 @@
         const navigation = resolve('navigation')
 
         return {
-          present: data => ({
-            navOpen: data.navOpen,
-          }),
-
-          component: component({
-            template: document.querySelector('#app-shell-template'),
-            bindings: [
-              classToggle('#shell', 'nav-open', ({data}) => data.navOpen),
-              on('#backdrop', 'click', () => {
-                update(data => ({...data, navOpen: false}))
+          components: [
+            {
+              present: data => ({
+                navOpen: data.navOpen,
               }),
-            ],
-          }),
-
-          members: [
-            {at: '#header', definition: header},
-            {at: '#sidebar', definition: navigation},
+              component: component({
+                template: document.querySelector('#app-shell-template'),
+                bindings: [
+                  classToggle('#shell', 'nav-open', ({data}) => data.navOpen),
+                  on('#backdrop', 'click', () => {
+                    update(data => ({...data, navOpen: false}))
+                  }),
+                ],
+              }),
+            },
+            {at: '#header', use: header},
+            {at: '#sidebar', use: navigation},
           ],
         }
       })
@@ -732,35 +732,35 @@
         const activityList = resolve('activityList')
 
         return {
-          present: data => ({
-            title: 'Good morning, Freddy',
-            date: 'Friday, July 24',
-            metrics: data.metrics,
-          }),
-
-          component: component({
-            template: document.querySelector('#overview-template'),
-            bindings: [
-              text('#overview > .heading .eyebrow', ({data}) => data.date),
-              text('#overview-title', ({data}) => data.title),
-              repeat('.metric-card', ({data}) => data.metrics, [
-                text('.label', ({item}) => item.label),
-                text('.value', ({item}) => item.value),
-                text('.change', ({item}) => item.change),
-                classToggle(':scope', 'positive', ({item}) => item.direction === 'positive'),
-              ]),
-            ],
-          }),
-
-          members: [
+          components: [
+            {
+              present: data => ({
+                title: 'Good morning, Freddy',
+                date: 'Friday, July 24',
+                metrics: data.metrics,
+              }),
+              component: component({
+                template: document.querySelector('#overview-template'),
+                bindings: [
+                  text('#overview > .heading .eyebrow', ({data}) => data.date),
+                  text('#overview-title', ({data}) => data.title),
+                  repeat('.metric-card', ({data}) => data.metrics, [
+                    text('.label', ({item}) => item.label),
+                    text('.value', ({item}) => item.value),
+                    text('.change', ({item}) => item.change),
+                    classToggle(':scope', 'positive', ({item}) => item.direction === 'positive'),
+                  ]),
+                ],
+              }),
+            },
             {
               at: '.focus > .content',
-              definition: projectList,
+              use: projectList,
               select: data => data.projects.slice(0, 3),
             },
             {
               at: '.activity-panel > .content',
-              definition: activityList,
+              use: activityList,
               select: data => data.activities.slice(0, 3),
             },
           ],
@@ -810,45 +810,45 @@
         )
 
         return {
-          present: data => {
-            const projects = selectedProjects(data)
-            const suffix = projects.length === 1 ? 'project' : 'projects'
+          components: [
+            {
+              present: data => {
+                const projects = selectedProjects(data)
+                const suffix = projects.length === 1 ? 'project' : 'projects'
 
-            return {
-              filter: data.filter,
-              summary: `${projects.length} ${suffix} shown`,
-            }
-          },
-
-          component: component({
-            template: document.querySelector('#projects-template'),
-            bindings: [
-              text('.project-toolbar .summary', ({data}) => data.summary),
-              // Each button carries the filter it selects, so this stays a data
-              // attribute: the handler and the projection both read its value.
-              on('[data-filter]', 'click', (e, el) => {
-                const filter = el.dataset.filter
-
-                if (
-                  filter === 'all'
-                  || filter === 'active'
-                  || filter === 'planning'
-                ) {
-                  update(data => ({...data, filter}))
+                return {
+                  filter: data.filter,
+                  summary: `${projects.length} ${suffix} shown`,
                 }
-              }),
-              attr(
-                '[data-filter]',
-                'aria-pressed',
-                ({data}, el) => String(el.dataset.filter === data.filter),
-              ),
-            ],
-          }),
+              },
+              component: component({
+                template: document.querySelector('#projects-template'),
+                bindings: [
+                  text('.project-toolbar .summary', ({data}) => data.summary),
+                  // Each button carries its filter, so both the handler and
+                  // projection read it from the native data attribute.
+                  on('[data-filter]', 'click', (e, el) => {
+                    const filter = el.dataset.filter
 
-          members: [
+                    if (
+                      filter === 'all'
+                      || filter === 'active'
+                      || filter === 'planning'
+                    ) {
+                      update(data => ({...data, filter}))
+                    }
+                  }),
+                  attr(
+                    '[data-filter]',
+                    'aria-pressed',
+                    ({data}, el) => String(el.dataset.filter === data.filter),
+                  ),
+                ],
+              }),
+            },
             {
               at: '#projects > .content',
-              definition: projectList,
+              use: projectList,
               select: selectedProjects,
             },
           ],
@@ -1008,21 +1008,21 @@
         const activityList = resolve('activityList')
 
         return {
-          present: data => ({
-            count: `${data.activities.length} updates`,
-          }),
-
-          component: component({
-            template: document.querySelector('#activity-page-template'),
-            bindings: [
-              text('#activity > .heading .count', ({data}) => data.count),
-            ],
-          }),
-
-          members: [
+          components: [
+            {
+              present: data => ({
+                count: `${data.activities.length} updates`,
+              }),
+              component: component({
+                template: document.querySelector('#activity-page-template'),
+                bindings: [
+                  text('#activity > .heading .count', ({data}) => data.count),
+                ],
+              }),
+            },
             {
               at: '.activity-panel > .content',
-              definition: activityList,
+              use: activityList,
               select: data => data.activities,
             },
           ],

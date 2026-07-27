@@ -103,8 +103,12 @@ test('keeps only the active SPA page connected to the document', () => {
   define('navigation', definition('navigation'))
 
   define('appShell', () => {
-    const header = resolve('header')
-    const navigation = resolve('navigation')
+    const header = /** @type {import('../examples/spa/demo-components.js').LeafDefinition} */ (
+      resolve('header')
+    )
+    const navigation = /** @type {import('../examples/spa/demo-components.js').LeafDefinition} */ (
+      resolve('navigation')
+    )
 
     return {
       present(data) {
@@ -231,27 +235,51 @@ test('composes independently reusable components with isolated DOM ownership', (
       ],
     }),
   }
+  let overriddenConnections = 0
+  /** @type {import('../examples/spa/demo-components.js').Definition<any>} */
+  const overridden = {
+    present: data => data,
+    component: component({
+      template: createTemplate(document, '<p class="overridden">Wrong</p>'),
+      bindings: [{
+        connect() {
+          overriddenConnections += 1
+          return {
+            prepare() {
+              return {commit() {}}
+            },
+            destroy() {},
+          }
+        },
+      }],
+    }),
+  }
   /** @type {import('../examples/spa/demo-components.js').Definition<any>} */
   const page = {
-    present: data => data.title,
-    component: component({
-      template: createTemplate(document, `
-        <section>
-          <h1 class="title">Default</h1>
-          <div class="list-slot"></div>
-        </section>
-      `),
-      bindings: [
-        text('.title', ({data}) => data),
-        // This selector must not cross the planned member boundary.
-        text('.item', () => 'Owned by the page'),
-      ],
-    }),
-    members: [{
-      at: '.list-slot',
-      definition: list,
-      select: data => data.items,
-    }],
+    components: [
+      {
+        present: data => data.title,
+        component: component({
+          template: createTemplate(document, `
+            <section>
+              <h1 class="title">Default</h1>
+              <div class="list-slot"></div>
+            </section>
+          `),
+          bindings: [
+            text('.title', ({data}) => data),
+            // This selector must not cross the planned component boundary.
+            text('.item', () => 'Owned by the page'),
+          ],
+        }),
+      },
+      {at: '.list-slot', use: overridden},
+      {
+        at: '.list-slot',
+        use: list,
+        select: data => data.items,
+      },
+    ],
   }
   const target = document.createElement('div')
   const mounted = mountGroup(page, target)
@@ -263,6 +291,7 @@ test('composes independently reusable components with isolated DOM ownership', (
     Array.from(mounted.root.querySelectorAll('.item'), item => item.textContent),
     ['One', 'Two'],
   )
+  assert.equal(overriddenConnections, 0)
 
   mounted.update({title: 'Updated', items: ['Three']})
 
@@ -298,21 +327,25 @@ test('prepares every component group member before committing any member', () =>
   }
   /** @type {import('../examples/spa/demo-components.js').Definition<any>} */
   const page = {
-    present: data => data.title,
-    component: component({
-      template: createTemplate(document, `
-        <section>
-          <h1 class="title">Default</h1>
-          <div class="detail-slot"></div>
-        </section>
-      `),
-      bindings: [text('.title', ({data}) => data)],
-    }),
-    members: [{
-      at: '.detail-slot',
-      definition: detail,
-      select: data => data.detail,
-    }],
+    components: [
+      {
+        present: data => data.title,
+        component: component({
+          template: createTemplate(document, `
+            <section>
+              <h1 class="title">Default</h1>
+              <div class="detail-slot"></div>
+            </section>
+          `),
+          bindings: [text('.title', ({data}) => data)],
+        }),
+      },
+      {
+        at: '.detail-slot',
+        use: detail,
+        select: data => data.detail,
+      },
+    ],
   }
   const target = document.createElement('div')
   const mounted = mountGroup(page, target)

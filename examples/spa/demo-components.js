@@ -7,11 +7,11 @@
  * application using Lumi can organize its components with different utilities
  * or with a framework.
  *
- * A definition pairs one Lumi component with the projection that turns
- * application data into the snapshot that component renders. A definition
- * may also compose reusable definitions into its empty member slots.
- * Definitions run on first use, so a group may resolve a member that a later
- * script in the document defines.
+ * A leaf definition pairs one Lumi component with the projection that turns
+ * application data into the snapshot that component renders. A composite
+ * definition instead provides an ordered component stack. Definitions run on
+ * first use, so a stack may resolve a component that a later script in the
+ * document defines.
  */
 
 /**
@@ -19,11 +19,24 @@
  * @typedef {{
  *   component: import('../../src/types.js').Component<any>,
  *   present: (data: Data) => any,
- *   members?: ReadonlyArray<{
- *     at: string,
- *     definition: Definition,
- *     select?: (data: Data) => any,
- *   }>,
+ * }} LeafDefinition
+ */
+
+/**
+ * @template [Data=any]
+ * @typedef {{
+ *   at?: string,
+ *   select?: (data: Data) => any,
+ * } & (
+ *   {use: Definition}
+ *   | LeafDefinition<Data>
+ * )} ComponentEntry
+ */
+
+/**
+ * @template [Data=any]
+ * @typedef {LeafDefinition<Data> | {
+ *   components: ReadonlyArray<ComponentEntry<Data>>,
  * }} Definition
  */
 

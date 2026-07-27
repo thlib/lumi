@@ -9,9 +9,9 @@ import {
  * Application-owned component composition.
  *
  * Lumi components continue to own only their own template and bindings.
- * A definition may compose independently reusable definitions into named
- * slots. This planner owns that group's coordinated mount, prepare, commit,
- * and unmount lifecycle.
+ * A composite definition stacks independently reusable definitions in an
+ * ordered list. This planner owns that group's coordinated mount, prepare,
+ * commit, and unmount lifecycle.
  */
 
 /**
@@ -29,7 +29,7 @@ import {
 /**
  * @typedef {{
  *   mounted: import('../../src/types.js').MountedComponent<any>,
- *   definition: Definition,
+ *   definition: import('./demo-components.js').LeafDefinition,
  *   select: (data: any) => any,
  * }} MountedMember
  */
@@ -38,10 +38,12 @@ import {
 const prepareByGroup = new WeakMap()
 
 /**
- * Mounts one component definition and all of its declared members.
+ * Mounts one leaf or composite component definition.
  *
- * Member containers are registered as ownership boundaries before the
- * containing component connects. Mount failure restores the target contents.
+ * Composite entries are reduced by target before anything mounts, so a later
+ * entry replaces an earlier entry for the same `at` selector. The remaining
+ * containers are registered as ownership boundaries before the containing
+ * component connects. Mount failure restores the target contents.
  *
  * @param {Definition} definition
  * @param {Element | null} target
@@ -64,7 +66,7 @@ export function mountGroup(definition, target, options = {}) {
   const previousChildren = Array.from(target.childNodes)
 
   try {
-    mountMember(
+    mountDefinition(
       definition,
       target,
       data => data,
@@ -244,47 +246,158 @@ export function updateGroups(groups, data) {
  * @param {(data: any) => any} select
  * @param {ReadonlyArray<string>} outlets
  * @param {MountedMember[]} mountedMembers
+ * @returns {ReadonlyArray<Element>}
  */
-function mountMember(
+function mountDefinition(
   definition,
   target,
   select,
   outlets,
   mountedMembers,
 ) {
-  const declarations = definition.members ?? []
-  const boundarySelectors = [
-    ...outlets,
-    ...declarations.map(member => member.at),
-  ]
-  const {mounted, boundaries} = mountWithBoundaries(
-    definition.component,
-    target,
-    boundarySelectors,
-  )
-  mountedMembers.push({mounted, definition, select})
+  if (isLeafDefinition(definition)) {
+    const {mounted, boundaries} = mountWithBoundaries(
+      definition.component,
+      target,
+      outlets,
+    )
+    mountedMembers.push({mounted, definition, select})
+    return boundaries
+  }
 
-  for (let index = 0; index < declarations.length; index += 1) {
-    const declaration = declarations[index]
+  if (!isCompositeDefinition(definition)) {
+    throw new TypeError(
+      'A component definition requires component or components',
+    )
+  }
+
+  const entries = effectiveEntries(definition.components)
+  const rootEntry = entries.find(entry => entry.at === undefined)
+
+  if (rootEntry === undefined) {
+    throw new Error('A component stack requires a root entry without "at"')
+  }
+
+  const placedEntries = entries.filter(entry => entry.at !== undefined)
+  const selectors = [
+    ...outlets,
+    ...placedEntries.map(entry => /** @type {string} */ (entry.at)),
+  ]
+  /** @type {ReadonlyArray<Element>} */
+  const boundaries = mountDefinition(
+    definitionFromEntry(rootEntry),
+    target,
+    selectedBy(select, rootEntry.select),
+    selectors,
+    mountedMembers,
+  )
+
+  for (let index = 0; index < placedEntries.length; index += 1) {
+    const entry = placedEntries[index]
     const boundary = boundaries[outlets.length + index]
 
-    if (declaration === undefined || boundary === undefined) {
-      throw new Error('Invalid component group member declaration')
+    if (entry === undefined || boundary === undefined) {
+      throw new Error('Invalid component stack entry')
     }
 
-    mountMember(
-      declaration.definition,
+    mountDefinition(
+      definitionFromEntry(entry),
       boundary,
-      data => {
-        const parentData = select(data)
-        return declaration.select === undefined
-          ? parentData
-          : declaration.select(parentData)
-      },
+      selectedBy(select, entry.select),
       [],
       mountedMembers,
     )
   }
+
+  return boundaries.slice(0, outlets.length)
+}
+
+/**
+ * Keeps only the last entry for each target while retaining the declaration
+ * order of the entries that survive.
+ *
+ * @param {ReadonlyArray<import('./demo-components.js').ComponentEntry>} entries
+ * @returns {ReadonlyArray<import('./demo-components.js').ComponentEntry>}
+ */
+function effectiveEntries(entries) {
+  /** @type {Map<string | undefined, number>} */
+  const lastIndexByTarget = new Map()
+
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]
+
+    if (entry === undefined) {
+      throw new TypeError('Invalid component stack entry')
+    }
+
+    definitionFromEntry(entry)
+
+    if (
+      entry.at !== undefined
+      && (typeof entry.at !== 'string' || entry.at.length === 0)
+    ) {
+      throw new TypeError('A component stack "at" must be a non-empty string')
+    }
+
+    lastIndexByTarget.set(entry.at, index)
+  }
+
+  return entries.filter((entry, index) => {
+    return lastIndexByTarget.get(entry.at) === index
+  })
+}
+
+/**
+ * Resolves either a reusable `use` reference or an inline leaf definition.
+ *
+ * @param {import('./demo-components.js').ComponentEntry} entry
+ * @returns {Definition}
+ */
+function definitionFromEntry(entry) {
+  const hasUse = Reflect.has(entry, 'use')
+  const hasInlineLeaf = isLeafDefinition(
+    /** @type {Definition} */ (/** @type {unknown} */ (entry)),
+  )
+
+  if (hasUse === hasInlineLeaf) {
+    throw new TypeError(
+      'A component stack entry requires either "use" or component and present',
+    )
+  }
+
+  return hasUse
+    ? /** @type {{use: Definition}} */ (entry).use
+    : /** @type {import('./demo-components.js').LeafDefinition} */ (entry)
+}
+
+/**
+ * @param {(data: any) => any} parent
+ * @param {((data: any) => any) | undefined} select
+ * @returns {(data: any) => any}
+ */
+function selectedBy(parent, select) {
+  return data => {
+    const parentData = parent(data)
+    return select === undefined ? parentData : select(parentData)
+  }
+}
+
+/**
+ * @param {Definition} definition
+ * @returns {definition is import('./demo-components.js').LeafDefinition}
+ */
+function isLeafDefinition(definition) {
+  return Reflect.has(definition, 'component')
+    && Reflect.has(definition, 'present')
+}
+
+/**
+ * @param {Definition} definition
+ * @returns {definition is {components: ReadonlyArray<import('./demo-components.js').ComponentEntry>}}
+ */
+function isCompositeDefinition(definition) {
+  return Reflect.has(definition, 'components')
+    && Array.isArray(Reflect.get(definition, 'components'))
 }
 
 /**

@@ -611,11 +611,15 @@ Changing pages selects a different composition of component instances. It
 does not require a new kind of component.
 
 The SPA example makes that composition explicit in an application-owned group
-planner. A route definition lists independently reusable component definitions
-and the slots where their instances belong. The planner derives every member's
+planner. A route definition provides an ordered `components` stack of
+independently reusable definitions and the slots where their instances belong.
+An entry may declare its `component` and `present` function inline, or refer to
+a reusable definition with `use`.
+When entries name the same slot, the later entry replaces the earlier one
+before anything mounts. The planner derives every surviving component's
 presentation, prepares the complete active group, and only then commits or
-switches the route subtree. It also registers the member slots as component
-ownership boundaries before their containing components connect.
+switches the route subtree. It also registers the component slots as ownership
+boundaries before their containing components connect.
 
 This keeps the two structural responsibilities separate:
 

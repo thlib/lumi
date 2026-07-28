@@ -1,0 +1,21 @@
+{
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.patterns": {
+    "*.html": "${capture}.ts, ${capture}.css"
+  },
+  "workbench.editor.openSideBySideDirection": "right",
+  "autoOpenFiles.enabled": true,
+  "autoOpenFiles.maxTab": 2,
+  "autoOpenFiles.rules": [
+    {
+      "triggerPattern": "^(.+)\\.html$",
+      "openPattern": "$1.ts",
+      "viewColumn": "beside"
+    },
+    {
+      "triggerPattern": "^(.+)\\.html$",
+      "openPattern": "$1.css",
+      "viewColumn": "beside"
+    }
+  ]
+}

@@ -15,10 +15,19 @@ build derives each definition name from the shared filename, so neither file
 performs a runtime `define()` call. Filenames must be unique across
 [`components`](./components/) and [`pages`](./pages/).
 
-The workspace at [`lumi-ts.code-workspace`](../../../lumi-ts.code-workspace)
-opens this directory as its own VS Code root. Its root-scoped settings nest each
-component's TypeScript and CSS files under its HTML template without affecting
-other examples.
+To use the VS Code companion-file view, open the repository root:
+
+```sh
+code .
+```
+
+VS Code reads the repository
+[workspace settings](../../../.vscode/settings.json) and recommends the
+configured [companion-file extension](../../../.vscode/extensions.json).
+Install the recommended extension when VS Code prompts you. When you open an
+HTML template, VS Code opens its existing TypeScript and CSS companion files in
+the right-hand editor group. The Explorer also nests these companion files
+under the HTML template.
 
 From the repository root, start the bundled development server:
 

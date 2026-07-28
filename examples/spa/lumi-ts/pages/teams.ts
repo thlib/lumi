@@ -40,13 +40,13 @@ export default function teams(): DefinitionOptions<PageData, TeamsData> {
     bindings: [
       text<TeamsData, TeamsData>('#directory > .heading .count', ({data}) => data.memberCount),
       repeat<Member, TeamsData>('.member-row', ({data}) => data.members, [
-        text<Member, TeamsData>('.avatar', ({item}) => item.initials),
-        text<Member, TeamsData>('.name', ({item}) => item.name),
-        text<Member, TeamsData>('.email', ({item}) => item.email),
-        text<Member, TeamsData>('.team', ({item}) => item.team),
-        text<Member, TeamsData>('.role', ({item}) => item.role),
-        attr<Member, TeamsData>('.name', 'href', ({item}) => `#/teams/${item.id}`),
-        attr<Member, TeamsData>('.avatar', 'data-person', ({item}) => item.id),
+        text<Member>('.avatar', ({item}) => item.initials),
+        text<Member>('.name', ({item}) => item.name),
+        text<Member>('.email', ({item}) => item.email),
+        text<Member>('.team', ({item}) => item.team),
+        text<Member>('.role', ({item}) => item.role),
+        attr<Member>('.name', 'href', ({item}) => `#/teams/${item.id}`),
+        attr<Member>('.avatar', 'data-person', ({item}) => item.id),
       ]),
       text<TeamsData, TeamsData>('#profile .avatar', ({data}) => data.selectedMember.initials),
       text<TeamsData, TeamsData>('#profile .name', ({data}) => data.selectedMember.name),
@@ -56,8 +56,8 @@ export default function teams(): DefinitionOptions<PageData, TeamsData> {
       text<TeamsData, TeamsData>('#profile .email', ({data}) => data.selectedMember.email),
       text<TeamsData, TeamsData>('#profile .bio', ({data}) => data.selectedMember.bio),
       repeat<Toast, TeamsData>('.toast', ({data}) => data.toasts, [
-        text<Toast, TeamsData>('.message', ({item}) => item.message),
-        attr<Toast, TeamsData>(':scope', 'data-toast-id', ({item}) => item.id),
+        text<Toast>('.message', ({item}) => item.message),
+        attr<Toast>(':scope', 'data-toast-id', ({item}) => item.id),
       ]),
       on<string, 'input', TeamsData>('.invite input[type="email"]', 'input', (_, el) => {
         if (

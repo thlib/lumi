@@ -9,13 +9,13 @@ export default {
   present: activities => ({activities}),
   bindings: [
     repeat<Activity, ActivityListData>('.activity-item', ({data}) => data.activities, [
-      text<Activity, ActivityListData>('.avatar', ({item}) => item.initials),
-      text<Activity, ActivityListData>('.person', ({item}) => item.person),
-      text<Activity, ActivityListData>('.action', ({item}) => item.action),
-      text<Activity, ActivityListData>('.target', ({item}) => item.target),
-      text<Activity, ActivityListData>('time', ({item}) => item.time),
-      attr<Activity, ActivityListData>('.avatar', 'data-person', ({item}) => item.personId),
-      attr<Activity, ActivityListData>('.person', 'href', ({item}) => `#/teams/${item.personId}`),
+      text<Activity>('.avatar', ({item}) => item.initials),
+      text<Activity>('.person', ({item}) => item.person),
+      text<Activity>('.action', ({item}) => item.action),
+      text<Activity>('.target', ({item}) => item.target),
+      text<Activity>('time', ({item}) => item.time),
+      attr<Activity>('.avatar', 'data-person', ({item}) => item.personId),
+      attr<Activity>('.person', 'href', ({item}) => `#/teams/${item.personId}`),
     ]),
   ],
 } satisfies DefinitionOptions<readonly Activity[], ActivityListData>

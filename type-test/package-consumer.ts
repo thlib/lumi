@@ -105,15 +105,14 @@ const peopleOptions: ComponentOptions<PeoplePage> = {
       void item
       return data.people
     }, [
-      text<Person, PeoplePage>('.name', ({item, data}, el) => {
+      text<Person>('.name', ({item}, el) => {
         const contextItem: Person = item
-        const rootData: PeoplePage = data
         const matched: Element = el
         void contextItem
-        void rootData
         void matched
         return item.name
       }),
+      text<Person, PeoplePage>('.heading', ({data}) => data.heading),
     ]),
   ],
 }

@@ -23,10 +23,10 @@ export default {
       ({data}) => data.today === day ? 'today' : false,
     )),
     repeat<Metric, OverviewData>('.metric-card', ({data}) => data.metrics, [
-      text<Metric, OverviewData>('.label', ({item}) => item.label),
-      text<Metric, OverviewData>('.value', ({item}) => item.value),
-      text<Metric, OverviewData>('.change', ({item}) => item.change),
-      attr<Metric, OverviewData>(':scope', 'data-direction', ({item}) => item.direction),
+      text<Metric>('.label', ({item}) => item.label),
+      text<Metric>('.value', ({item}) => item.value),
+      text<Metric>('.change', ({item}) => item.change),
+      attr<Metric>(':scope', 'data-direction', ({item}) => item.direction),
     ]),
   ],
 } satisfies DefinitionOptions<PageData, OverviewData>

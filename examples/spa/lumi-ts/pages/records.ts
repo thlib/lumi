@@ -24,7 +24,7 @@ export default {
   },
   bindings: [
     repeat<string, RecordsData>('.record-row', ({data}) => data.rows, [
-      text<string, RecordsData>(':scope', ({item}) => item),
+      text<string>(':scope', ({item}) => item),
     ]),
     text<RecordsData, RecordsData>('.record-summary', ({data}) => data.summary),
     text<RecordsData, RecordsData>('.record-sort-indicator', ({data}) => data.sortIndicator),

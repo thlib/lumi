@@ -29,7 +29,7 @@ for (const framework of ['vue', 'react', 'angular']) {
   })
 }
 
-for (const variant of ['lumi-native', 'lumi-build', 'lumi-dsl']) {
+for (const variant of ['lumi-native', 'lumi-build', 'lumi-ts', 'lumi-dsl']) {
   test(`the ${variant} SPA starts from its intended output`, async ({page}) => {
     /** @type {string[]} */
     const problems = []
@@ -55,7 +55,7 @@ for (const variant of ['lumi-native', 'lumi-build', 'lumi-dsl']) {
   })
 }
 
-for (const variant of ['lumi-build', 'lumi-dsl']) {
+for (const variant of ['lumi-build', 'lumi-ts', 'lumi-dsl']) {
   test(`the ${variant} SPA drives behavior through Lumi bindings`, async ({
     page,
   }) => {

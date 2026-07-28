@@ -177,6 +177,9 @@ TypeScript consumer contract run as part of `pnpm run lint`.
   behavior in one `index.html`, backed by one unbundled demo module.
 - [Component-build SPA](./examples/spa/lumi-build): one native HTML document
   per component, assembled and bundled for development and production.
+- [TypeScript component-build SPA](./examples/spa/lumi-ts): native HTML
+  templates paired with colocated TypeScript behavior modules, assembled and
+  bundled for development and production.
 - [Framework comparison SPAs](./examples/spa): equivalent React, Vue,
   and Angular applications sharing the SPA's content and visual design without
   importing Lumi.

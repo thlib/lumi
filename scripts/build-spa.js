@@ -4,10 +4,10 @@
  * Builds the bundled Lumi SPA from native HTML view documents.
  *
  * Reusable views live in components/ while route-wide views live in pages/.
- * The JavaScript variant keeps behavior modules inline with those documents;
- * the data-attribute DSL keeps declarative markup in HTML and composes its
- * Lumi bindings from ordinary `.ts` modules. The build bundles the selected
- * behavior entry and assembles the native HTML into one document.
+ * The JavaScript variant keeps behavior modules inline with those documents.
+ * The TypeScript variants keep declarative markup in HTML and behavior in
+ * ordinary `.ts` modules. The build bundles the selected behavior entry and
+ * assembles the native HTML into one document.
  *
  * `--serve` keeps the same bundle pipeline active for development and serves
  * the selected variant's dist/ directory directly.
@@ -33,12 +33,18 @@ const variant = process.argv
   .slice(2)
   .find(argument => !argument.startsWith('--'))
 
-if (variant !== 'lumi-build' && variant !== 'lumi-dsl') {
-  throw new Error('Choose a bundled SPA variant: lumi-build or lumi-dsl')
+if (
+  variant !== 'lumi-build'
+  && variant !== 'lumi-dsl'
+  && variant !== 'lumi-ts'
+) {
+  throw new Error(
+    'Choose a bundled SPA variant: lumi-build, lumi-dsl, or lumi-ts',
+  )
 }
 
 const source = join(spa, variant)
-const typescript = variant === 'lumi-dsl'
+const typescript = variant !== 'lumi-build'
 const componentsDirectory = join(source, 'components')
 const pagesDirectory = join(source, 'pages')
 const documentDirectories = [
@@ -120,7 +126,7 @@ function viewDocumentsPlugin() {
         () => {
           const documentFiles = readDocumentFiles()
 
-          if (typescript) {
+          if (variant === 'lumi-dsl') {
             return {
               contents: "import './app.ts'",
               loader: 'ts',
@@ -142,9 +148,9 @@ function viewDocumentsPlugin() {
           })
 
           imports.push(
-            "import {installDefinitions} from './components.js'",
+            `import {installDefinitions} from './components.${typescript ? 'ts' : 'js'}'`,
           )
-          imports.push("import './app.js'")
+          imports.push(`import './app.${typescript ? 'ts' : 'js'}'`)
 
           const declarations = documentFiles.map((file, index) => {
             const filename = basename(file, '.html')
@@ -158,12 +164,13 @@ function viewDocumentsPlugin() {
 
           return {
             contents: imports.join('\n'),
-            loader: 'js',
+            loader: typescript ? 'ts' : 'js',
             resolveDir: source,
             watchDirs: documentDirectories,
             watchFiles: [
               shellFile,
               stylesheetFile,
+              ...(typescript ? [typeScriptConfig] : []),
               ...documentFiles,
             ],
           }
@@ -177,12 +184,20 @@ function viewDocumentsPlugin() {
 
       build.onLoad(
         {filter: /\.html$/, namespace: 'lumi-document'},
-        args => ({
-          contents: readDocument(args.path).module,
-          loader: typescript ? 'ts' : 'js',
-          resolveDir: dirname(args.path),
-          watchFiles: [args.path],
-        }),
+        args => {
+          const behaviorFile = typescript
+            ? args.path.replace(/\.html$/, '.ts')
+            : args.path
+
+          return {
+            contents: typescript
+              ? readFileSync(behaviorFile, 'utf8')
+              : readDocument(args.path).module,
+            loader: typescript ? 'ts' : 'js',
+            resolveDir: dirname(args.path),
+            watchFiles: [args.path, behaviorFile],
+          }
+        },
       )
 
       build.onEnd(result => {

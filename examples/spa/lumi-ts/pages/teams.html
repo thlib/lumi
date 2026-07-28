@@ -1,0 +1,175 @@
+<template id="teams-view">
+  <section id="teams">
+    <div id="directory">
+      <div class="heading">
+        <div>
+          <p class="eyebrow">Manage</p>
+          <h1 id="teams-title">Manage teams</h1>
+          <p>Invite people and organize how your workspace collaborates.</p>
+        </div>
+        <span class="count">11 members</span>
+      </div>
+
+      <section class="panel member-directory" aria-labelledby="member-list-title">
+        <div class="heading">
+          <div>
+            <h2 id="member-list-title">All team members</h2>
+            <p>Everyone with access to the Luminate workspace.</p>
+          </div>
+          <span>Team</span>
+          <span>Role</span>
+        </div>
+
+        <div class="member-list">
+          <article class="member-row">
+            <span class="avatar">AL</span>
+            <div class="identity">
+              <a class="name">Member name</a>
+              <span class="email">name@luminate.example</span>
+            </div>
+            <span class="team">Team</span>
+            <span class="role">Role</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="team-actions">
+        <div class="heading">
+          <div>
+            <h2>Team actions</h2>
+            <p>Invitations and new teams require a connected server.</p>
+          </div>
+        </div>
+
+        <div class="forms">
+          <form class="panel team-form invite" novalidate>
+            <div class="heading">
+              <span class="icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <circle cx="9" cy="8" r="3"></circle>
+                  <path d="M3.5 19c.5-4 2.3-6 5.5-6s5 2 5.5 6M17.5 8v6M14.5 11h6"></path>
+                </svg>
+              </span>
+              <div>
+                <h2>Invite a teammate</h2>
+                <p>Send an invitation to join Luminate.</p>
+              </div>
+            </div>
+
+            <label class="field">
+              <span>Email address</span>
+              <input
+                type="email"
+                name="email"
+                placeholder="name@company.com"
+                aria-describedby="invite-email-error"
+                required
+              >
+              <small
+                class="error"
+                id="invite-email-error"
+                aria-live="polite"
+                hidden
+              ></small>
+            </label>
+
+            <label class="field">
+              <span>Role</span>
+              <select name="role">
+                <option>Member</option>
+                <option>Admin</option>
+                <option>Viewer</option>
+              </select>
+            </label>
+
+            <button class="primary-button" type="submit">Send invitation</button>
+          </form>
+
+          <form class="panel team-form" novalidate>
+            <div class="heading">
+              <span class="icon" data-form-kind="create-team" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <circle cx="8" cy="8" r="3"></circle>
+                  <circle cx="17" cy="9" r="2.5"></circle>
+                  <path d="M2.5 19c.5-4 2.3-6 5.5-6s5 2 5.5 6M14 14c3.8-.7 6.2 1 6.8 5"></path>
+                </svg>
+              </span>
+              <div>
+                <h2>Create a team</h2>
+                <p>Group teammates around a shared area of work.</p>
+              </div>
+            </div>
+
+            <label class="field">
+              <span>Team name</span>
+              <input
+                type="text"
+                name="teamName"
+                placeholder="e.g. Product design"
+                required
+              >
+            </label>
+
+            <label class="field">
+              <span>Description <em>Optional</em></span>
+              <textarea
+                name="description"
+                rows="3"
+                placeholder="What does this team work on?"
+              ></textarea>
+            </label>
+
+            <button class="primary-button" type="submit">Create team</button>
+          </form>
+        </div>
+      </section>
+    </div>
+
+    <div id="profile" hidden>
+      <a class="back-link" href="#/teams">
+        <span aria-hidden="true">←</span>
+        All team members
+      </a>
+
+      <article class="panel member-profile-card">
+        <div class="header">
+          <span class="avatar large">AL</span>
+          <div>
+            <p class="eyebrow team">Team</p>
+            <h1 class="name">Member name</h1>
+            <span class="role">Role</span>
+          </div>
+        </div>
+
+        <p class="bio">Team member biography.</p>
+
+        <dl class="member-details">
+          <div>
+            <dt>Email</dt>
+            <dd><a class="email">name@luminate.example</a></dd>
+          </div>
+          <div>
+            <dt>Country</dt>
+            <dd class="country">Country</dd>
+          </div>
+          <div>
+            <dt>Team</dt>
+            <dd class="team">Team</dd>
+          </div>
+        </dl>
+      </article>
+    </div>
+
+    <div
+      id="toasts"
+      aria-live="polite"
+      aria-label="Notifications"
+    >
+      <div class="toast">
+        <span class="icon" aria-hidden="true">!</span>
+        <span class="message">No server for demo</span>
+        <button type="button" aria-label="Dismiss notification">×</button>
+      </div>
+    </div>
+  </section>
+</template>

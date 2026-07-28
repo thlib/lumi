@@ -41,7 +41,56 @@ demo-app in all examples
 
 lumi example should be the native one?
 
-- each spa in examples/spa that has a build or bundle stage should have it's own build or bundle script in their own folder ( for example called build.js or bundle.js or whatever is appropriate), they should not share them
+- each spa in examples/spa that has a build or bundle stage should have it's own build or bundle script in their own folder ( for example called build.js or bundle.js or whatever is appropriate), they should not share them. Equally lumi src should have own build that creates /dist/lumi.js and /dist/lumi.js.map and one lumi.d.ts file for the ts types compatibility, it should not create plan.d.ts etc...
+
+
+This: // The document registry intentionally accepts components with different local
+// presentations. Keep that dynamic boundary in this facade while each
+// TypeScript module owns its behavior beside the corresponding template.
+export const attr = lumiAttr as (
+  selector: string,
+  name: string,
+  project: Projection,
+) => Binding<any>
+export const classToggle = lumiClassToggle as (
+  selector: string,
+  name: string,
+  project: Projection,
+) => Binding<any>
+export const on = lumiOn as (
+  selector: string,
+  type: string,
+  handler: EventHandler,
+) => Binding<any>
+export const prop = lumiProp as (
+  selector: string,
+  project: Projection,
+  name: string,
+) => Binding<any>
+export const repeat = lumiRepeat as (
+  selector: string,
+  project: Projection,
+  bindings?: readonly Binding<any>[],
+) => Binding<any>
+export const style = lumiStyle as (
+  selector: string,
+  name: string,
+  project: Projection,
+) => Binding<any>
+export const text = lumiText as (
+  selector: string,
+  project: Projection,
+) => Binding<any>
+
+should be unneccessary because of the lumi.d.ts or lumi.js.map
+
+
+add type safety to lumi-ts .ts files
+
+
+
+
+
 
 shim <template> to support `src` to fetch a `.html` file into itself.
 

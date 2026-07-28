@@ -65,6 +65,7 @@ serve: ## Serve the repository on port 8008 to browse examples/
 	@echo "Examples: http://localhost:$(PORT)/examples/counter/"
 	@echo "Lumi native: http://localhost:$(PORT)/examples/spa/lumi-native/"
 	@echo "Lumi build: http://localhost:$(PORT)/examples/spa/lumi-build/dist/"
+	@echo "Lumi TypeScript: http://localhost:$(PORT)/examples/spa/lumi-ts/dist/"
 	@echo "Lumi DSL: http://localhost:$(PORT)/examples/spa/lumi-dsl/dist/"
 	python -m http.server $(PORT)
 

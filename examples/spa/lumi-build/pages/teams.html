@@ -42,7 +42,7 @@
         </div>
 
         <div class="forms">
-          <form class="panel team-form invite" novalidate>
+          <form class="panel team-form invite" data-validate="email" novalidate>
             <div class="heading">
               <span class="icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24">
@@ -177,7 +177,6 @@
 <script type="module">
   import {
     attr,
-    emailValidationMessage,
     on,
     prop,
     repeat,
@@ -226,23 +225,12 @@
             text('.message', ({item}) => item.message),
             attr(':scope', 'data-toast-id', ({item}) => item.id),
           ]),
-          on('.invite input[type="email"]', 'input', (e, el) => {
-            if (
-              el instanceof HTMLInputElement
-              && el.hasAttribute('aria-invalid')
-            ) {
-              showEmailError(el, emailValidationMessage(el))
-            }
-          }),
           on('.team-form', 'submit', (e, el) => {
-            e.preventDefault()
-
-            if (
-              el.matches('.invite')
-              && !validateInviteForm(el)
-            ) {
+            if (e.defaultPrevented) {
               return
             }
+
+            e.preventDefault()
 
             const toast = {
               id: `toast-${nextToastId++}`,
@@ -289,50 +277,5 @@
       ],
     }
 
-    /**
-     * @param {Element} form
-     * @returns {boolean}
-     */
-    function validateInviteForm(form) {
-      const input = form.querySelector('input[type="email"]')
-
-      if (!(input instanceof HTMLInputElement)) {
-        throw new TypeError('Invite form requires an email input')
-      }
-
-      input.value = input.value.trim()
-      const message = emailValidationMessage(input)
-      showEmailError(input, message)
-
-      if (message !== '') {
-        input.focus()
-        return false
-      }
-
-      return true
-    }
-
-    /**
-     * @param {HTMLInputElement} input
-     * @param {string} message
-     */
-    function showEmailError(input, message) {
-      const error = input.form?.querySelector('.field .error')
-
-      if (!(error instanceof HTMLElement)) {
-        throw new TypeError('Invite form requires an email error message')
-      }
-
-      if (message === '') {
-        input.removeAttribute('aria-invalid')
-        error.hidden = true
-        error.textContent = ''
-        return
-      }
-
-      input.setAttribute('aria-invalid', 'true')
-      error.textContent = message
-      error.hidden = false
-    }
   }
 </script>

@@ -1,6 +1,5 @@
 import {
   attr,
-  emailValidationMessage,
   on,
   prop,
   repeat,
@@ -59,20 +58,12 @@ export default function teams(): DefinitionOptions<PageData, TeamsData> {
         text<Toast>('.message', ({item}) => item.message),
         attr<Toast>(':scope', 'data-toast-id', ({item}) => item.id),
       ]),
-      on<string, 'input', TeamsData>('.invite input[type="email"]', 'input', (_, el) => {
-        if (
-          el instanceof HTMLInputElement
-          && el.hasAttribute('aria-invalid')
-        ) {
-          showEmailError(el, emailValidationMessage(el))
-        }
-      }),
       on<string, 'submit', TeamsData>('.team-form', 'submit', (e, el) => {
-        e.preventDefault()
-
-        if (el.matches('.invite') && !validateInviteForm(el)) {
+        if (e.defaultPrevented) {
           return
         }
+
+        e.preventDefault()
 
         const toast: Toast = {
           id: `toast-${nextToastID++}`,
@@ -127,41 +118,4 @@ export default function teams(): DefinitionOptions<PageData, TeamsData> {
     ],
   }
 
-  function validateInviteForm(form: Element): boolean {
-    const input = form.querySelector('input[type="email"]')
-
-    if (!(input instanceof HTMLInputElement)) {
-      throw new TypeError('Invite form requires an email input')
-    }
-
-    input.value = input.value.trim()
-    const message = emailValidationMessage(input)
-    showEmailError(input, message)
-
-    if (message !== '') {
-      input.focus()
-      return false
-    }
-
-    return true
-  }
-
-  function showEmailError(input: HTMLInputElement, message: string): void {
-    const error = input.form?.querySelector('.field .error')
-
-    if (!(error instanceof HTMLElement)) {
-      throw new TypeError('Invite form requires an email error message')
-    }
-
-    if (message === '') {
-      input.removeAttribute('aria-invalid')
-      error.hidden = true
-      error.textContent = ''
-      return
-    }
-
-    input.setAttribute('aria-invalid', 'true')
-    error.textContent = message
-    error.hidden = false
-  }
 }

@@ -1,6 +1,6 @@
 # SPA comparisons
 
-These seven applications reproduce the same result and interactions using each
+These eight applications reproduce the same result and interactions using each
 renderer’s own application model:
 
 - [`lumi-native`](./lumi-native/) — inline templates and one native demo module
@@ -10,12 +10,13 @@ renderer’s own application model:
 - [`lumi-dsl`](./lumi-dsl/) — a data-attribute DSL and typed behavior modules
 - [`vue`](./vue/) — Vue single-file components and Composition API
 - [`react`](./react/) — React components and hooks
+- [`lit`](./lit/) — Lit templates and reactive properties
 - [`angular`](./angular/) — Angular standalone components and signals
 
-All six use the static JSON payloads in this directory and the
+All eight use the static JSON payloads in this directory and the
 shared visual design in [`spa.css`](./spa.css). The data-attribute DSL, React,
-Vue, and Angular also share the typed helpers in [`data.ts`](./data.ts) and
-[`data-20k.ts`](./data-20k.ts). None of the three framework implementations
+Vue, Lit, and Angular also share the typed helpers in [`data.ts`](./data.ts)
+and [`data-20k.ts`](./data-20k.ts). None of the four framework implementations
 imports Lumi, `@thlib/lumi`, or anything from the repository’s `src` directory.
 The Lumi applications import the repository's built
 [`dist/lumi.js`](../../dist/lumi.js) bundle.
@@ -50,11 +51,13 @@ pnpm install
 pnpm --filter luminate-spa-react run dev
 ```
 
-Substitute `luminate-spa-vue` or `luminate-spa-angular` to run another
+Substitute `luminate-spa-vue`, `luminate-spa-lit`, or
+`luminate-spa-angular` to run another
 application. Use `pnpm --filter <package-name> run build` to create its
 production bundle. The framework production bundles are committed so the
 repository-wide static server can open the applications at
-`/examples/spa/react/`, `/examples/spa/vue/`, and `/examples/spa/angular/`.
+`/examples/spa/react/`, `/examples/spa/vue/`, `/examples/spa/lit/`, and
+`/examples/spa/angular/`.
 Rebuild the corresponding application after changing its source.
 
 Each application includes the unvirtualized **Records** route. It renders the
@@ -69,7 +72,8 @@ From the repository root, run the production SPA stress benchmark:
 pnpm run benchmark:spa
 ```
 
-The runner rebuilds all five applications and measures cache-disabled cold load,
+The runner rebuilds all seven benchmark applications and measures
+cache-disabled cold load,
 route-render churn, repeated project filtering, a separately sampled
 20,000-row filter cycle, long tasks, DOM stability, heap change, and initial
 asset size in headless Chromium. It writes a readable report to

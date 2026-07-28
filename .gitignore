@@ -4,6 +4,8 @@ dist/
 !examples/spa/react/dist/**
 !examples/spa/vue/dist/
 !examples/spa/vue/dist/**
+!examples/spa/lit/dist/
+!examples/spa/lit/dist/**
 !examples/spa/angular/dist/
 !examples/spa/angular/dist/**
 test-results/

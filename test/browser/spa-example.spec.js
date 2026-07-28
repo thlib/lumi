@@ -2,7 +2,7 @@
 
 import { expect, test } from '@playwright/test'
 
-for (const framework of ['vue', 'react', 'angular']) {
+for (const framework of ['vue', 'react', 'lit', 'angular']) {
   test(`the ${framework} SPA opens from its shared examples path`, async ({
     page,
   }) => {

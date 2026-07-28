@@ -149,6 +149,14 @@ const frameworks = Object.freeze([
     urlPath: 'react',
   },
   {
+    id: 'lit',
+    label: 'Lit',
+    packageFile: resolve(root, 'examples/spa/lit/package.json'),
+    buildDirectory: resolve(root, 'examples/spa/lit'),
+    publicRoot: resolve(root, 'examples/spa/lit/dist'),
+    urlPath: 'lit',
+  },
+  {
     id: 'angular',
     label: 'Angular',
     packageFile: resolve(root, 'examples/spa/angular/package.json'),

@@ -4,7 +4,7 @@
 
 Lumi is a small browser-first rendering layer.
 
-It solves one problem: Declarative DOM rendering.
+It solves one problem: **Declarative DOM rendering**.
 
 It brings declarative updates to native HTML without relocating HTML into
 JavaScript or imposing a state-management model.

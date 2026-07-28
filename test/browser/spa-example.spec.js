@@ -55,7 +55,7 @@ for (const variant of ['lumi-native', 'lumi-build', 'lumi-ts', 'lumi-dsl']) {
   })
 }
 
-for (const variant of ['lumi-build', 'lumi-ts', 'lumi-dsl']) {
+for (const variant of ['lumi-native', 'lumi-build', 'lumi-ts', 'lumi-dsl']) {
   test(`the ${variant} SPA drives behavior through Lumi bindings`, async ({
     page,
   }) => {
@@ -70,9 +70,10 @@ for (const variant of ['lumi-build', 'lumi-ts', 'lumi-dsl']) {
 
     await page.setViewportSize({width: 800, height: 900})
     await page.goto(`/examples/spa/${variant}/index.html#/overview`)
+    const output = variant === 'lumi-native' ? '' : '/dist'
     await expect(page).toHaveURL(
       new RegExp(
-        `/examples/spa/${variant}/dist/index\\.html#/overview$`,
+        `/examples/spa/${variant}${output}/index\\.html#/overview$`,
       ),
     )
 

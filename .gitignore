@@ -1,5 +1,7 @@
 node_modules/
-dist/
+examples/spa/lumi-build/dist/
+examples/spa/lumi-dsl/dist/
+examples/spa/lumi-ts/dist/
 !examples/spa/react/dist/
 !examples/spa/react/dist/**
 !examples/spa/vue/dist/

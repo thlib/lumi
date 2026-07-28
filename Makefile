@@ -60,7 +60,7 @@ ci: install lint test test-package browsers test-browser ## Run the CI workflow 
 bench: ## Run the Node rendering baseline
 	$(PNPM) run benchmark
 
-spa-bench: ## Run the SPA comparison benchmark
+spa-bench: install ## Install dependencies and run the SPA comparison benchmark
 	$(PNPM) run benchmark:spa
 
 serve: ## Serve the repository on port 8008 to browse examples/

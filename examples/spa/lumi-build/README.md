@@ -1,7 +1,7 @@
 # Lumi component-build SPA
 
-Reusable views live in [`components`](./components/), while full route views
-live in [`pages`](./pages/). Each file is a native HTML document that starts
+Reusable views live in [`src/components`](./src/components/), while full route
+views live in [`src/pages`](./src/pages/). Each file is a native HTML document that starts
 with one `<template>` and ends with the ordinary `<script type="module">` that
 default-exports the template's Lumi behavior. The build derives the definition
 name from its filename, so these documents do not make runtime `define()`
@@ -27,7 +27,7 @@ Create the minified benchmark/production output once with:
 pnpm run build:spa
 ```
 
-[`shell.html`](./shell.html) owns the outer document. The build places every
+[`src/shell.html`](./src/shell.html) owns the outer document. The build places every
 component and page template into its body, extracts each document's final
 inline module as an esbuild input, and emits one `dist/app.js` module graph.
 The root [`index.html`](./index.html) redirects repository-wide static servers

@@ -1,9 +1,9 @@
 # Lumi data-attribute DSL SPA
 
 This experiment keeps all executable behavior in ordinary TypeScript while
-making the component HTML declarative through a data-attribute DSL. Reusable templates live in
-[`components`](./components/) and route templates live in
-[`pages`](./pages/). They contain no inline scripts.
+making the component HTML declarative through a data-attribute DSL. Reusable
+templates live in [`src/components`](./src/components/) and route templates
+live in [`src/pages`](./src/pages/). They contain no inline scripts.
 
 Data attributes opt elements into independently composable Lumi behaviors:
 
@@ -11,7 +11,7 @@ Data attributes opt elements into independently composable Lumi behaviors:
 <span data-path="$.data.workspace">Luminate</span>
 ```
 
-[`behaviors/path.ts`](./behaviors/path.ts) defines that behavior with Lumi's
+[`src/behaviors/path.ts`](./src/behaviors/path.ts) defines that behavior with Lumi's
 ordinary `text()` binding. It evaluates the RFC 9535 JSONPath against Lumi's
 projection context, so root presentation data is available through
 `$.data`, repeated values through `$.item`, and positions through `$.index`.
@@ -34,12 +34,12 @@ Interaction attributes name behavior groups rather than DOM events or hidden
 handler functions. `data-navigation="toggle"`, `data-project-filter="active"`,
 `data-validate="email"`, and `data-toast="close"` are each owned by their
 corresponding TypeScript behavior module, which chooses the appropriate event.
-The root definition in [`application.ts`](./application.ts) composes the
+The root definition in [`src/application.ts`](./src/application.ts) composes the
 modules' exported Lumi bindings.
 
 `data-include` composes the source templates into one root template before
 mounting. Lumi therefore manages the application as one component and receives
-the typed snapshot produced by [`presentation.ts`](./presentation.ts).
+the typed snapshot produced by [`src/presentation.ts`](./src/presentation.ts).
 
 From the repository root, start its development server:
 

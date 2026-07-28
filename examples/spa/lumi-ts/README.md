@@ -4,7 +4,7 @@ This is the TypeScript counterpart to [`lumi-build`](../lumi-build/). Each
 native component or page template has a colocated TypeScript behavior module:
 
 ```text
-components/
+src/components/
   navigation.html
   navigation.ts
 ```
@@ -13,7 +13,7 @@ The HTML files contain one native `<template>` and no executable code. Their
 matching `.ts` files default-export the Lumi definition for that template. The
 build derives each definition name from the shared filename, so neither file
 performs a runtime `define()` call. Filenames must be unique across
-[`components`](./components/) and [`pages`](./pages/).
+[`src/components`](./src/components/) and [`src/pages`](./src/pages/).
 
 To use the VS Code companion-file view, open the repository root:
 

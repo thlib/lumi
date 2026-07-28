@@ -4,8 +4,9 @@ import {dirname, join} from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {build} from 'esbuild'
 
-const source = dirname(fileURLToPath(import.meta.url))
-const root = dirname(dirname(dirname(source)))
+const project = dirname(fileURLToPath(import.meta.url))
+const source = join(project, 'src')
+const root = dirname(dirname(dirname(project)))
 
 await build({
   entryPoints: [join(source, 'json-path-browser-entry.js')],

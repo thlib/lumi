@@ -6,10 +6,11 @@ import {fileURLToPath} from 'node:url'
 import {spawnSync} from 'node:child_process'
 import {build, context} from 'esbuild'
 
-const source = dirname(fileURLToPath(import.meta.url))
-const spa = dirname(source)
+const project = dirname(fileURLToPath(import.meta.url))
+const source = join(project, 'src')
+const spa = dirname(project)
 const root = dirname(dirname(spa))
-const output = join(source, 'dist')
+const output = join(project, 'dist')
 const documents = ['components', 'pages'].map(name => join(source, name)).filter(existsSync)
 const serve = process.argv.includes('--serve')
 
@@ -34,7 +35,7 @@ function documentsPlugin() {
       return errors.length === 0 ? undefined : {errors}
     })
     build.onResolve({filter: /^lumi-spa-entry$/}, () => ({path: 'entry', namespace: 'lumi-spa'}))
-    build.onLoad({filter: /^entry$/, namespace: 'lumi-spa'}, () => ({contents: entryModule(), loader: 'ts', resolveDir: source, watchDirs: documents, watchFiles: [join(source, 'shell.html'), join(spa, 'spa.css'), join(source, 'tsconfig.json'), ...files()]}))
+    build.onLoad({filter: /^entry$/, namespace: 'lumi-spa'}, () => ({contents: entryModule(), loader: 'ts', resolveDir: source, watchDirs: documents, watchFiles: [join(source, 'shell.html'), join(spa, 'spa.css'), join(project, 'tsconfig.json'), ...files()]}))
     build.onResolve({filter: /^lumi-document:/}, args => ({path: join(source, args.path.slice('lumi-document:'.length)), namespace: 'lumi-document'}))
     build.onLoad({filter: /\.html$/, namespace: 'lumi-document'}, args => ({contents: behavior(args.path), loader: 'ts', resolveDir: dirname(args.path), watchFiles: [args.path, args.path.replace(/\.html$/, '.ts')]}))
     build.onEnd(result => { if (result.errors.length === 0) emitPage() })
@@ -42,7 +43,7 @@ function documentsPlugin() {
 }
 
 function typeErrors() {
-  const result = spawnSync(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '--project', join(source, 'tsconfig.json')], {cwd: root, encoding: 'utf8'})
+  const result = spawnSync(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '--project', join(project, 'tsconfig.json')], {cwd: root, encoding: 'utf8'})
   if (result.status === 0) return []
   return [{text: `${result.stdout}${result.stderr}`.replaceAll(`${root}/`, '').trim() || `TypeScript exited with status ${String(result.status)}`}]
 }
@@ -75,7 +76,7 @@ function emitPage() {
   const shell = readFileSync(join(source, 'shell.html'), 'utf8')
   const closingBody = '\n  </body>'
   const markup = files().map(file => indent(readFileSync(file, 'utf8').trim(), 4)).join('\n\n')
-  const page = shell.replace(closingBody, `\n\n${markup}${closingBody}`).replace('href="../spa.css"', 'href="./spa.css"')
+  const page = shell.replace(closingBody, `\n\n${markup}${closingBody}`).replace('href="../../spa.css"', 'href="./spa.css"')
   if (page === shell) throw new Error('shell.html does not reference the shared stylesheet')
   writeFileSync(join(output, 'index.html'), page)
   cpSync(join(spa, 'spa.css'), join(output, 'spa.css'))

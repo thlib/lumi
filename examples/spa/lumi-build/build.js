@@ -5,9 +5,10 @@ import {basename, dirname, extname, join, relative} from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {build, context} from 'esbuild'
 
-const source = dirname(fileURLToPath(import.meta.url))
-const spa = dirname(source)
-const output = join(source, 'dist')
+const project = dirname(fileURLToPath(import.meta.url))
+const source = join(project, 'src')
+const spa = dirname(project)
+const output = join(project, 'dist')
 const documents = ['components', 'pages']
   .map(name => join(source, name))
   .filter(existsSync)
@@ -121,7 +122,7 @@ function emitPage() {
   const closingBody = '\n  </body>'
   if (!shell.includes(closingBody)) throw new Error('shell.html does not contain a closing body element')
   const markup = files().map(file => indent(readDocument(file).markup, 4)).join('\n\n')
-  const page = shell.replace(closingBody, `\n\n${markup}${closingBody}`).replace('href="../spa.css"', 'href="./spa.css"')
+  const page = shell.replace(closingBody, `\n\n${markup}${closingBody}`).replace('href="../../spa.css"', 'href="./spa.css"')
   if (page === shell) throw new Error('shell.html does not reference the shared stylesheet')
   writeFileSync(join(output, 'index.html'), page)
   cpSync(join(spa, 'spa.css'), join(output, 'spa.css'))

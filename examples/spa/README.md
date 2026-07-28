@@ -22,7 +22,7 @@ The Lumi applications import the repository's built
 [`dist/lumi.js`](../../dist/lumi.js) bundle.
 
 Lumi build keeps every component's native template and inline module behavior
-together in [`lumi-build/components`](./lumi-build/components/). Run its
+together in [`lumi-build/src/components`](./lumi-build/src/components/). Run its
 bundled development server from the repository root:
 
 ```sh
@@ -30,7 +30,7 @@ pnpm run dev:spa
 ```
 
 Lumi TypeScript keeps each native template beside a separate TypeScript module
-in [`lumi-ts/components`](./lumi-ts/components/). Run it with:
+in [`lumi-ts/src/components`](./lumi-ts/src/components/). Run it with:
 
 ```sh
 pnpm run dev:spa:ts

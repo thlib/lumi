@@ -182,22 +182,28 @@ TypeScript consumer contract run as part of `pnpm run lint`.
 ## Demos
 
 - [Native bindings counter](https://thlib.github.io/lumi/examples/counter-native/)
-  ([source](./examples/counter-native)): the smallest direct Lumi example. HTML
-  stays native; JavaScript bindings beside the template project data into it.
+  ([source](./examples/counter-native)): direct Lumi bindings with native HTML.
 - [JSONPath counter](https://thlib.github.io/lumi/examples/counter/)
-  ([source](./examples/counter)): the same behavior using application-owned
-  `data-path` attributes and a cached RFC 9535 JSONPath adapter. It shows an
-  optional declarative convention, not a Lumi requirement.
-- [Native-module SPA](./examples/spa/lumi-native): templates and adjacent
-  behavior in one `index.html`, backed by one unbundled demo module.
-- [Component-build SPA](./examples/spa/lumi-build): one native HTML document
-  per component, assembled and bundled for development and production.
-- [TypeScript component-build SPA](./examples/spa/lumi-ts): native HTML
-  templates paired with colocated TypeScript behavior modules, assembled and
-  bundled for development and production.
-- [Framework comparison SPAs](./examples/spa): equivalent React, Vue,
-  and Angular applications sharing the SPA's content and visual design without
-  importing Lumi.
+  ([source](./examples/counter)): an optional `data-path` convention with an
+  RFC 9535 JSONPath adapter.
+- [Native-module SPA](https://thlib.github.io/lumi/examples/spa/lumi-native/)
+  ([source](./examples/spa/lumi-native)): inline templates and one unbundled
+  demo module.
+- [Component-build SPA](https://thlib.github.io/lumi/examples/spa/lumi-build/)
+  ([source](./examples/spa/lumi-build)): bundled native component documents.
+- [TypeScript component-build SPA](https://thlib.github.io/lumi/examples/spa/lumi-ts/)
+  ([source](./examples/spa/lumi-ts)): native templates with colocated
+  TypeScript behavior modules.
+- [Data-attribute DSL SPA](https://thlib.github.io/lumi/examples/spa/lumi-dsl/)
+  ([source](./examples/spa/lumi-dsl)): a data-attribute DSL with typed behavior
+  modules.
+- [Framework comparison SPAs](https://github.com/thlib/lumi/tree/main/examples/spa):
+  equivalent React, Vue, Lit, and Angular applications. They share the SPA
+  content and visual design without importing Lumi. Live examples:
+  [React](https://thlib.github.io/lumi/examples/spa/react/),
+  [Vue](https://thlib.github.io/lumi/examples/spa/vue/),
+  [Lit](https://thlib.github.io/lumi/examples/spa/lit/), and
+  [Angular](https://thlib.github.io/lumi/examples/spa/angular/).
 
 ## SPA benchmark
 

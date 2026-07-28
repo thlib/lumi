@@ -81,11 +81,11 @@
   const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
   export default {
+    template: document.querySelector('#overview-view'),
     present: data => ({
       ...overviewDetails(data.now),
       metrics: data.metrics,
     }),
-    template: document.querySelector('#overview-view'),
     bindings: [
       text('#overview > .heading .eyebrow', ({data}) => data.date),
       text('#overview-title', ({data}) => data.title),

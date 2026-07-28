@@ -9,11 +9,11 @@ import type {OverviewData} from '../view-data.js'
 const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
 
 export default {
+  template: document.querySelector('#overview-view'),
   present: data => ({
     ...overviewDetails(data.now),
     metrics: data.metrics,
   }),
-  template: document.querySelector('#overview-view'),
   bindings: [
     text<OverviewData, OverviewData>('#overview > .heading .eyebrow', ({data}) => data.date),
     text<OverviewData, OverviewData>('#overview-title', ({data}) => data.title),

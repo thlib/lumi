@@ -48,10 +48,10 @@
   import {text} from '../app.js'
 
   export default {
+    template: document.querySelector('#activity-page'),
     present: data => ({
       count: `${data.activities.length} updates`,
     }),
-    template: document.querySelector('#activity-page'),
     bindings: [
       text('#activity > .heading .count', ({data}) => data.count),
     ],

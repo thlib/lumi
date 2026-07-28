@@ -5,8 +5,8 @@ import type {DefinitionOptions} from '../components.js'
 import type {ProjectListData} from '../view-data.js'
 
 export default {
-  present: projects => ({projects}),
   template: document.querySelector('#project-list'),
+  present: projects => ({projects}),
   bindings: [
     repeat<Project, ProjectListData>('.project-card', ({data}) => data.projects, [
       text<Project, ProjectListData>('.status', ({item}) => item.status),

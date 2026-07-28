@@ -7,6 +7,7 @@ import type {PageData} from '../page.js'
 import type {RecordsData} from '../view-data.js'
 
 export default {
+  template: document.querySelector('#records-view'),
   present: data => {
     const records = orderLargeRecords(
       filterLargeRecords(data.recordFilter),
@@ -21,7 +22,6 @@ export default {
       summary: `${records.length.toLocaleString('en-US')} records shown`,
     }
   },
-  template: document.querySelector('#records-view'),
   bindings: [
     repeat<string, RecordsData>('.record-row', ({data}) => data.rows, [
       text<string, RecordsData>(':scope', ({item}) => item),

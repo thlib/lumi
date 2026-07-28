@@ -190,6 +190,7 @@
     const toastTimers = new Map()
 
     return {
+      template: document.querySelector('#teams-view'),
       present: data => {
         const selectedMember = data.members.find(
           member => member.id === data.selectedMemberId,
@@ -203,7 +204,6 @@
           selectedMember: selectedMember ?? data.members[0],
         }
       },
-      template: document.querySelector('#teams-view'),
       bindings: [
           text('#directory > .heading .count', ({data}) => data.memberCount),
           repeat('.member-row', ({data}) => data.members, [

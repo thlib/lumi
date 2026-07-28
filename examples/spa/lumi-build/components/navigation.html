@@ -50,11 +50,11 @@
   // Each link already carries its route in href, so the bindings read the
   // document rather than a parallel attribute.
   export default {
+    template: document.querySelector('#navigation-view'),
     present: data => ({
       route: data.route,
       projectCount: data.projects.length,
     }),
-    template: document.querySelector('#navigation-view'),
     bindings: [
       text('.link .count', ({data}) => data.projectCount),
       on('.link', 'click', (e, el) => {

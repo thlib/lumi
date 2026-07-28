@@ -18,10 +18,10 @@
   } from '../app.js'
 
   export default {
+    template: document.querySelector('#app-shell'),
     present: data => ({
       navOpen: data.navOpen,
     }),
-    template: document.querySelector('#app-shell'),
     bindings: [
       attr(
         '#shell',

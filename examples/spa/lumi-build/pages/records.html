@@ -42,6 +42,7 @@
   } from '../app.js'
 
   export default {
+    template: document.querySelector('#records-view'),
     present: data => {
       const records = orderLargeRecords(
         filterLargeRecords(data.recordFilter),
@@ -55,7 +56,6 @@
         summary: `${records.length.toLocaleString('en-US')} records shown`,
       }
     },
-    template: document.querySelector('#records-view'),
     bindings: [
       repeat('.record-row', ({data}) => data.rows, [
         text(':scope', ({item}) => item),

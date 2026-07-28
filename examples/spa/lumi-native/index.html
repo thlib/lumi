@@ -32,10 +32,10 @@
       import {define, update} from './demo-app.js'
 
       define('appShell', {
+        template: document.querySelector('#app-shell'),
         present: data => ({
           navOpen: data.navOpen,
         }),
-        template: document.querySelector('#app-shell'),
         bindings: [
           attr(
             '#shell',
@@ -94,13 +94,13 @@
       import {define, update} from './demo-app.js'
 
       define('header', {
+        template: document.querySelector('#header-view'),
         present: data => ({
           workspace: 'Luminate',
           userName: 'Freddy Fraggin',
           userInitials: 'FF',
           navOpen: data.navOpen,
         }),
-        template: document.querySelector('#header-view'),
         bindings: [
           text('.workspace-switcher .name', ({data}) => data.workspace),
           text('.user-menu .name', ({data}) => data.userName),
@@ -170,11 +170,11 @@
       // Each link already carries its route in href, so the bindings read the
       // document rather than a parallel attribute.
       define('navigation', {
+        template: document.querySelector('#navigation-view'),
         present: data => ({
           route: data.route,
           projectCount: data.projects.length,
         }),
-        template: document.querySelector('#navigation-view'),
         bindings: [
           text('.link .count', ({data}) => data.projectCount),
           on('.link', 'click', (e, el) => {
@@ -388,6 +388,7 @@
         const toastTimers = new Map()
 
         return {
+          template: document.querySelector('#teams-view'),
           present: data => {
             const selectedMember = data.members.find(
               member => member.id === data.selectedMemberId,
@@ -401,7 +402,6 @@
               selectedMember: selectedMember ?? data.members[0],
             }
           },
-          template: document.querySelector('#teams-view'),
           bindings: [
               text('#directory > .heading .count', ({data}) => data.memberCount),
               repeat('.member-row', ({data}) => data.members, [
@@ -568,8 +568,8 @@
       import {define} from './demo-app.js'
 
       define('projectList', {
-        present: projects => ({projects}),
         template: document.querySelector('#project-list'),
+        present: projects => ({projects}),
         bindings: [
           repeat('.project-card', ({data}) => data.projects, [
             text('.status', ({item}) => item.status),
@@ -607,8 +607,8 @@
       import {define} from './demo-app.js'
 
       define('activityList', {
-        present: activities => ({activities}),
         template: document.querySelector('#activity-list'),
+        present: activities => ({activities}),
         bindings: [
           repeat('.activity-item', ({data}) => data.activities, [
             text('.avatar', ({item}) => item.initials),
@@ -706,11 +706,11 @@
       const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
       define('overview', {
+        template: document.querySelector('#overview-view'),
         present: data => ({
           ...overviewDetails(data.now),
           metrics: data.metrics,
         }),
-        template: document.querySelector('#overview-view'),
         bindings: [
           text('#overview > .heading .eyebrow', ({data}) => data.date),
           text('#overview-title', ({data}) => data.title),
@@ -761,6 +761,7 @@
       import {define, update} from './demo-app.js'
 
       define('projects', {
+        template: document.querySelector('#projects-view'),
         present: data => {
           const projects = data.projects.filter(
             project => data.filter === 'all'
@@ -773,7 +774,6 @@
             summary: `${projects.length} ${suffix} shown`,
           }
         },
-        template: document.querySelector('#projects-view'),
         bindings: [
           text('.project-toolbar .summary', ({data}) => data.summary),
           // Each button carries its filter, so both the handler and projection
@@ -845,6 +845,7 @@
       } from './demo-app.js'
 
       define('records', {
+        template: document.querySelector('#records-view'),
         present: data => {
           const records = orderLargeRecords(
             filterLargeRecords(data.recordFilter),
@@ -858,7 +859,6 @@
             summary: `${records.length.toLocaleString('en-US')} records shown`,
           }
         },
-        template: document.querySelector('#records-view'),
         bindings: [
           repeat('.record-row', ({data}) => data.rows, [
             text(':scope', ({item}) => item),
@@ -946,10 +946,10 @@
       import {define} from './demo-app.js'
 
       define('activityPage', {
+        template: document.querySelector('#activity-page'),
         present: data => ({
           count: `${data.activities.length} updates`,
         }),
-        template: document.querySelector('#activity-page'),
         bindings: [
           text('#activity > .heading .count', ({data}) => data.count),
         ],

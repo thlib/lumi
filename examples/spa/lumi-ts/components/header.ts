@@ -6,13 +6,13 @@ import type {PageData} from '../page.js'
 import type {HeaderData} from '../view-data.js'
 
 export default {
+  template: document.querySelector('#header-view'),
   present: data => ({
     workspace: 'Luminate',
     userName: 'Freddy Fraggin',
     userInitials: 'FF',
     navOpen: data.navOpen,
   }),
-  template: document.querySelector('#header-view'),
   bindings: [
     text<HeaderData, HeaderData>('.workspace-switcher .name', ({data}) => data.workspace),
     text<HeaderData, HeaderData>('.user-menu .name', ({data}) => data.userName),

@@ -24,6 +24,7 @@ import {rootContext} from './internal/projection-context.js'
 const domBindingDescriptor = Symbol('Lumi DOM binding descriptor')
 const ownedDomSubtrees = Symbol('Lumi owned DOM subtrees')
 const noOperation = () => {}
+const classWhitespace = '[\\t\\n\\f\\r ]'
 
 /**
  * @typedef {string | number | boolean} TextValue
@@ -462,31 +463,81 @@ function createRuntimeApply(runtime) {
     }
     case 'class': {
       const name = requiredName(descriptor)
+      const valid = name !== '' && !/[\t\n\f\r ]/.test(name)
+      const token = escapeRegularExpression(name)
+      const contains = new RegExp(
+        `(^|${classWhitespace})${token}(?=$|${classWhitespace})`,
+      )
+      const remove = new RegExp(
+        `(^|${classWhitespace})${token}(?=$|${classWhitespace})`,
+        'g',
+      )
+
       return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
         const next = /** @type {boolean} */ (value)
 
-        if (element.classList.contains(name) === next) {
+        // Keep native DOMTokenList errors for invalid tokens. Valid fixed
+        // tokens use the raw attribute so an update does not create and
+        // search a DOMTokenList for all classes on the element.
+        if (!valid) {
+          if (element.classList.contains(name) === next) {
+            return false
+          }
+
+          element.classList.toggle(name, next)
+          return true
+        }
+
+        const current = element.getAttribute('class') ?? ''
+
+        if (contains.test(current) === next) {
           return false
         }
 
-        element.classList.toggle(name, next)
+        const className = next
+          ? appendClassToken(current, name)
+          : current.replace(remove, '$1')
+        element.setAttribute('class', className)
         return true
       }
     }
     case 'style': {
       const name = requiredName(descriptor)
+      const property = supportsStyleProperty(runtime.view, name)
+        ? styleProperty(name)
+        : null
+
       return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
         const styledElement = asStyledElement(element)
-        const current = styledElement.style.getPropertyValue(name)
+        const declaration = styledElement.style
+
+        if (
+          property !== null
+          && typeof Reflect.get(declaration, property) === 'string'
+        ) {
+          const style = /** @type {Record<string, unknown>} */ (
+            /** @type {unknown} */ (declaration)
+          )
+          const current = style[property]
+
+          if (current === value) {
+            return false
+          }
+
+          style[property] = /** @type {string} */ (value)
+          return true
+        }
+
+        const current = declaration.getPropertyValue(name)
 
         if (current === value) {
           return false
         }
 
         if (value === '') {
-          styledElement.style.removeProperty(name)
+          declaration.removeProperty(name)
         } else {
-          styledElement.style.setProperty(name, /** @type {string} */ (value))
+          declaration.setProperty(name, /** @type {string} */ (value))
         }
         return true
       }
@@ -1384,21 +1435,11 @@ function applyPlannedValue(
       return
     }
     case 'class': {
-      element.classList.toggle(
-        requiredName(descriptor),
-        /** @type {boolean} */ (value),
-      )
+      runtime.apply(element, value)
       return
     }
     case 'style': {
-      const styledElement = asStyledElement(element)
-      const name = requiredName(descriptor)
-
-      if (value === '') {
-        styledElement.style.removeProperty(name)
-      } else {
-        styledElement.style.setProperty(name, /** @type {string} */ (value))
-      }
+      runtime.apply(element, value)
       return
     }
     case 'repeat':
@@ -1457,6 +1498,72 @@ function setAttributeValue(element, name, value) {
   }
 
   return true
+}
+
+/**
+ * Adds one class token without parsing or serializing unrelated tokens.
+ *
+ * @param {string} current
+ * @param {string} name
+ * @returns {string}
+ */
+function appendClassToken(current, name) {
+  if (current === '' || /[\t\n\f\r ]$/.test(current)) {
+    return current + name
+  }
+
+  return `${current} ${name}`
+}
+
+/**
+ * Escapes a fixed string for use in a regular expression.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+function escapeRegularExpression(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * Gets the CSSStyleDeclaration property for a standard CSS property name.
+ * Custom properties and non-standard spellings use the CSSOM methods.
+ *
+ * @param {string} name
+ * @returns {string | null}
+ */
+function styleProperty(name) {
+  if (name.startsWith('--') || /[A-Z]/.test(name)) {
+    return null
+  }
+
+  if (name === 'float') {
+    return 'cssFloat'
+  }
+
+  return name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())
+}
+
+/**
+ * Tests a CSS property name without assuming that the DOM types expose the
+ * CSS namespace.
+ *
+ * @param {Window | null} view
+ * @param {string} name
+ * @returns {boolean}
+ */
+function supportsStyleProperty(view, name) {
+  if (view === null) {
+    return false
+  }
+
+  const css = Reflect.get(view, 'CSS')
+  const supports = css === null || css === undefined
+    ? undefined
+    : Reflect.get(css, 'supports')
+
+  return typeof supports === 'function'
+    && Reflect.apply(supports, css, [name, 'initial']) === true
 }
 
 /**

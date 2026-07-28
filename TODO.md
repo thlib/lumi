@@ -42,5 +42,7 @@
 - remove `background-color`
 - remove the unused styles
 - fix the mini-bars
-- current classToggle was inefficient?
+- lit based spa
+- lumi should accept a DomFragment instead of a template too, and another element as the template too.
+
 

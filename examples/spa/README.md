@@ -1,17 +1,19 @@
 # SPA comparisons
 
-These six applications reproduce the same result and interactions using each
+These seven applications reproduce the same result and interactions using each
 renderer’s own application model:
 
 - [`lumi-native`](./lumi-native/) — inline templates and one native demo module
 - [`lumi-build`](./lumi-build/) — bundled native component documents
-- [`lumi-ts`](./lumi-ts/) — declarative data paths and typed behavior modules
+- [`lumi-ts`](./lumi-ts/) — bundled native templates with colocated TypeScript
+  behavior modules
+- [`lumi-dsl`](./lumi-dsl/) — a data-attribute DSL and typed behavior modules
 - [`vue`](./vue/) — Vue single-file components and Composition API
 - [`react`](./react/) — React components and hooks
 - [`angular`](./angular/) — Angular standalone components and signals
 
 All six use the static JSON payloads in this directory and the
-shared visual design in [`spa.css`](./spa.css). The TypeScript trial, React,
+shared visual design in [`spa.css`](./spa.css). The data-attribute DSL, React,
 Vue, and Angular also share the typed helpers in [`data.ts`](./data.ts) and
 [`data-20k.ts`](./data-20k.ts). None of the three framework implementations
 imports Lumi, `@thlib/lumi`, or anything from the repository’s `src` directory.
@@ -26,8 +28,16 @@ bundled development server from the repository root:
 pnpm run dev:spa
 ```
 
-Use `pnpm run dev:spa:ts` for the TypeScript trial. The development servers
-rebuild the same `lumi-build/dist/` and `lumi-ts/dist/` applications used
+Lumi TypeScript keeps each native template beside a separate TypeScript module
+in [`lumi-ts/components`](./lumi-ts/components/). Run it with:
+
+```sh
+pnpm run dev:spa:ts
+```
+
+Use `pnpm run dev:spa:dsl` for the data-attribute DSL. The development servers
+rebuild the same `lumi-build/dist/`, `lumi-ts/dist/`, and `lumi-dsl/dist/`
+applications used
 by the browser contracts and production benchmark. The browser-native
 `lumi-native` variant can be served directly from the repository root after
 running `pnpm run build`.

@@ -1,22 +1,22 @@
 <template id="project-list">
   <div class="project-grid">
-    <article class="project-card" data-repeat="$.item.projects[*]">
+    <article class="project-card">
       <div class="top">
-        <span class="accent" data-attr="data-project: $.item.id"></span>
-        <span class="status" data-attr="data-status: $.item.status" data-path="$.item.status">Active</span>
+        <span class="accent"></span>
+        <span class="status">Active</span>
       </div>
-      <h3 class="name" data-path="$.item.name">Project name</h3>
-      <p class="description" data-path="$.item.description">Project description</p>
+      <h3 class="name">Project name</h3>
+      <p class="description">Project description</p>
       <div class="progress-label">
         <span>Progress</span>
-        <strong class="value" data-path="$.item.progressLabel">0%</strong>
+        <strong class="value">0%</strong>
       </div>
       <div class="progress-track">
-        <span class="bar" data-attr="data-project: $.item.id"></span>
+        <span class="bar"></span>
       </div>
       <div class="footer">
-        <span class="members" data-path="$.item.members">AL · NB</span>
-        <span class="due" data-path="$.item.due">Due soon</span>
+        <span class="members">AL · NB</span>
+        <span class="due">Due soon</span>
       </div>
     </article>
   </div>

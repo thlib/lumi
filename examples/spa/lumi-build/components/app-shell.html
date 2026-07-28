@@ -13,16 +13,18 @@
 <script type="module">
   import {
     attr,
+    emailValidation,
     on,
     update,
   } from '../app.js'
 
   export default {
+    template: document.querySelector('#app-shell'),
     present: data => ({
       navOpen: data.navOpen,
     }),
-    template: document.querySelector('#app-shell'),
     bindings: [
+      ...emailValidation,
       attr(
         '#shell',
         'data-navigation-state',

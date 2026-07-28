@@ -9,7 +9,7 @@ BROWSERS ?= chromium firefox
 PORT ?= 8008
 
 .PHONY: help install build types bundle spa spa-dev size lint test test-browser \
-	test-package browsers check bench spa-bench serve clean
+	test-package browsers check ci bench spa-bench serve clean
 
 help: ## List the available targets
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage: make <target>\n\n"} \
@@ -55,6 +55,8 @@ browsers: ## Download the Playwright browsers
 
 check: lint test test-package test-browser ## Run everything CI runs
 
+ci: install lint test test-package browsers test-browser ## Run the CI workflow locally
+
 bench: ## Run the Node rendering baseline
 	$(PNPM) run benchmark
 
@@ -65,7 +67,8 @@ serve: ## Serve the repository on port 8008 to browse examples/
 	@echo "Examples: http://localhost:$(PORT)/examples/counter/"
 	@echo "Lumi native: http://localhost:$(PORT)/examples/spa/lumi-native/"
 	@echo "Lumi build: http://localhost:$(PORT)/examples/spa/lumi-build/dist/"
-	@echo "Lumi TS: http://localhost:$(PORT)/examples/spa/lumi-ts/dist/"
+	@echo "Lumi TypeScript: http://localhost:$(PORT)/examples/spa/lumi-ts/dist/"
+	@echo "Lumi DSL: http://localhost:$(PORT)/examples/spa/lumi-dsl/dist/"
 	python -m http.server $(PORT)
 
 clean: ## Remove build output

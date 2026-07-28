@@ -26,8 +26,8 @@
   import {attr, repeat, text} from '../app.js'
 
   export default {
-    present: projects => ({projects}),
     template: document.querySelector('#project-list'),
+    present: projects => ({projects}),
     bindings: [
       repeat('.project-card', ({data}) => data.projects, [
         text('.status', ({item}) => item.status),

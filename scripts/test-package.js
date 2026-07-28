@@ -48,18 +48,7 @@ try {
     .sort()
 
   assert.deepEqual(declarationFiles, [
-    'dist/bindings.d.ts',
-    'dist/cardinality.d.ts',
-    'dist/component.d.ts',
-    'dist/dom.d.ts',
-    'dist/events.d.ts',
-    'dist/index.d.ts',
-    'dist/internal/diagnostics.d.ts',
-    'dist/internal/no-value.d.ts',
-    'dist/internal/projection-context.d.ts',
-    'dist/internal/projection-error.d.ts',
-    'dist/plan.d.ts',
-    'dist/types.d.ts',
+    'dist/lumi.d.ts',
   ])
 
   // The browser bundle ships alongside the declarations so a CDN can serve one

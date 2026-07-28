@@ -1,0 +1,15 @@
+<template id="activity-list">
+  <ol class="activity-list">
+    <li class="activity-item" data-repeat="$.item.activities[*]">
+      <span class="avatar" data-attr="data-person: $.item.personId" data-path="$.item.initials">AL</span>
+      <div class="copy">
+        <p>
+          <a class="person" data-attr="href: $.item.href" data-path="$.item.person">Person</a>
+          <span class="action" data-path="$.item.action">updated</span>
+          <b class="target" data-path="$.item.target">an item</b>
+        </p>
+        <time data-path="$.item.time">Just now</time>
+      </div>
+    </li>
+  </ol>
+</template>

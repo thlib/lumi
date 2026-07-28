@@ -30,6 +30,7 @@
   } from '../app.js'
 
   export default {
+    template: document.querySelector('#projects-view'),
     present: data => {
       const projects = data.projects.filter(
         project => data.filter === 'all'
@@ -42,7 +43,6 @@
         summary: `${projects.length} ${suffix} shown`,
       }
     },
-    template: document.querySelector('#projects-view'),
     bindings: [
       text('.project-toolbar .summary', ({data}) => data.summary),
       // Each button carries its filter, so both the handler and projection

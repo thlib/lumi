@@ -9,7 +9,6 @@ import {
   routeFromHash,
 } from '../data'
 import {largeRecords} from '../data-20k'
-import {present} from './presentation'
 
 import type {
   Activity,
@@ -23,7 +22,6 @@ import type {
   RecordFilter,
   RecordSortDirection,
 } from '../data-20k'
-import type {Presentation} from './presentation'
 
 export interface PageData extends AppState {
   activities: readonly Activity[]
@@ -38,7 +36,7 @@ export interface PageData extends AppState {
 
 interface ConnectedPage {
   root: Element
-  update(data: Presentation): void
+  update(data: PageData): void
   unmount(): void
 }
 
@@ -126,6 +124,6 @@ function render(): void {
     throw new Error('Page is not connected')
   }
 
-  page.update(present(data))
+  page.update(data)
   document.title = documentTitle(data.route, data.selectedMemberId)
 }

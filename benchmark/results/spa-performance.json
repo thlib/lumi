@@ -23,7 +23,7 @@
   "versions": {
     "lumi-native": "0.1.0",
     "lumi-build": "0.1.0",
-    "lumi-ts": "0.1.0",
+    "lumi-dsl": "0.1.0",
     "vue": "3.5.40",
     "react": "19.2.8",
     "angular": "21.2.18"
@@ -39,7 +39,7 @@
       "gzipBytes": 27416,
       "rawBytes": 99675
     },
-    "lumi-ts": {
+    "lumi-dsl": {
       "files": 3,
       "gzipBytes": 32469,
       "rawBytes": 121086
@@ -233,7 +233,7 @@
         "p95": 13.733333331843218
       }
     },
-    "lumi-ts": {
+    "lumi-dsl": {
       "domContentLoadedMs": {
         "count": 5,
         "max": 29.200000002980232,
@@ -918,12 +918,12 @@
         }
       }
     ],
-    "lumi-ts": [
+    "lumi-dsl": [
       {
         "resources": [
-          "http://127.0.0.1:34301/lumi-ts/?sample=1#/overview",
-          "http://127.0.0.1:34301/lumi-ts/spa.css",
-          "http://127.0.0.1:34301/lumi-ts/app.js"
+          "http://127.0.0.1:34301/lumi-dsl/?sample=1#/overview",
+          "http://127.0.0.1:34301/lumi-dsl/spa.css",
+          "http://127.0.0.1:34301/lumi-dsl/app.js"
         ],
         "startup": {
           "domContentLoadedMs": 28.200000002980232,
@@ -953,9 +953,9 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:34301/lumi-ts/?sample=2#/overview",
-          "http://127.0.0.1:34301/lumi-ts/spa.css",
-          "http://127.0.0.1:34301/lumi-ts/app.js"
+          "http://127.0.0.1:34301/lumi-dsl/?sample=2#/overview",
+          "http://127.0.0.1:34301/lumi-dsl/spa.css",
+          "http://127.0.0.1:34301/lumi-dsl/app.js"
         ],
         "startup": {
           "domContentLoadedMs": 29.200000002980232,
@@ -985,9 +985,9 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:34301/lumi-ts/?sample=3#/overview",
-          "http://127.0.0.1:34301/lumi-ts/spa.css",
-          "http://127.0.0.1:34301/lumi-ts/app.js"
+          "http://127.0.0.1:34301/lumi-dsl/?sample=3#/overview",
+          "http://127.0.0.1:34301/lumi-dsl/spa.css",
+          "http://127.0.0.1:34301/lumi-dsl/app.js"
         ],
         "startup": {
           "domContentLoadedMs": 28.100000001490116,
@@ -1017,9 +1017,9 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:34301/lumi-ts/?sample=4#/records",
-          "http://127.0.0.1:34301/lumi-ts/spa.css",
-          "http://127.0.0.1:34301/lumi-ts/app.js"
+          "http://127.0.0.1:34301/lumi-dsl/?sample=4#/records",
+          "http://127.0.0.1:34301/lumi-dsl/spa.css",
+          "http://127.0.0.1:34301/lumi-dsl/app.js"
         ],
         "startup": {
           "domContentLoadedMs": 28.299999997019768,
@@ -1049,9 +1049,9 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:34301/lumi-ts/?sample=5#/records",
-          "http://127.0.0.1:34301/lumi-ts/spa.css",
-          "http://127.0.0.1:34301/lumi-ts/app.js"
+          "http://127.0.0.1:34301/lumi-dsl/?sample=5#/records",
+          "http://127.0.0.1:34301/lumi-dsl/spa.css",
+          "http://127.0.0.1:34301/lumi-dsl/app.js"
         ],
         "startup": {
           "domContentLoadedMs": 29.200000002980232,

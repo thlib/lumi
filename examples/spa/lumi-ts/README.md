@@ -1,58 +1,46 @@
-# Lumi declarative TypeScript SPA
+# Lumi TypeScript component-build SPA
 
-This trial keeps all executable behavior in ordinary TypeScript while making
-the component HTML declarative. Reusable templates live in
-[`components`](./components/) and route templates live in
-[`pages`](./pages/). They contain no inline scripts.
+This is the TypeScript counterpart to [`lumi-build`](../lumi-build/). Each
+native component or page template has a colocated TypeScript behavior module:
 
-Data attributes opt elements into independently composable Lumi behaviors:
-
-```html
-<span data-path="$.data.workspace">Luminate</span>
+```text
+components/
+  navigation.html
+  navigation.ts
 ```
 
-[`behaviors/path.ts`](./behaviors/path.ts) defines that behavior with Lumi's
-ordinary `text()` binding. It evaluates the RFC 9535 JSONPath against Lumi's
-projection context, so root presentation data is available through
-`$.data`, repeated values through `$.item`, and positions through `$.index`.
-The repeat, attribute, and property conventions are separate behavior modules
-in the same directory. For example, `data-attr` declares an attribute
-projection:
+The HTML files contain one native `<template>` and no executable code. Their
+matching `.ts` files default-export the Lumi definition for that template. The
+build derives each definition name from the shared filename, so neither file
+performs a runtime `define()` call. Filenames must be unique across
+[`components`](./components/) and [`pages`](./pages/).
 
-```html
-<a data-attr="href: $.item.href" data-path="$.item.name">Member name</a>
-<span class="avatar" data-attr="data-person: $.item.personId">AL</span>
+To use the VS Code companion-file view, open the repository root:
+
+```sh
+code .
 ```
 
-Structural classes such as `avatar` remain static. Additive semantic
-attributes such as `data-person`, `data-project`, and `data-direction` carry
-dynamic meaning without replacing those classes; the shared stylesheet
-decides their colors and dimensions. No palette names or CSS values leak into
-the template or presentation model.
+VS Code reads the repository
+[workspace settings](../../../.vscode/settings.json) and recommends the
+configured [companion-file extension](../../../.vscode/extensions.json).
+Install the recommended extension when VS Code prompts you. When you open an
+HTML template, VS Code opens its existing TypeScript and CSS companion files in
+the right-hand editor group. The Explorer also nests these companion files
+under the HTML template.
 
-Interaction attributes name behavior groups rather than DOM events or hidden
-handler functions. `data-navigation="toggle"`, `data-project-filter="active"`,
-`data-validate="email"`, and `data-toast="close"` are each owned by their
-corresponding TypeScript behavior module, which chooses the appropriate event.
-The root definition in [`application.ts`](./application.ts) composes the
-modules' exported Lumi bindings.
-
-`data-include` composes the source templates into one root template before
-mounting. Lumi therefore manages the application as one component and receives
-the typed snapshot produced by [`presentation.ts`](./presentation.ts).
-
-From the repository root, start its development server:
+From the repository root, start the bundled development server:
 
 ```sh
 pnpm run dev:spa:ts
 ```
 
-Create the minified output once with:
+Create the minified production output once with:
 
 ```sh
 pnpm run build:spa:ts
 ```
 
-The build strictly checks the `.ts` module graph, bundles it with esbuild, and
-emits `dist/app.js`. It assembles the script-free declarative HTML templates into
-`dist/index.html`; the browser never loads the source TypeScript.
+The build type-checks the TypeScript module graph, bundles the behavior modules
+into `dist/app.js`, and assembles the templates into `dist/index.html`. The
+browser never loads source TypeScript or source component HTML.

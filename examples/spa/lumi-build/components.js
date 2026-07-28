@@ -11,14 +11,14 @@ import {component} from '../../../dist/lumi.js'
  * @template [Data=any]
  * @typedef {{
  *   template: HTMLTemplateElement | null,
- *   bindings?: ReadonlyArray<import('../../../dist/types.js').Binding<any>>,
+ *   bindings?: ReadonlyArray<import('../../../dist/lumi.js').Binding<any>>,
  *   present: (data: Data) => any,
  * }} DefinitionOptions
  */
 
 /**
  * @typedef {{
- *   mount: (target: Element | null) => import('../../../dist/types.js').MountedComponent<any>,
+ *   mount: (target: Element | null) => import('../../../dist/lumi.js').MountedComponent<any>,
  *   present: (data: any) => any,
  * }} Definition
  */

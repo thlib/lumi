@@ -1,0 +1,1 @@
+Use the guidelines from the ASD-STE 100 Simplified Technical English for technical documentation.

@@ -1,5 +1,5 @@
 <template id="records-view">
-  <section id="records" aria-labelledby="records-title" data-hidden="$.data.pages.records">
+  <section id="records" aria-labelledby="records-title">
     <div class="heading">
       <div>
         <p class="eyebrow">Performance dataset</p>
@@ -9,23 +9,22 @@
     </div>
     <div class="record-toolbar">
       <div class="filters" aria-label="Filter records">
-        <button type="button" data-attr="aria-pressed: $.data.recordFilters.all" data-record-filter="all" aria-pressed="true">All</button>
-        <button type="button" data-attr="aria-pressed: $.data.recordFilters.alpha" data-record-filter="alpha" aria-pressed="false">Alpha</button>
-        <button type="button" data-attr="aria-pressed: $.data.recordFilters.beta" data-record-filter="beta" aria-pressed="false">Beta</button>
-        <button type="button" data-attr="aria-pressed: $.data.recordFilters.gamma" data-record-filter="gamma" aria-pressed="false">Gamma</button>
-        <button type="button" data-attr="aria-pressed: $.data.recordFilters.delta" data-record-filter="delta" aria-pressed="false">Delta</button>
+        <button type="button" data-record-filter="all" aria-pressed="true">All</button>
+        <button type="button" data-record-filter="alpha" aria-pressed="false">Alpha</button>
+        <button type="button" data-record-filter="beta" aria-pressed="false">Beta</button>
+        <button type="button" data-record-filter="gamma" aria-pressed="false">Gamma</button>
+        <button type="button" data-record-filter="delta" aria-pressed="false">Delta</button>
       </div>
-      <p class="record-summary" data-path="$.data.recordSummary">20,000 records shown</p>
+      <p class="record-summary">20,000 records shown</p>
     </div>
     <div class="record-list-wrap panel">
-      <div class="record-list-header" data-attr="aria-sort: $.data.recordSort" data-record-header aria-sort="ascending">
-        <button type="button" data-record-sort="toggle">
-          Record
-          <span class="record-sort-indicator" data-path="$.data.recordSortIndicator" aria-hidden="true">↑</span>
+      <div class="record-list-header" data-record-header aria-sort="ascending">
+        <button type="button" data-record-sort>
+          Record <span class="record-sort-indicator" aria-hidden="true">↑</span>
         </button>
       </div>
       <ol class="record-list">
-        <li class="record-row" data-path="$.item" data-repeat="$.data.recordRows[*]">record-00001 · alpha · Aida Loveleys · 97</li>
+        <li class="record-row">record-00001 · alpha · Aida Loveleys · 97</li>
       </ol>
     </div>
   </section>

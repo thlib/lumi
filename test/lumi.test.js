@@ -415,6 +415,90 @@ test('renders scalar bindings through open shadow roots', () => {
   assert.equal(output?.style.color, '')
 })
 
+test('classToggle updates one token without repeated DOMTokenList work', () => {
+  const { document } = createDocument()
+  const template = createTemplate(
+    document,
+    '<button class="control  base\tstate[1] state[1] tail "></button>',
+  )
+  const mounted = component({
+    template,
+    bindings: [
+      classToggle('.control', 'state[1]', data => data.active),
+    ],
+  }).mount(document.createElement('div'))
+  const control = /** @type {HTMLButtonElement} */ (
+    mounted.root
+  )
+
+  mounted.update({active: false})
+  assert.equal(control.getAttribute('class'), 'control  base\t  tail ')
+
+  Object.defineProperties(control.classList, {
+    contains: {
+      value() {
+        throw new Error('classToggle searched DOMTokenList more than once')
+      },
+    },
+    toggle: {
+      value() {
+        throw new Error('classToggle used DOMTokenList to write a class')
+      },
+    },
+  })
+
+  mounted.update({active: true})
+  assert.equal(control.classList.value, 'control  base\t  tail state[1]')
+
+  mounted.update({active: false})
+  assert.equal(control.classList.value, 'control  base\t  tail ')
+})
+
+test('style updates a standard property and keeps other styles', () => {
+  const { document } = createDocument()
+  const template = createTemplate(
+    document,
+    '<button class="control" style="color: blue"></button>',
+  )
+  const mounted = component({
+    template,
+    bindings: [
+      style('.control', 'background-color', data => data.background),
+    ],
+  }).mount(document.createElement('div'))
+  const control = /** @type {HTMLButtonElement} */ (
+    mounted.root
+  )
+
+  mounted.update({background: 'red'})
+  assert.equal(control.style.backgroundColor, 'red')
+  assert.equal(control.style.color, 'blue')
+
+  mounted.update({background: ''})
+  assert.equal(control.style.backgroundColor, '')
+  assert.equal(control.style.color, 'blue')
+})
+
+test('style uses CSSOM methods for custom properties', () => {
+  const { document } = createDocument()
+  const template = createTemplate(document, '<button class="control"></button>')
+  const mounted = component({
+    template,
+    bindings: [
+      style('.control', '--tone', data => data.tone),
+    ],
+  }).mount(document.createElement('div'))
+  const control = /** @type {HTMLButtonElement} */ (
+    mounted.root
+  )
+
+  mounted.update({tone: 'red'})
+  assert.equal(control.style.getPropertyValue('--tone'), 'red')
+
+  mounted.update({tone: ''})
+  assert.equal(control.style.getPropertyValue('--tone'), '')
+})
+
 test('repeats targets inside open shadow roots', () => {
   const { document, window } = createDocument()
 

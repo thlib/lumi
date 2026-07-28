@@ -1,12 +1,12 @@
 <template id="activity-page">
-  <section id="activity" aria-labelledby="activity-title" data-hidden="$.data.pages.activity">
+  <section id="activity" aria-labelledby="activity-title">
     <div class="heading">
       <div>
         <p class="eyebrow">Workspace</p>
         <h1 id="activity-title">Team activity</h1>
         <p>A shared record of progress across every project.</p>
       </div>
-      <span class="count" data-path="$.data.activityCount">5 updates</span>
+      <span class="count">5 updates</span>
     </div>
 
     <div class="activity-layout">
@@ -15,9 +15,7 @@
           <span>Today</span>
           <span class="line"></span>
         </div>
-        <div class="content">
-          <template data-include="activity-list" data-repeat="$.data.activityPageScopes[*]"></template>
-        </div>
+        <div class="content"></div>
       </section>
 
       <aside class="activity-summary">

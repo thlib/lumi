@@ -1,0 +1,75 @@
+<template id="overview-view">
+  <section id="overview" aria-labelledby="overview-title" data-hidden="$.data.pages.overview">
+    <div class="heading">
+      <div>
+        <p class="eyebrow" data-path="$.data.overview.date"></p>
+        <h1 id="overview-title" data-path="$.data.overview.title">Welcome, Freddy</h1>
+        <p>Here's what's happening across your workspace today.</p>
+      </div>
+      <a class="primary-button" href="#/projects">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 7.5h6l2-2h8v14H4v-12Z"></path>
+        </svg>
+        View projects
+      </a>
+    </div>
+
+    <div class="metric-grid">
+      <article class="metric-card" data-attr="data-direction: $.item.direction" data-repeat="$.data.metrics[*]">
+        <div class="top">
+          <span class="label" data-path="$.item.label">Metric</span>
+        </div>
+        <strong class="value" data-path="$.item.value">0</strong>
+        <span class="change" data-path="$.item.change">No change</span>
+      </article>
+    </div>
+
+    <section class="focus">
+      <div class="heading">
+        <div>
+          <h2>In focus</h2>
+          <p>Your team's most active projects.</p>
+        </div>
+        <a class="text-link" href="#/projects">
+          View all
+          <span aria-hidden="true">→</span>
+        </a>
+      </div>
+      <div class="content">
+        <template data-include="project-list" data-repeat="$.data.overviewProjectScopes[*]"></template>
+      </div>
+    </section>
+
+    <div class="overview-lower">
+      <section class="panel activity-panel" aria-labelledby="recent-activity-title">
+        <div class="heading">
+          <div>
+            <h2 id="recent-activity-title">Recent activity</h2>
+            <p>The latest updates from your team.</p>
+          </div>
+          <a class="text-link" href="#/activity">See all</a>
+        </div>
+        <div class="content">
+          <template data-include="activity-list" data-repeat="$.data.overviewActivityScopes[*]"></template>
+        </div>
+      </section>
+
+      <aside class="panel week-card" aria-labelledby="week-title">
+        <div class="top">
+          <p class="eyebrow">This week</p>
+          <h2 id="week-title">Strong momentum</h2>
+          <p>Your team completed 28% more work than last week.</p>
+        </div>
+        <div class="week-chart" aria-label="Weekly activity chart">
+          <span data-attr="data-day-state: $.data.week.Mon"><i>Mon</i></span>
+          <span data-attr="data-day-state: $.data.week.Tue"><i>Tue</i></span>
+          <span data-attr="data-day-state: $.data.week.Wed"><i>Wed</i></span>
+          <span data-attr="data-day-state: $.data.week.Thu"><i>Thu</i></span>
+          <span data-attr="data-day-state: $.data.week.Fri"><i>Fri</i></span>
+          <span data-attr="data-day-state: $.data.week.Sat"><i>Sat</i></span>
+          <span data-attr="data-day-state: $.data.week.Sun"><i>Sun</i></span>
+        </div>
+      </aside>
+    </div>
+  </section>
+</template>

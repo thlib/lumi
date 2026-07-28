@@ -4,6 +4,8 @@ import {component} from '../../../dist/lumi.js'
 import content from '../data-content.json' with {type: 'json'}
 import config from '../data-records.json' with {type: 'json'}
 
+export {emailValidation, emailValidationMessage} from '../email-validation.js'
+
 /** @typedef {'overview' | 'projects' | 'records' | 'activity' | 'teams'} Route */
 /** @typedef {'all' | 'active' | 'planning'} ProjectFilter */
 /** @typedef {'all' | 'alpha' | 'beta' | 'gamma' | 'delta'} RecordFilter */
@@ -95,14 +97,14 @@ import config from '../data-records.json' with {type: 'json'}
  * @template [Data=any]
  * @typedef {{
  *   template: HTMLTemplateElement | null,
- *   bindings?: ReadonlyArray<import('../../../dist/types.js').Binding<any>>,
+ *   bindings?: ReadonlyArray<import('../../../dist/lumi.js').Binding<any>>,
  *   present: (data: Data) => any,
  * }} DefinitionOptions
  */
 
 /**
  * @typedef {{
- *   mount: (target: Element | null) => import('../../../dist/types.js').MountedComponent<any>,
+ *   mount: (target: Element | null) => import('../../../dist/lumi.js').MountedComponent<any>,
  *   present: (data: any) => any,
  * }} Definition
  */
@@ -297,7 +299,7 @@ export function mountApplication(target) {
 function mountPlan(plan, target) {
   const entries = effectiveEntries(plan)
   /** @type {Array<{
-   *   mounted: import('../../../dist/types.js').MountedComponent<any>,
+   *   mounted: import('../../../dist/lumi.js').MountedComponent<any>,
    *   present: (data: any) => any,
    *   select: (data: ApplicationData) => any,
    * }>} */
@@ -508,25 +510,6 @@ export function orderLargeRecords(records, direction) {
   return direction === 'ascending'
     ? records
     : Array.from(records).reverse()
-}
-
-/**
- * Returns accessible copy for the invalid states used by the invite form.
- * The browser remains the source of truth for email syntax.
- *
- * @param {HTMLInputElement} input
- * @returns {string}
- */
-export function emailValidationMessage(input) {
-  if (input.validity.valueMissing) {
-    return 'Enter an email address.'
-  }
-
-  if (input.validity.typeMismatch) {
-    return 'Enter a valid email address.'
-  }
-
-  return ''
 }
 
 const {

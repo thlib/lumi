@@ -16,9 +16,6 @@
     "target": "ES2022"
   },
   "include": [
-    "**/*.ts",
-    "../../data-path.d.ts",
-    "../data.ts",
-    "../data-20k.ts"
+    "**/*.ts"
   ]
 }

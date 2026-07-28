@@ -1,13 +1,13 @@
 <template id="teams-view">
-  <section id="teams" data-hidden="$.data.pages.teams">
-    <div id="directory" data-hidden="$.data.teamDirectoryHidden">
+  <section id="teams">
+    <div id="directory">
       <div class="heading">
         <div>
           <p class="eyebrow">Manage</p>
           <h1 id="teams-title">Manage teams</h1>
           <p>Invite people and organize how your workspace collaborates.</p>
         </div>
-        <span class="count" data-path="$.data.memberCount">11 members</span>
+        <span class="count">11 members</span>
       </div>
 
       <section class="panel member-directory" aria-labelledby="member-list-title">
@@ -21,14 +21,14 @@
         </div>
 
         <div class="member-list">
-          <article class="member-row" data-repeat="$.data.members[*]">
-            <span class="avatar" data-attr="data-person: $.item.id" data-path="$.item.initials">AL</span>
+          <article class="member-row">
+            <span class="avatar">AL</span>
             <div class="identity">
-              <a class="name" data-attr="href: $.item.href" data-path="$.item.name">Member name</a>
-              <span class="email" data-path="$.item.email">name@luminate.example</span>
+              <a class="name">Member name</a>
+              <span class="email">name@luminate.example</span>
             </div>
-            <span class="team" data-path="$.item.team">Team</span>
-            <span class="role" data-path="$.item.role">Role</span>
+            <span class="team">Team</span>
+            <span class="role">Role</span>
           </article>
         </div>
       </section>
@@ -42,7 +42,7 @@
         </div>
 
         <div class="forms">
-          <form class="panel team-form invite" data-toast="create" data-validate="submit" novalidate>
+          <form class="panel team-form invite" data-validate="email" novalidate>
             <div class="heading">
               <span class="icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24">
@@ -58,8 +58,19 @@
 
             <label class="field">
               <span>Email address</span>
-              <input type="email" name="email" placeholder="name@company.com" aria-describedby="invite-email-error" data-validate="email" required>
-              <small class="error" id="invite-email-error" aria-live="polite" hidden></small>
+              <input
+                type="email"
+                name="email"
+                placeholder="name@company.com"
+                aria-describedby="invite-email-error"
+                required
+              >
+              <small
+                class="error"
+                id="invite-email-error"
+                aria-live="polite"
+                hidden
+              ></small>
             </label>
 
             <label class="field">
@@ -74,7 +85,7 @@
             <button class="primary-button" type="submit">Send invitation</button>
           </form>
 
-          <form class="panel team-form" data-toast="create" novalidate>
+          <form class="panel team-form" novalidate>
             <div class="heading">
               <span class="icon" data-form-kind="create-team" aria-hidden="true">
                 <svg viewBox="0 0 24 24">
@@ -91,12 +102,21 @@
 
             <label class="field">
               <span>Team name</span>
-              <input type="text" name="teamName" placeholder="e.g. Product design" required>
+              <input
+                type="text"
+                name="teamName"
+                placeholder="e.g. Product design"
+                required
+              >
             </label>
 
             <label class="field">
               <span>Description <em>Optional</em></span>
-              <textarea name="description" rows="3" placeholder="What does this team work on?"></textarea>
+              <textarea
+                name="description"
+                rows="3"
+                placeholder="What does this team work on?"
+              ></textarea>
             </label>
 
             <button class="primary-button" type="submit">Create team</button>
@@ -105,7 +125,7 @@
       </section>
     </div>
 
-    <div id="profile" data-hidden="$.data.teamProfileHidden" hidden>
+    <div id="profile" hidden>
       <a class="back-link" href="#/teams">
         <span aria-hidden="true">←</span>
         All team members
@@ -113,39 +133,41 @@
 
       <article class="panel member-profile-card">
         <div class="header">
-          <span class="avatar large" data-attr="data-person: $.data.selectedMember.id" data-path="$.data.selectedMember.initials">AL</span>
+          <span class="avatar large">AL</span>
           <div>
-            <p class="eyebrow team" data-path="$.data.selectedMember.team">Team</p>
-            <h1 class="name" data-path="$.data.selectedMember.name">Member name</h1>
-            <span class="role" data-path="$.data.selectedMember.role">Role</span>
+            <p class="eyebrow team">Team</p>
+            <h1 class="name">Member name</h1>
+            <span class="role">Role</span>
           </div>
         </div>
 
-        <p class="bio" data-path="$.data.selectedMember.bio">Team member biography.</p>
+        <p class="bio">Team member biography.</p>
 
         <dl class="member-details">
           <div>
             <dt>Email</dt>
-            <dd>
-              <a class="email" data-attr="href: $.data.selectedMember.mailto" data-path="$.data.selectedMember.email">name@luminate.example</a>
-            </dd>
+            <dd><a class="email">name@luminate.example</a></dd>
           </div>
           <div>
             <dt>Country</dt>
-            <dd class="country" data-path="$.data.selectedMember.country">Country</dd>
+            <dd class="country">Country</dd>
           </div>
           <div>
             <dt>Team</dt>
-            <dd class="team" data-path="$.data.selectedMember.team">Team</dd>
+            <dd class="team">Team</dd>
           </div>
         </dl>
       </article>
     </div>
 
-    <div id="toasts" aria-live="polite" aria-label="Notifications">
-      <div class="toast" data-attr="data-toast-id: $.item.id" data-repeat="$.data.toasts[*]" data-toast="close">
+    <div
+      id="toasts"
+      aria-live="polite"
+      aria-label="Notifications"
+    >
+      <div class="toast">
         <span class="icon" aria-hidden="true">!</span>
-        <span class="message" data-path="$.item.message">No server for demo</span>
+        <span class="message">No server for demo</span>
         <button type="button" aria-label="Dismiss notification">×</button>
       </div>
     </div>

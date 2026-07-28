@@ -149,6 +149,78 @@ test('a bound input value is restored from authoritative data', async ({
   await expect(input).toBeFocused()
 })
 
+test('class and standard style bindings use token-specific paths', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { classToggle, component, style } = /** @type {typeof import('../../src/index.js')} */ (
+      await import(String('/src/index.js'))
+    )
+    const template = document.createElement('template')
+    template.innerHTML = `
+      <button class="control base" style="color: blue"></button>
+    `
+    /** @type {import('../../src/index.js').ComponentOptions<{
+     *   active: boolean,
+     *   background: string,
+     * }>} */
+    const options = {
+      template,
+      bindings: [
+        classToggle('.control', 'active', ({data}) => data.active),
+        style('.control', 'background-color', ({data}) => data.background),
+      ],
+    }
+    const mounted = component(options)
+      .mount(document.querySelector('#test-root'))
+    const control = /** @type {HTMLElement} */ (mounted.root)
+
+    Object.defineProperties(control.classList, {
+      contains: {
+        value() {
+          throw new Error('classToggle used DOMTokenList.contains')
+        },
+      },
+      toggle: {
+        value() {
+          throw new Error('classToggle used DOMTokenList.toggle')
+        },
+      },
+    })
+    Object.defineProperties(control.style, {
+      getPropertyValue: {
+        value() {
+          throw new Error('style used getPropertyValue')
+        },
+      },
+      removeProperty: {
+        value() {
+          throw new Error('style used removeProperty')
+        },
+      },
+      setProperty: {
+        value() {
+          throw new Error('style used setProperty')
+        },
+      },
+    })
+
+    mounted.update({active: true, background: 'red'})
+
+    return {
+      background: control.style.backgroundColor,
+      classes: control.className,
+      color: control.style.color,
+    }
+  })
+
+  expect(result).toEqual({
+    background: 'red',
+    classes: 'control base active',
+    color: 'blue',
+  })
+})
+
 test('array append and truncation preserve surviving rows and form state', async ({
   page,
 }) => {

@@ -29,40 +29,17 @@
   request replaces the module graph. Its sourcemap resolves against the
   published source, so devtools still show original code. Pin a version: an
   unpinned CDN URL follows the latest release.
-- add 3 languages english, mandarin chinese, hindi, use i18n where you have t(txt) and n(txt, count) and ideally some standard (I assume .po files are a bit dated now?) way to host translation strings. where the txt is not english, it's an english like contextual placeholder, for example instead of saying "letter" it adds context to what that letter actually means using a `prefix_` (I wonder why english can't remain the translation string with an additional argument that gives context?), or actually make it 4. en + zh-Hans + ar + ua (ukraine)
-
-squash all unpushed commits in lumi to a single well named commit
-
-component styles in component files
-
-emailValidationMessage could be done better
-
-demo-app in all examples
-
-lumi example should be the native one?
-
-add type safety to lumi-ts .ts files
+- add 3 languages english, mandarin chinese, hindi, use i18n where you have t(txt) and n(txt, count) and ideally some standard (I assume .po files are a bit dated now?) way to host translation strings. where the txt is not english, it's an english like contextual placeholder, for example instead of saying "letter" it adds context to what that letter actually means using a `prefix_` (I wonder why english can't remain the translation string with an additional argument that gives context?), or actually make it 4. en + zh-Hans + ar + ua (ukraine), the base string for `t` should be simplified developer english without plurals.
 
 
-
-
-
-
-shim <template> to support `src` to fetch a `.html` file into itself.
-
-aren't things like `tone-cream` absolutely smelly? the class should instead describe the _meaning_ and the css should pick the color for the meaning, this allows better dark/light theme too.
-
-also I do want opening tags to be multi-line when they are twice as long as the standard size at which they normally become multi-line.
-
-
+- emailValidationMessage could be done better
+- aren't things like `tone-cream` absolutely smelly? the class should instead describe the _meaning_ and the css should pick the color for the meaning, this allows better dark/light theme too.
+- also I do want opening tags to be multi-line when they are twice as long as the standard size at which they normally become multi-line.
 - remove `style` from `lumi` and also remove `classToggle` from lumi, because they are just attributes, how the attribute figures out the toggling or setting is outside of lumi
-
 - remove people id's from css
 - remove widths from css
 - remove classes that are colors
 - remove `background-color`
 - remove the unused styles
 - fix the mini-bars
-
-
 

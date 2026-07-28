@@ -1,16 +1,33 @@
 import {resolve} from './components.js'
 
-import type {MountedComponent} from '../../../dist/lumi.js'
+import type {Activity, Project} from '../data.js'
 import type {PageData} from './page.js'
 
 type Route = PageData['route']
 type ApplicationData = PageData
 
-interface PlanEntry {
-  at: string
-  use: string
-  select?(data: ApplicationData): unknown
+interface ComponentData {
+  activityList: readonly Activity[]
+  activityPage: ApplicationData
+  appShell: ApplicationData
+  header: ApplicationData
+  navigation: ApplicationData
+  overview: ApplicationData
+  projectList: readonly Project[]
+  projects: ApplicationData
+  records: ApplicationData
+  teams: ApplicationData
 }
+
+type ComponentName = keyof ComponentData
+
+type PlanEntry = {
+  [Name in ComponentName]: {
+    at: string
+    use: Name
+    select(data: ApplicationData): ComponentData[Name]
+  }
+}[ComponentName]
 
 interface MountedPlan {
   root: Element
@@ -18,15 +35,20 @@ interface MountedPlan {
   unmount(): void
 }
 
-const shellPlan: readonly PlanEntry[] = [
-  {at: ':scope', use: 'appShell'},
-  {at: '#header', use: 'header'},
-  {at: '#sidebar', use: 'navigation'},
-]
+interface MountedEntry {
+  update(data: ApplicationData): void
+  unmount(): void
+}
 
-const routePlans: Readonly<Record<Route, readonly PlanEntry[]>> = {
+const shellPlan = [
+  {at: ':scope', use: 'appShell', select: data => data},
+  {at: '#header', use: 'header', select: data => data},
+  {at: '#sidebar', use: 'navigation', select: data => data},
+] satisfies readonly PlanEntry[]
+
+const routePlans = {
   overview: [
-    {at: ':scope', use: 'overview'},
+    {at: ':scope', use: 'overview', select: data => data},
     {
       at: '.focus > .content',
       use: 'projectList',
@@ -39,7 +61,7 @@ const routePlans: Readonly<Record<Route, readonly PlanEntry[]>> = {
     },
   ],
   projects: [
-    {at: ':scope', use: 'projects'},
+    {at: ':scope', use: 'projects', select: data => data},
     {
       at: '.content',
       use: 'projectList',
@@ -50,10 +72,10 @@ const routePlans: Readonly<Record<Route, readonly PlanEntry[]>> = {
     },
   ],
   records: [
-    {at: ':scope', use: 'records'},
+    {at: ':scope', use: 'records', select: data => data},
   ],
   activity: [
-    {at: ':scope', use: 'activityPage'},
+    {at: ':scope', use: 'activityPage', select: data => data},
     {
       at: '.activity-panel > .content',
       use: 'activityList',
@@ -61,9 +83,9 @@ const routePlans: Readonly<Record<Route, readonly PlanEntry[]>> = {
     },
   ],
   teams: [
-    {at: ':scope', use: 'teams'},
+    {at: ':scope', use: 'teams', select: data => data},
   ],
-}
+} satisfies Readonly<Record<Route, readonly PlanEntry[]>>
 
 /**
  * Mounts the persistent shell and lazily retains each visited route plan.
@@ -133,11 +155,7 @@ function mountPlan(
   target: Element,
 ): MountedPlan {
   const entries = effectiveEntries(plan)
-  const mountedEntries: {
-    mounted: MountedComponent<unknown>
-    present(data: unknown): unknown
-    select(data: ApplicationData): unknown
-  }[] = []
+  const mountedEntries: MountedEntry[] = []
   let root: Element | undefined
 
   try {
@@ -154,9 +172,10 @@ function mountPlan(
       const mounted = definition.mount(placement)
       root ??= mounted.root
       mountedEntries.push({
-        mounted,
-        present: definition.present,
-        select: entry.select ?? (data => data),
+        unmount: mounted.unmount,
+        update(data) {
+          mounted.update(definition.present(entry.select(data)))
+        },
       })
     }
   } catch (error) {
@@ -172,11 +191,8 @@ function mountPlan(
     root,
 
     update(data) {
-      const presentations = mountedEntries.map(entry => (
-        entry.present(entry.select(data))
-      ))
-      for (let index = 0; index < mountedEntries.length; index += 1) {
-        mountedEntries[index]?.mounted.update(presentations[index])
+      for (const entry of mountedEntries) {
+        entry.update(data)
       }
     },
 
@@ -208,13 +224,13 @@ function effectiveEntries(
 }
 
 function unmountEntries(
-  entries: readonly {mounted: {unmount(): void}}[],
+  entries: readonly Pick<MountedEntry, 'unmount'>[],
 ): unknown {
   let firstError: unknown
 
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     try {
-      entries[index]?.mounted.unmount()
+      entries[index]?.unmount()
     } catch (error) {
       firstError ??= error
     }

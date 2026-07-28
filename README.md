@@ -4,7 +4,7 @@
 
 Lumi is a small browser-first rendering layer.
 
-It solves one problem: Declarative DOM rendering.
+It solves one problem: **Declarative DOM rendering**.
 
 It brings declarative updates to native HTML without relocating HTML into
 JavaScript or imposing a state-management model.
@@ -30,18 +30,33 @@ It intentionally does not:
 - Watch for changes
 - Decide when rendering should happen
 
+## The idea
+
+* **Modern browsers provide far more than they used to.** Many capabilities that once required libraries, preprocessors, or framework abstractions are now built into HTML, CSS, JavaScript, and browser APIs.
+* **Native browser behavior is highly optimized.** When applications work with the platform rather than recreate it, they benefit from browser-managed performance, accessibility, semantics, focus, events, validation, lifecycle, and interoperability.
+* **LLMs work best with widely used, long-lived technologies.** HTML, CSS, JavaScript, and the DOM have decades of documentation, examples, bug reports, and production code. Agents can generally reason about these technologies more reliably than smaller proprietary languages and framework-specific abstractions. Keeping platform code explicit also makes application behavior easier to understand and modify without translating through additional conceptual layers.
+* **Agentic coding makes verbosity cheaper.** Many abstractions were created because writing and maintaining the underlying code required too much time or specialist knowledge. An agent can now produce repetitive code, update affected references, perform migrations, and make coordinated changes across a codebase.
+* **Reduced value of knowledge-substitution tooling.** These are tools whose main purpose is to let developers avoid learning or writing an underlying standard technology, rather than to provide strong correctness guarantees.
+  * ORMs used mainly to avoid writing SQL
+  * CSS preprocessors used mainly to compensate for limitations that modern CSS no longer has
+  * Template DSLs used mainly to avoid HTML or DOM APIs
+  * Framework wrappers around capabilities now provided directly by browsers
+  * Configuration abstractions that hide otherwise ordinary platform configuration
+  * Proprietary component syntax that replaces HTML, CSS, and JavaScript without adding meaningful guarantees
+* **DOM synchronization is still difficult.** JavaScript can already handle state, modules, events, networking, and application logic. The error-prone part is keeping an existing DOM tree synchronized with changing data while preserving node identity, focus, selection, event state, and browser-owned behavior.
+
+Something should solve that narrow problem. Its purpose is not to replace HTML, CSS, JavaScript, or the browser with another application model. It should provide the missing declarative connection between data and the DOM while leaving the underlying platform visible and directly usable.
+
 ## The model
 
 The model separates concerns that tend to become entangled in frontend code:
 
-- Let HTML describe the document. Let small, replaceable tools connect data or
-  behavior to it.
+- Let HTML describe the document. Let small, replaceable tools connect data or behavior to it.
 - HTML describes native semantic structure.
 - CSS controls presentation and layout.
 - Plain JavaScript functions project data into declared DOM state.
 - The application owns data, business decisions, and update timing.
-- Native events carry user intent back to the application, which may produce
-  new data and explicitly update again.
+- Native events carry user intent back to the application, which may produce new data and explicitly update again.
 
 At the application boundary, one page has one update operation.
 Nested components participate in that update rather than becoming

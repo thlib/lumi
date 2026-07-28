@@ -42,4 +42,5 @@
 - remove `background-color`
 - remove the unused styles
 - fix the mini-bars
+- current classToggle was inefficient?
 

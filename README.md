@@ -51,14 +51,12 @@ Something should solve that narrow problem. Its purpose is not to replace HTML, 
 
 The model separates concerns that tend to become entangled in frontend code:
 
-- Let HTML describe the document. Let small, replaceable tools connect data or
-  behavior to it.
+- Let HTML describe the document. Let small, replaceable tools connect data or behavior to it.
 - HTML describes native semantic structure.
 - CSS controls presentation and layout.
 - Plain JavaScript functions project data into declared DOM state.
 - The application owns data, business decisions, and update timing.
-- Native events carry user intent back to the application, which may produce
-  new data and explicitly update again.
+- Native events carry user intent back to the application, which may produce new data and explicitly update again.
 
 At the application boundary, one page has one update operation.
 Nested components participate in that update rather than becoming

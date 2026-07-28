@@ -2,7 +2,7 @@ import {on} from '../../../../dist/lumi.js'
 import {update} from '../page'
 
 import type {RecordFilter} from '../../data-20k'
-import type {Binding} from '../../../../dist/types.js'
+import type {Binding} from '../../../../dist/lumi.js'
 import type {Presentation} from '../presentation'
 
 export const recordBehaviors: ReadonlyArray<Binding<Presentation>> = [

@@ -152,7 +152,7 @@ export function mountApplication(target) {
 function mountPlan(plan, target) {
   const entries = effectiveEntries(plan)
   /** @type {Array<{
-   *   mounted: import('../../../dist/types.js').MountedComponent<any>,
+   *   mounted: import('../../../dist/lumi.js').MountedComponent<any>,
    *   present: (data: any) => any,
    *   select: (data: ApplicationData) => any,
    * }>} */

@@ -2,7 +2,7 @@
 
 import {component} from '../../../dist/lumi.js'
 
-import type {Binding, MountedComponent} from '../../../dist/types.js'
+import type {Binding, MountedComponent} from '../../../dist/lumi.js'
 
 /**
  * Demo-owned registry populated by the view-document build. Page

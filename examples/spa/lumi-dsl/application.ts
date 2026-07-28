@@ -10,7 +10,7 @@ import {toastBehaviors} from './behaviors/toasts'
 import {validationBehaviors} from './behaviors/validation'
 import {composeTemplate} from './template'
 
-import type {MountedComponent} from '../../../dist/types.js'
+import type {MountedComponent} from '../../../dist/lumi.js'
 import type {Presentation} from './presentation'
 
 export function mountApplication(

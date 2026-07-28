@@ -1,15 +1,19 @@
 // @ts-check
 
-import {copyFileSync} from 'node:fs'
+import {cpSync, mkdirSync, rmSync} from 'node:fs'
 import {dirname, join} from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {build} from 'esbuild'
 
-const repository = dirname(dirname(fileURLToPath(import.meta.url)))
-const output = join(repository, 'dist')
+const source = dirname(fileURLToPath(import.meta.url))
+const root = dirname(source)
+const output = join(root, 'dist')
+
+rmSync(output, {recursive: true, force: true})
+mkdirSync(output, {recursive: true})
 
 await build({
-  entryPoints: [join(repository, 'src/index.js')],
+  entryPoints: [join(source, 'index.js')],
   bundle: true,
   format: 'esm',
   target: 'es2022',
@@ -23,4 +27,4 @@ await build({
   logLevel: 'info',
 })
 
-copyFileSync(join(output, 'index.d.ts'), join(output, 'lumi.d.ts'))
+cpSync(join(source, 'lumi.d.ts'), join(output, 'lumi.d.ts'))

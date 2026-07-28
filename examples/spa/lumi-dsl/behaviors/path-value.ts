@@ -1,9 +1,6 @@
 import {jsonPath} from '../../../data-path.js'
 
-import type {
-  ProjectionContext,
-} from '../../../../dist/types.js'
-import type {TextValue} from '../../../../dist/bindings.js'
+import type {ProjectionContext, TextValue} from '../../../../dist/lumi.js'
 import type {Presentation} from '../presentation'
 
 export type PathContext = ProjectionContext<unknown, Presentation>

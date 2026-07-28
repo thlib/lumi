@@ -1,7 +1,7 @@
 import {on} from '../../../../dist/lumi.js'
 import {update} from '../page'
 
-import type {Binding} from '../../../../dist/types.js'
+import type {Binding} from '../../../../dist/lumi.js'
 import type {Presentation} from '../presentation'
 
 export const navigationBehaviors: ReadonlyArray<Binding<Presentation>> = [

@@ -1,6 +1,6 @@
 import {resolve} from './components.js'
 
-import type {MountedComponent} from '../../../dist/types.js'
+import type {MountedComponent} from '../../../dist/lumi.js'
 import type {PageData} from './page.js'
 
 type Route = PageData['route']

@@ -26,13 +26,13 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/lumi.d.ts",
       "import": "./src/index.js",
       "default": "./src/index.js"
     },
     "./dist/lumi.js": "./dist/lumi.js"
   },
-  "types": "./dist/index.d.ts",
+  "types": "./dist/lumi.d.ts",
   "jsdelivr": "./dist/lumi.js",
   "unpkg": "./dist/lumi.js",
   "files": [
@@ -45,16 +45,15 @@
   ],
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "build": "pnpm run build:types && pnpm run build:bundle",
-    "build:types": "pnpm run clean && tsc -p tsconfig.build.json",
-    "build:bundle": "node scripts/build-bundle.js",
-    "build:json-path": "node scripts/build-json-path.js",
-    "build:spa": "pnpm run build && pnpm run build:json-path && node scripts/build-spa.js lumi-build && node scripts/build-spa.js lumi-ts && node scripts/build-spa.js lumi-dsl",
-    "build:spa:ts": "pnpm run build && pnpm run build:json-path && node scripts/build-spa.js lumi-ts",
-    "build:spa:dsl": "pnpm run build && pnpm run build:json-path && node scripts/build-spa.js lumi-dsl",
-    "dev:spa": "pnpm run build && pnpm run build:json-path && node scripts/build-spa.js lumi-build --serve",
-    "dev:spa:ts": "pnpm run build && pnpm run build:json-path && node scripts/build-spa.js lumi-ts --serve",
-    "dev:spa:dsl": "pnpm run build && pnpm run build:json-path && node scripts/build-spa.js lumi-dsl --serve",
+    "build": "node src/build.js",
+    "build:types": "node src/build.js",
+    "build:bundle": "node src/build.js",
+    "build:spa": "pnpm run build && node examples/spa/lumi-build/build.js && node examples/spa/lumi-ts/build.js && node examples/spa/lumi-dsl/build-json-path.js && node examples/spa/lumi-dsl/build.js",
+    "build:spa:ts": "pnpm run build && node examples/spa/lumi-ts/build.js",
+    "build:spa:dsl": "pnpm run build && node examples/spa/lumi-dsl/build-json-path.js && node examples/spa/lumi-dsl/build.js",
+    "dev:spa": "pnpm run build && node examples/spa/lumi-build/build.js --serve",
+    "dev:spa:ts": "pnpm run build && node examples/spa/lumi-ts/build.js --serve",
+    "dev:spa:dsl": "pnpm run build && node examples/spa/lumi-dsl/build-json-path.js && node examples/spa/lumi-dsl/build.js --serve",
     "lint": "pnpm run build && tsc -p jsconfig.json",
     "benchmark": "node benchmark/performance-baseline.js",
     "benchmark:spa": "node benchmark/spa-comparison.js",

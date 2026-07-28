@@ -1,7 +1,7 @@
 import {attr} from '../../../../dist/lumi.js'
 import {declarationPath, pathText} from './path-value'
 
-import type {Binding} from '../../../../dist/types.js'
+import type {Binding} from '../../../../dist/lumi.js'
 import type {Presentation} from '../presentation'
 
 export const attributeBehaviors: ReadonlyArray<Binding<Presentation>> = [

@@ -5,7 +5,7 @@
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "dev": "ng serve",
-    "build": "ng build",
+    "build": "node build.js",
     "watch": "ng build --watch --configuration development"
   },
   "dependencies": {

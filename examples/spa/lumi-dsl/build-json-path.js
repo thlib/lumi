@@ -4,10 +4,11 @@ import {dirname, join} from 'node:path'
 import {fileURLToPath} from 'node:url'
 import {build} from 'esbuild'
 
-const repository = dirname(dirname(fileURLToPath(import.meta.url)))
+const source = dirname(fileURLToPath(import.meta.url))
+const root = dirname(dirname(dirname(source)))
 
 await build({
-  entryPoints: [join(repository, 'scripts/json-path-browser-entry.js')],
+  entryPoints: [join(source, 'json-path-browser-entry.js')],
   bundle: true,
   format: 'esm',
   target: 'es2022',
@@ -16,6 +17,6 @@ await build({
   banner: {
     js: '// @ts-nocheck\n/*! @jsonjoy.com/json-path | Apache-2.0 | https://github.com/streamich/json-joy */',
   },
-  outfile: join(repository, 'examples/vendor/json-path.js'),
+  outfile: join(root, 'examples/vendor/json-path.js'),
   logLevel: 'info',
 })

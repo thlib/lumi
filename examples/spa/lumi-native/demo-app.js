@@ -95,14 +95,14 @@ import config from '../data-records.json' with {type: 'json'}
  * @template [Data=any]
  * @typedef {{
  *   template: HTMLTemplateElement | null,
- *   bindings?: ReadonlyArray<import('../../../dist/types.js').Binding<any>>,
+ *   bindings?: ReadonlyArray<import('../../../dist/lumi.js').Binding<any>>,
  *   present: (data: Data) => any,
  * }} DefinitionOptions
  */
 
 /**
  * @typedef {{
- *   mount: (target: Element | null) => import('../../../dist/types.js').MountedComponent<any>,
+ *   mount: (target: Element | null) => import('../../../dist/lumi.js').MountedComponent<any>,
  *   present: (data: any) => any,
  * }} Definition
  */
@@ -297,7 +297,7 @@ export function mountApplication(target) {
 function mountPlan(plan, target) {
   const entries = effectiveEntries(plan)
   /** @type {Array<{
-   *   mounted: import('../../../dist/types.js').MountedComponent<any>,
+   *   mounted: import('../../../dist/lumi.js').MountedComponent<any>,
    *   present: (data: any) => any,
    *   select: (data: ApplicationData) => any,
    * }>} */

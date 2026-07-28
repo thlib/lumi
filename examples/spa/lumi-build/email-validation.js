@@ -1,6 +1,6 @@
 // @ts-check
 
-import {on} from '../../dist/lumi.js'
+import {on} from '../../../dist/lumi.js'
 
 /**
  * Applies inline email validation to forms marked with data-validate="email".

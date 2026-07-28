@@ -24,7 +24,7 @@ export {
 
 export {overviewDetails} from './navigation.js'
 export {update} from './page.js'
-export {emailValidation} from '../../email-validation.js'
+export {emailValidation} from '../email-validation.js'
 export {
   filterLargeRecords,
   largeRecords,

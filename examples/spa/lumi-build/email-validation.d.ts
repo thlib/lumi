@@ -1,4 +1,4 @@
-import type {Binding} from '../../dist/lumi.js'
+import type {Binding} from '../../../dist/lumi.js'
 
 export const emailValidation: readonly Binding<unknown>[]
 

@@ -4,7 +4,7 @@ import {component} from '../../../dist/lumi.js'
 import content from '../data-content.json' with {type: 'json'}
 import config from '../data-records.json' with {type: 'json'}
 
-export {emailValidation, emailValidationMessage} from '../email-validation.js'
+export {emailValidation, emailValidationMessage} from './email-validation.js'
 
 /** @typedef {'overview' | 'projects' | 'records' | 'activity' | 'teams'} Route */
 /** @typedef {'all' | 'active' | 'planning'} ProjectFilter */

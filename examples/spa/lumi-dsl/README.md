@@ -1,7 +1,7 @@
-# Lumi declarative TypeScript SPA
+# Lumi data-attribute DSL SPA
 
-This trial keeps all executable behavior in ordinary TypeScript while making
-the component HTML declarative. Reusable templates live in
+This experiment keeps all executable behavior in ordinary TypeScript while
+making the component HTML declarative through a data-attribute DSL. Reusable templates live in
 [`components`](./components/) and route templates live in
 [`pages`](./pages/). They contain no inline scripts.
 
@@ -44,13 +44,13 @@ the typed snapshot produced by [`presentation.ts`](./presentation.ts).
 From the repository root, start its development server:
 
 ```sh
-pnpm run dev:spa:ts
+pnpm run dev:spa:dsl
 ```
 
 Create the minified output once with:
 
 ```sh
-pnpm run build:spa:ts
+pnpm run build:spa:dsl
 ```
 
 The build strictly checks the `.ts` module graph, bundles it with esbuild, and

@@ -5,7 +5,7 @@
  *
  * Reusable views live in components/ while route-wide views live in pages/.
  * The JavaScript variant keeps behavior modules inline with those documents;
- * the TypeScript variant keeps declarative markup in HTML and composes its
+ * the data-attribute DSL keeps declarative markup in HTML and composes its
  * Lumi bindings from ordinary `.ts` modules. The build bundles the selected
  * behavior entry and assembles the native HTML into one document.
  *
@@ -33,12 +33,12 @@ const variant = process.argv
   .slice(2)
   .find(argument => !argument.startsWith('--'))
 
-if (variant !== 'lumi-build' && variant !== 'lumi-ts') {
-  throw new Error('Choose a bundled SPA variant: lumi-build or lumi-ts')
+if (variant !== 'lumi-build' && variant !== 'lumi-dsl') {
+  throw new Error('Choose a bundled SPA variant: lumi-build or lumi-dsl')
 }
 
 const source = join(spa, variant)
-const typescript = variant === 'lumi-ts'
+const typescript = variant === 'lumi-dsl'
 const componentsDirectory = join(source, 'components')
 const pagesDirectory = join(source, 'pages')
 const documentDirectories = [

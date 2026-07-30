@@ -23,6 +23,9 @@ importers:
       jsdom:
         specifier: ^27.1.0
         version: 27.4.0
+      node:
+        specifier: ^26.5.1
+        version: 26.5.1
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -2286,6 +2289,9 @@ packages:
   node-addon-api@7.1.1:
     resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
 
+  node-bin-setup@1.1.4:
+    resolution: {integrity: sha512-vWNHOne0ZUavArqPP5LJta50+S8R261Fr5SvGul37HbEDcowvLjwdvd0ZeSr0r2lTSrPxl6okq9QUw8BFGiAxA==}
+
   node-gyp-build-optional-packages@5.2.2:
     resolution: {integrity: sha512-s+w+rBWnpTMwSFbaE0UXsRlg7hU4FjekKU4eyAih5T8nJuNZT1nNsskXpxmeqSK9UzkBl6UgRlnKc8hz8IEqOw==}
     hasBin: true
@@ -2298,6 +2304,11 @@ packages:
   node-releases@2.0.51:
     resolution: {integrity: sha512-wRNIrw4DmVLKQlbgOMdkMx27Wrpzes2hh5Jtbi2bjPd+4wJstWIqP5A+lscnqbm0xxmT5Bpg8Lec5ItEBwx6BQ==}
     engines: {node: '>=18'}
+
+  node@26.5.1:
+    resolution: {integrity: sha512-jMR0E6e5HtjOdc3oj0e2MSC6Z5/yAf849Mykpkt1UAnThDg61AnztpXdsrXILd8Dz3gHDHaxqsMFNJs/lhiRyQ==}
+    engines: {npm: '>=5.0.0'}
+    hasBin: true
 
   nopt@9.0.0:
     resolution: {integrity: sha512-Zhq3a+yFKrYwSBluL4H9XP3m3y5uvQkB/09CwDruCiRmR/UJYnn9W4R48ry0uGC70aeTPKLynBtscP9efFFcPw==}
@@ -5003,6 +5014,8 @@ snapshots:
   node-addon-api@7.1.1:
     optional: true
 
+  node-bin-setup@1.1.4: {}
+
   node-gyp-build-optional-packages@5.2.2:
     dependencies:
       detect-libc: 2.1.2
@@ -5022,6 +5035,10 @@ snapshots:
       which: 6.0.1
 
   node-releases@2.0.51: {}
+
+  node@26.5.1:
+    dependencies:
+      node-bin-setup: 1.1.4
 
   nopt@9.0.0:
     dependencies:

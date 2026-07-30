@@ -120,16 +120,16 @@ in control of the surrounding responsibilities.
 The experimental implementation is plain JavaScript with no runtime
 dependencies.
 
-It currently supports template mounting, scalar bindings, positional
-repetition from array projections, nested components, and bindings through
-open Shadow DOM. Managed event bindings route native events at the component
-boundary, or follow matching elements when a binding declares
+It currently supports template mounting, scalar bindings, positional and
+keyed repetition from array projections, nested components, and bindings
+through open Shadow DOM. Managed event bindings route native events at the
+component boundary, or follow matching elements when a binding declares
 `{at: 'elements'}`, without introducing a synthetic event system.
 
 Mounting replaces the target's existing contents with a fresh clone of the
-component template. Array repetition deliberately preserves identity by
-position: Lumi does not inspect `key`, `id`, object identity, or any other
-application value to infer keyed identity.
+component template. Array repetition preserves identity by position unless
+the application gives `repeat` an explicit key projection. Lumi does not
+infer keys from item properties or object identity.
 
 Every render projection receives a context containing the whole presentation
 snapshot and the current occurrence. `repeat` changes cardinality; other

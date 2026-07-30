@@ -776,6 +776,164 @@ test('repeats targets for array projection values', () => {
   assert.equal(ada?.isConnected, false)
 })
 
+test('moves keyed repeat occurrences without exposing keys in the DOM', () => {
+  const {document} = createDocument()
+  const template = createTemplate(document, `
+    <ol>
+      <li class="item"><span class="name"></span><input></li>
+    </ol>
+  `)
+  const mounted = render({
+    items: [
+      {id: 'ada', name: 'Ada'},
+      {id: 'grace', name: 'Grace'},
+      {id: 'linus', name: 'Linus'},
+    ],
+  }, {
+    target: document.createElement('div'),
+    template,
+    bindings: [
+      repeat(
+        '.item',
+        ({data}) => data.items,
+        ({item}) => item.id,
+        [text('.name', ({item}) => item.name)],
+      ),
+    ],
+  })
+  const initial = Array.from(mounted.root.querySelectorAll('.item'))
+  const ada = initial[0]
+  const grace = initial[1]
+  const linus = initial[2]
+  const graceInput = grace?.querySelector('input')
+
+  if (graceInput !== null && graceInput !== undefined) {
+    graceInput.value = 'Uncommitted note'
+  }
+
+  mounted.update({
+    items: [
+      {id: 'linus', name: 'Linus Torvalds'},
+      {id: 'ada', name: 'Ada Lovelace'},
+      {id: 'grace', name: 'Grace Hopper'},
+    ],
+  })
+
+  const reordered = mounted.root.querySelectorAll('.item')
+  assert.strictEqual(reordered[0], linus)
+  assert.strictEqual(reordered[1], ada)
+  assert.strictEqual(reordered[2], grace)
+  assert.equal(graceInput?.value, 'Uncommitted note')
+  assert.deepEqual(
+    Array.from(reordered, element => {
+      return element.querySelector('.name')?.textContent
+    }),
+    ['Linus Torvalds', 'Ada Lovelace', 'Grace Hopper'],
+  )
+  assert.equal(
+    initial.some(element => element.hasAttribute('data-key')),
+    false,
+  )
+})
+
+test('rejects duplicate repeat keys before changing the live DOM', () => {
+  const {document} = createDocument()
+  const template = createTemplate(document, `
+    <section>
+      <output class="status"></output>
+      <p class="item"></p>
+    </section>
+  `)
+  const mounted = render({
+    status: 'Ready',
+    items: [
+      {id: 1, name: 'First'},
+      {id: 2, name: 'Second'},
+    ],
+  }, {
+    target: document.createElement('div'),
+    template,
+    bindings: [
+      text('.status', ({data}) => data.status),
+      repeat(
+        '.item',
+        ({data}) => data.items,
+        ({item}) => item.id,
+        [text(':scope', ({item}) => item.name)],
+      ),
+    ],
+  })
+  const items = Array.from(mounted.root.querySelectorAll('.item'))
+
+  assert.throws(
+    () => mounted.update({
+      status: 'Rejected',
+      items: [
+        {id: 1, name: 'Changed'},
+        {id: 1, name: 'Duplicate'},
+      ],
+    }),
+    /repeat key for "\.item" is duplicated at item positions 1 and 2/,
+  )
+  assert.equal(mounted.root.querySelector('.status')?.textContent, 'Ready')
+  assert.deepEqual(
+    Array.from(
+      mounted.root.querySelectorAll('.item'),
+      element => element.textContent,
+    ),
+    ['First', 'Second'],
+  )
+  assert.strictEqual(mounted.root.querySelectorAll('.item')[0], items[0])
+  assert.strictEqual(mounted.root.querySelectorAll('.item')[1], items[1])
+
+  mounted.update({
+    status: 'Recovered',
+    items: [
+      {id: 2, name: 'Second again'},
+      {id: 1, name: 'First again'},
+    ],
+  })
+  assert.equal(mounted.root.querySelector('.status')?.textContent, 'Recovered')
+  assert.strictEqual(mounted.root.querySelectorAll('.item')[0], items[1])
+  assert.strictEqual(mounted.root.querySelectorAll('.item')[1], items[0])
+})
+
+test('keeps repeat key projection failures recoverable', () => {
+  const {document} = createDocument()
+  const template = createTemplate(
+    document,
+    '<ol><li class="item"></li></ol>',
+  )
+  const mounted = render({items: [{id: 'ready'}]}, {
+    target: document.createElement('div'),
+    template,
+    bindings: [
+      repeat(
+        '.item',
+        ({data}) => data.items,
+        ({item}) => {
+          if (item.id === 'fail') {
+            throw new Error('Key is unavailable')
+          }
+          return item.id
+        },
+        [text(':scope', ({item}) => item.id)],
+      ),
+    ],
+  })
+  const item = mounted.root.querySelector('.item')
+
+  assert.throws(
+    () => mounted.update({items: [{id: 'fail'}]}),
+    /repeat key projection for "\.item".*item 1 failed: Key is unavailable/,
+  )
+  assert.strictEqual(mounted.root.querySelector('.item'), item)
+  assert.equal(item?.textContent, 'ready')
+
+  mounted.update({items: [{id: 'ready'}]})
+  assert.strictEqual(mounted.root.querySelector('.item'), item)
+})
+
 test('evaluates each projection once with explicit repeat planning', () => {
   const { document } = createDocument()
   const template = createTemplate(document, `

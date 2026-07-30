@@ -227,7 +227,7 @@ the corresponding native element type. Complex selectors safely fall back to
 
 | Binding | Projection result | DOM effect |
 | --- | --- | --- |
-| `repeat(selector, project, bindings?)` | array or nullish | Repeats the matched template element once per item; optional built-in DOM bindings are scoped to those occurrences |
+| `repeat(selector, project, bindings?)` or `repeat(selector, project, key, bindings?)` | array or nullish | Repeats the matched template element once per item; an optional key preserves item identity, and optional built-in DOM bindings are scoped to each occurrence |
 | `text(selector, project)` | text value or nullish | Assigns `textContent`, or preserves it for nullish and invalid values |
 | `prop(selector, project, name)` | any non-nullish value, TrustedHTML for `innerHTML`/`outerHTML`, or nullish | Assigns the native property with `Reflect.set`, or does nothing for nullish |
 | `attr(selector, name, project)` | string, number, boolean, or nullish | Removes on `false`, creates an empty attribute on `true`, sets text, or does nothing for nullish |
@@ -447,11 +447,11 @@ repeat('.item', ({data}) => data.items)
 text('.item', ({item}) => item.name)
 ```
 
-For a local reading order, `repeat` may take its built-in DOM bindings as an
-optional third argument. Those bindings resolve their selectors only inside
-the repeated template element, and their projections receive that occurrence's
-context. The repeated element participates in matching, so `:scope` selects
-that element itself:
+For a local reading order, `repeat` can take its built-in DOM bindings as the
+last argument. Without a key projection, this is the third argument. These
+bindings resolve their selectors only inside the repeated template element.
+Their projections receive that occurrence's context. The repeated element
+participates in matching, so `:scope` selects that element itself:
 
 ```js
 repeat('.item', ({data}) => data.items, [
@@ -500,14 +500,32 @@ Every repeated occurrence has a positional coordinate such as `[1, 2]`.
 Ragged nested arrays are valid, and an empty inner array removes only the
 elements at that inner level.
 
-Repeated elements are reconciled by array position. Reordering changes the
-data represented by existing positions. Existing positions retain their native
-DOM nodes; appends create trailing nodes and truncation removes trailing nodes.
+By default, Lumi reconciles repeated elements by array position. Reordering
+changes the data represented by existing positions. Existing positions retain
+their native DOM nodes. Appends create trailing nodes, and truncation removes
+trailing nodes.
 
-This positional identity is the public contract. Lumi does not recognize a
-`key` or `id` property, compare object identity, accept a key function, or move
-occurrences to follow application records. Reordering an array updates the data
-represented by each existing position.
+An explicit key projection keeps an occurrence with an application item when
+its position changes:
+
+```js
+repeat(
+  '.item',
+  ({data}) => data.items,
+  ({item}) => item.id,
+  [text('.name', ({item}) => item.name)],
+)
+```
+
+The key projection receives the new occurrence context. It does not receive
+an element because Lumi must compute the key before it selects an existing
+element. Lumi compares keys with the same equality rules as a JavaScript
+`Map`. Each key must be unique in its repeat region.
+
+Lumi stores keys in internal occurrence state. It does not add key attributes
+to the DOM. An application can use `attr` if it must expose an item identifier
+in markup. Lumi does not infer keys from `key` or `id` properties, or from
+object identity.
 
 Array cardinality cannot replace the mounted component root, whose public
 boundary is one persistent `Element`. It applies to descendants of that root.
@@ -617,7 +635,7 @@ container must not initially contain another element.
 
 A binding writes only the DOM sink named by that binding:
 
-- A `repeat` declaration owns positional element cardinality.
+- A `repeat` declaration owns element cardinality and occurrence identity.
 - A `text` declaration owns scalar `textContent`.
 - A property binding owns one property.
 - A class binding owns one class token.
@@ -663,6 +681,8 @@ An error is thrown when:
 - A generic binding targets an event handler or `srcdoc`.
 - An `innerHTML` or `outerHTML` projection is not genuine `TrustedHTML`, or
   the mounted document cannot authenticate it.
+- A keyed repeat produces a duplicate key. Lumi validates all keys before it
+  changes the live DOM.
 - An event declaration has a non-string type or selector, a handler that is
   not callable, options that are not an object, an unsupported option name, or
   an invalid `at`, `capture`, `passive`, or `freq` value. The message
@@ -677,8 +697,9 @@ An event selector is validated when the component connects, even when it
 currently has no matches, so an invalid declaration fails mount atomically.
 
 If application projection code throws, Lumi rethrows an error that identifies
-the binding kind, selector, and one-based matched position. The original
-thrown value is available as its `cause`.
+the binding kind, selector, and one-based matched position. A key projection
+error also identifies the item position. The original thrown value is
+available as its `cause`.
 
 Selector syntax errors remain native `DOMException`s from the browser.
 

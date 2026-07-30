@@ -1,6 +1,6 @@
 # SPA performance comparison
 
-Generated 2026-07-28T20:22:50.494Z on linux 6.17.0-1030-oem, Node v24.14.1,
+Generated 2026-07-30T20:30:49.579Z on linux 6.6.87.2-microsoft-standard-WSL2, Node v26.5.1,
 Chromium 149.0.7827.55. Lower timing and size values are better.
 
 ## Results
@@ -10,13 +10,13 @@ across 5 cache-disabled samples.
 
 | Framework | Cold load ms | FCP ms | Route ms/update | Filter ms/update | Tasks >10 ms count / total ms | Initial DOM nodes | DOM node delta |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Lumi native 0.1.0 | 33.4 (35.4) | 76.0 (80.0) | 0.339 (0.412) | 0.076 (0.083) | 1 / 22.9 | 218 | 0 |
-| Lumi build 0.1.0 | 31.1 (45.2) | 76.0 (108.0) | 0.343 (0.385) | 0.077 (0.079) | 1 / 23.3 | 208 | 0 |
-| Lumi data-attribute DSL 0.1.0 | 31.9 (34.3) | 80.0 (96.0) | 0.527 (0.579) | 0.190 (0.202) | 1 / 57.3 | 586 | 0 |
-| Vue 3.5.40 | 10.1 (11.0) | 80.0 (88.0) | 0.519 (0.545) | 0.058 (0.059) | 1 / 17.5 | 197 | 0 |
-| React 19.2.8 | 9.7 (10.7) | 88.0 (96.0) | 0.651 (0.686) | 0.128 (0.142) | 1 / 38.7 | 197 | 0 |
-| Lit 3.3.3 | 11.7 (13.0) | 84.0 (108.0) | 0.454 (0.496) | 0.067 (0.072) | 1 / 20.3 | 197 | 0 |
-| Angular 21.2.18 | 37.0 (42.2) | 80.0 (84.0) | 0.666 (0.671) | 1.641 (1.655) | 0 / 0.0 | 199 | 0 |
+| Lumi native 0.1.0 | 33.0 (38.4) | 84.0 (88.0) | 0.472 (0.489) | 0.084 (0.085) | 1 / 25.4 | 218 | 0 |
+| Lumi build 0.1.0 | 28.5 (30.7) | 80.0 (84.0) | 0.464 (0.466) | 0.083 (0.085) | 1 / 25.1 | 208 | 0 |
+| Lumi data-attribute DSL 0.1.0 | 31.4 (32.1) | 84.0 (84.0) | 0.617 (0.674) | 0.197 (0.202) | 1 / 59.3 | 586 | 0 |
+| Vue 3.5.40 | 10.6 (13.5) | 84.0 (100.0) | 0.632 (0.712) | 0.073 (0.080) | 1 / 22.2 | 197 | 0 |
+| React 19.2.8 | 10.2 (11.1) | 92.0 (96.0) | 0.722 (0.757) | 0.127 (0.128) | 1 / 38.4 | 197 | 0 |
+| Lit 3.3.3 | 10.9 (14.3) | 88.0 (92.0) | 0.541 (0.587) | 0.077 (0.081) | 1 / 23.5 | 197 | 0 |
+| Angular 21.2.18 | 34.4 (37.4) | 84.0 (84.0) | 0.680 (0.735) | 1.645 (1.664) | 0 / 0.0 | 199 | 0 |
 
 ## 20k-row filter
 
@@ -27,13 +27,13 @@ bound the workload's memory use.
 
 | Framework | Record filter ms/update | Relative to Lumi build |
 | --- | ---: | ---: |
-| Lumi native 0.1.0 | 16.9 (17.0) | 1.18× |
-| Lumi build 0.1.0 | 14.3 (14.7) | 1.00× |
-| Lumi data-attribute DSL 0.1.0 | 12.3 (12.4) | 0.86× |
-| Vue 3.5.40 | 17.8 (17.9) | 1.25× |
-| React 19.2.8 | 23.0 (23.1) | 1.61× |
-| Lit 3.3.3 | 483.4 (491.1) | 33.85× |
-| Angular 21.2.18 | 173.9 (178.4) | 12.17× |
+| Lumi native 0.1.0 | 13.0 (13.1) | 0.97× |
+| Lumi build 0.1.0 | 13.3 (14.0) | 1.00× |
+| Lumi data-attribute DSL 0.1.0 | 11.3 (11.5) | 0.85× |
+| Vue 3.5.40 | 15.7 (16.0) | 1.18× |
+| React 19.2.8 | 19.8 (22.4) | 1.49× |
+| Lit 3.3.3 | 493.7 (505.7) | 37.12× |
+| Angular 21.2.18 | 152.3 (153.6) | 11.45× |
 
 ## Initial asset footprint
 
@@ -43,9 +43,9 @@ compressed transfer, not the benchmark server's uncompressed transfer.
 
 | Framework | Files | Raw | Gzip |
 | --- | ---: | ---: | ---: |
-| Lumi native | 5 | 110.1 KiB | 28.2 KiB |
-| Lumi build | 3 | 98.7 KiB | 27.3 KiB |
-| Lumi data-attribute DSL | 3 | 119.0 KiB | 32.0 KiB |
+| Lumi native | 5 | 111.7 KiB | 28.7 KiB |
+| Lumi build | 3 | 100.4 KiB | 27.7 KiB |
+| Lumi data-attribute DSL | 3 | 120.6 KiB | 32.5 KiB |
 | Vue | 4 | 111.4 KiB | 39.9 KiB |
 | React | 4 | 239.5 KiB | 73.7 KiB |
 | Lit | 4 | 68.1 KiB | 21.8 KiB |
@@ -57,13 +57,13 @@ Values below 1.00× are lower than Lumi build; values above 1.00× are higher.
 
 | Framework | Cold load | Route update | Filter update | Gzip assets |
 | --- | ---: | ---: | ---: | ---: |
-| Lumi native | 1.07× | 0.99× | 0.98× | 1.04× |
+| Lumi native | 1.16× | 1.02× | 1.01× | 1.04× |
 | Lumi build | 1.00× | 1.00× | 1.00× | 1.00× |
-| Lumi data-attribute DSL | 1.03× | 1.53× | 2.46× | 1.18× |
-| Vue | 0.32× | 1.51× | 0.75× | 1.46× |
-| React | 0.31× | 1.90× | 1.66× | 2.70× |
-| Lit | 0.38× | 1.32× | 0.86× | 0.80× |
-| Angular | 1.19× | 1.94× | 21.22× | 1.98× |
+| Lumi data-attribute DSL | 1.10× | 1.33× | 2.38× | 1.17× |
+| Vue | 0.37× | 1.36× | 0.88× | 1.44× |
+| React | 0.36× | 1.55× | 1.54× | 2.66× |
+| Lit | 0.38× | 1.17× | 0.94× | 0.79× |
+| Angular | 1.21× | 1.46× | 19.90× | 1.95× |
 
 ## Stress validation
 
@@ -73,24 +73,24 @@ same overview state after warmup and after the complete stress run.
 
 | Framework | Route updates | Filter updates | DOM delta range | Median heap delta |
 | --- | ---: | ---: | ---: | ---: |
-| Lumi native | 1000 | 1500 | 0 to 0 | +272.9 KiB |
-| Lumi build | 1000 | 1500 | 0 to 0 | +271.7 KiB |
-| Lumi data-attribute DSL | 1000 | 1500 | 0 to 0 | +220.8 KiB |
-| Vue | 1000 | 1500 | 0 to 0 | +346.0 KiB |
-| React | 1000 | 1500 | 0 to 0 | +437.2 KiB |
-| Lit | 1000 | 1500 | 0 to 0 | +218.8 KiB |
-| Angular | 1000 | 1500 | 0 to 0 | +588.4 KiB |
+| Lumi native | 1000 | 1500 | 0 to 0 | +272.7 KiB |
+| Lumi build | 1000 | 1500 | 0 to 0 | +271.6 KiB |
+| Lumi data-attribute DSL | 1000 | 1500 | 0 to 0 | +227.4 KiB |
+| Vue | 1000 | 1500 | 0 to 0 | +345.1 KiB |
+| React | 1000 | 1500 | 0 to 0 | +426.2 KiB |
+| Lit | 1000 | 1500 | 0 to 0 | +216.4 KiB |
+| Angular | 1000 | 1500 | 0 to 0 | +578.3 KiB |
 
 ## Reading the result
 
 - React recorded the lowest median cold-load time
-  (9.7 ms).
-- Lumi native recorded the lowest median route-update time
-  (0.339 ms/update).
+  (10.2 ms).
+- Lumi build recorded the lowest median route-update time
+  (0.464 ms/update).
 - Vue recorded the lowest median project-filter time
-  (0.058 ms/update).
+  (0.073 ms/update).
 - Lumi data-attribute DSL recorded the lowest median 20k-row filter time
-  (12.3 ms/update).
+  (11.3 ms/update).
 - Lit requested the smallest initial compressed asset set
   (21.8 KiB).
 

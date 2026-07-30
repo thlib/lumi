@@ -24,6 +24,14 @@ import {
  */
 
 /**
+ * @template Item
+ * @template [Data=unknown]
+ * @typedef {(
+ *   context: import('./types.js').ProjectionContext<Item, Data>,
+ * ) => unknown} KeyProjection
+ */
+
+/**
  * @template {string} Selector
  * @typedef {import('./types.js').SelectorElement<Selector>} SelectorElement
  */
@@ -56,8 +64,9 @@ function assertSafeBindingName(kind, name) {
  * The projection receives the nearest positional occurrence. At the
  * component boundary, context.item is the component data. A nullish or
  * non-array result preserves the current region. Built-in DOM bindings in
- * the optional third argument resolve selectors inside each repeated
- * occurrence and receive that occurrence's context.
+ * the final argument resolve selectors inside each repeated occurrence and
+ * receive that occurrence's context. An optional key projection before the
+ * bindings keeps occurrence identity with an item when its position changes.
  *
  * @template Item
  * @template [Data=unknown]
@@ -65,17 +74,36 @@ function assertSafeBindingName(kind, name) {
  * @template {string} [Selector=string]
  * @param {Selector} selector
  * @param {ContextProjection<Parent, Data, ReadonlyArray<Item> | null | undefined, SelectorElement<Selector>>} project
+ * @param {KeyProjection<Item, Data> | ReadonlyArray<import('./types.js').Binding<Data>>} [keyOrBindings]
  * @param {ReadonlyArray<import('./types.js').Binding<Data>>} [bindings]
  * @returns {import('./types.js').Binding<Data>}
  */
-export function repeat(selector, project, bindings) {
+export function repeat(selector, project, keyOrBindings, bindings) {
+  if (
+    keyOrBindings !== undefined
+    && typeof keyOrBindings !== 'function'
+    && !Array.isArray(keyOrBindings)
+  ) {
+    throw new TypeError(
+      'Lumi repeat third argument must be a key projection or binding list',
+    )
+  }
+
+  const key = typeof keyOrBindings === 'function'
+    ? keyOrBindings
+    : undefined
+  const localBindings = Array.isArray(keyOrBindings)
+    ? keyOrBindings
+    : bindings
+
   return createDomBinding({
     kind: 'repeat',
     selector,
     project: /** @type {(context: import('./types.js').ProjectionContext<Parent, Data>, el: Element) => unknown} */ (
       /** @type {unknown} */ (project)
     ),
-    bindings: repeatBindingDescriptors(bindings),
+    ...(key === undefined ? {} : {key}),
+    bindings: repeatBindingDescriptors(localBindings),
   })
 }
 

@@ -9,8 +9,8 @@ repeat('.person', ({data}) => data.people)
 text('.person .name', ({item}) => item.name)
 ```
 
-The optional third argument creates a local selector scope inside each
-repeated `.person` occurrence:
+An optional binding list creates a local selector scope inside each repeated
+`.person` occurrence:
 
 ```js
 repeat('.person', ({data}) => data.people, [
@@ -26,6 +26,28 @@ Within a repeat binding list, `:scope` selects the repeated element itself.
 For `{people: [{name: 'Ann'}, {name: 'Bo'}]}`, Lumi keeps two `.person`
 occurrences. Their text projections receive `Ann` and `Bo` as `item`, while
 both retain the complete presentation snapshot as `data`.
+
+## Identity
+
+By default, each occurrence keeps its DOM identity by array position. Give
+`repeat` a key projection when DOM identity must follow an item:
+
+```js
+repeat(
+  '.person',
+  ({data}) => data.people,
+  ({item}) => item.id,
+  [text('.name', ({item}) => item.name)],
+)
+```
+
+The key projection is before the optional binding list. Lumi stores each key
+in internal state. It does not write the key to the DOM. When the array order
+changes, Lumi moves the existing keyed element and its occurrence state.
+
+The key projection receives the occurrence context but does not receive an
+element. Each key must be unique in its immediate repeat region. A duplicate
+key rejects the complete update before Lumi changes the live DOM.
 
 ## Context
 

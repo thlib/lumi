@@ -313,7 +313,8 @@ Each explicit `update(data)` call proceeds as follows:
 7. Replays the prepared DOM operations on persistent live nodes, compares
    projected values with owned DOM state or its safely cached representation,
    and writes only differences.
-8. Reconciles positional structural regions and nested child components.
+8. Reconciles positional or explicitly keyed structural regions and nested
+   child components.
 9. Retains projected values needed to avoid redundant DOM writes.
 
 This separation makes projection and validation failures recoverable: the
@@ -456,7 +457,7 @@ Component rules say how data affects declared DOM state:
 - Attributes.
 - Classes and inline styles.
 - Conditional regions.
-- Positional repeated regions.
+- Positional and explicitly keyed repeated regions.
 - Child components.
 
 Projection functions should be pure: the same data should produce the same
@@ -751,8 +752,8 @@ The design must not:
 - Make JavaScript strings the primary home of HTML.
 - Add signals, proxies, watchers, subscriptions, dependency tracking,
   computed graphs, or automatic rerendering.
-- Add or infer keyed identity for array repetition. Repeated occurrence
-  identity is deliberately positional.
+- Infer keyed identity for array repetition. Positional identity is the
+  default, and keyed identity requires an explicit key projection.
 - Become a state manager, store, router, data cache, network client, GraphQL
   layer, server protocol, or business-logic runtime.
 - Decide whether application data changed. It only makes the DOM match data
@@ -802,7 +803,8 @@ The design remains intact only if all of these stay true:
 - Scalar bindings reject projection results outside their declared value
   types instead of relying on implicit DOM string or boolean coercion.
 - Empty repeat arrays produce zero elements, nested repeats preserve their
-  dimensions, and repeated element identity remains positional across renders.
+  dimensions, positional repeats retain identity by position, and keyed
+  repeats retain identity by key.
 - Changing one scalar projection changes only its bound DOM state.
 - An unbound DOM property remains untouched.
 - An opaque imperative subtree survives renders unchanged.

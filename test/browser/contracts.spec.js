@@ -298,6 +298,78 @@ test('array append and truncation preserve surviving rows and form state', async
   })).toBe(true)
 })
 
+test('keyed rows preserve identity and form state when their order changes', async ({
+  page,
+}) => {
+  await page.evaluate(async () => {
+    const {component, repeat, text} = /** @type {typeof import('../../src/index.js')} */ (
+      await import(String('/src/index.js'))
+    )
+    const template = document.createElement('template')
+    template.innerHTML = `
+      <ol>
+        <li class="row">
+          <label class="name"></label>
+          <input>
+        </li>
+      </ol>
+    `
+    /** @type {import('../../src/index.js').ComponentOptions<{
+     *   items: Array<{id: string, name: string}>
+     * }>} */
+    const options = {
+      template,
+      bindings: [
+        repeat(
+          '.row',
+          ({data}) => data.items,
+          ({item}) => item.id,
+          [text('.name', ({item}) => item.name)],
+        ),
+      ],
+    }
+    const mounted = component(options)
+      .mount(document.querySelector('#test-root'))
+
+    mounted.update({
+      items: [
+        {id: 'ada', name: 'Ada'},
+        {id: 'grace', name: 'Grace'},
+      ],
+    })
+    Reflect.set(window, 'mounted', mounted)
+    Reflect.set(window, 'originalRows', Array.from(
+      mounted.root.querySelectorAll('.row'),
+    ))
+  })
+
+  const inputs = page.locator('input')
+  await inputs.nth(1).fill('second draft')
+  await page.evaluate(() => {
+    Reflect.get(window, 'mounted').update({
+      items: [
+        {id: 'grace', name: 'Grace Hopper'},
+        {id: 'ada', name: 'Ada Lovelace'},
+      ],
+    })
+  })
+
+  await expect(page.locator('.name')).toHaveText([
+    'Grace Hopper',
+    'Ada Lovelace',
+  ])
+  expect(await inputs.evaluateAll(elements => {
+    return elements.map(element => Reflect.get(element, 'value'))
+  })).toEqual(['second draft', ''])
+  expect(await page.evaluate(() => {
+    const rows = document.querySelectorAll('.row')
+    const originals = Reflect.get(window, 'originalRows')
+    return rows[0] === originals[1]
+      && rows[1] === originals[0]
+      && Array.from(rows).every(row => !row.hasAttribute('data-key'))
+  })).toBe(true)
+})
+
 test('a custom element receives only necessary writes and one lifecycle', async ({
   page,
 }) => {

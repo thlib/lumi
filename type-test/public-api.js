@@ -54,6 +54,15 @@ repeat('li', (/** @type {CounterContext} */ {data}, el) => {
   text('li', (/** @type {CounterContext} */ {item}) => item.count),
 ])
 
+repeat(
+  'li',
+  (/** @type {CounterContext} */ {data}) => {
+    return Array.from({length: data.count}, (_, index) => index)
+  },
+  ({item}) => item,
+  [text(':scope', ({item}) => item)],
+)
+
 text('output', (/** @type {CounterContext} */ {item}, el) => {
   const output = /** @type {HTMLOutputElement} */ (el)
   void output

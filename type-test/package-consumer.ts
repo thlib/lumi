@@ -114,10 +114,23 @@ const peopleOptions: ComponentOptions<PeoplePage> = {
       }),
       text<Person, PeoplePage>('.heading', ({data}) => data.heading),
     ]),
+    repeat<Person, PeoplePage>(
+      'li',
+      ({data}) => data.people,
+      ({item, data}) => `${data.heading}:${item.name}`,
+      [text<Person>('.name', ({item}) => item.name)],
+    ),
   ],
 }
 
 component(peopleOptions)
+
+repeat<Person, PeoplePage>(
+  'li',
+  ({data}) => data.people,
+  // @ts-expect-error repeat key projections do not receive a DOM element.
+  ({item}, _el: Element) => item.name,
+)
 
 const personContext: ProjectionContext<Person, PeoplePage> = {
   data: {people: [], heading: 'People'},

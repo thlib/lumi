@@ -72,6 +72,9 @@ export type ContextProjection<
   Target extends Element = Element,
 > = (context: ProjectionContext<Item, Data>, el: Target) => Value
 
+export type KeyProjection<Item, Data = unknown> =
+  (context: ProjectionContext<Item, Data>) => unknown
+
 export function repeat<
   Item,
   Data = unknown,
@@ -85,6 +88,23 @@ export function repeat<
     ReadonlyArray<Item> | null | undefined,
     SelectorElement<Selector>
   >,
+  bindings?: ReadonlyArray<Binding<Data>>,
+): Binding<Data>
+
+export function repeat<
+  Item,
+  Data = unknown,
+  Parent = Data,
+  Selector extends string = string,
+>(
+  selector: Selector,
+  project: ContextProjection<
+    Parent,
+    Data,
+    ReadonlyArray<Item> | null | undefined,
+    SelectorElement<Selector>
+  >,
+  key: KeyProjection<Item, Data>,
   bindings?: ReadonlyArray<Binding<Data>>,
 ): Binding<Data>
 

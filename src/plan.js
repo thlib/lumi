@@ -52,6 +52,7 @@ const classWhitespace = '[\\t\\n\\f\\r ]'
  * @property {DomBindingKind} kind
  * @property {string} selector
  * @property {(input: any, el: Element) => unknown} project
+ * @property {(input: any) => unknown} [key]
  * @property {string} [name]
  * @property {DomBindingDescriptor<Data>} [scope]
  * @property {ReadonlyArray<DomBindingDescriptor<Data>>} [bindings]

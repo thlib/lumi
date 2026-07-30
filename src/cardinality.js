@@ -20,6 +20,8 @@ import { isNoValue } from './internal/no-value.js'
 import { projectionError } from './internal/projection-error.js'
 import {itemContext, rootContext} from './internal/projection-context.js'
 
+const noKey = Symbol('Lumi unkeyed occurrence')
+
 /**
  * @typedef {string | number | boolean} TextValue
  */
@@ -30,6 +32,7 @@ import {itemContext, rootContext} from './internal/projection-context.js'
  *   kind: 'repeat' | 'text' | 'property' | 'attribute' | 'class' | 'style',
  *   selector: string,
  *   project: (input: unknown, el: Element) => unknown,
+ *   key?: (input: unknown) => unknown,
  *   name?: string,
  *   scope?: Runtime['descriptor']
  * }} descriptor
@@ -86,6 +89,7 @@ import {itemContext, rootContext} from './internal/projection-context.js'
  * @property {SinkPlan[]} ownSinks
  * @property {ScopePlan} [scope]
  * @property {import('./types.js').ProjectionContext<unknown, unknown>} context
+ * @property {unknown} key
  */
 
 /**
@@ -581,6 +585,10 @@ function prepareRegion(spec, data, coordinate, normalize, context) {
   const entries = resolved
   /** @type {OccurrencePlan[]} */
   const occurrences = new Array(entries.length)
+  /** @type {Map<unknown, number> | null} */
+  const indexesByKey = spec.runtime.descriptor.key === undefined
+    ? null
+    : new Map()
 
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]
@@ -589,6 +597,20 @@ function prepareRegion(spec, data, coordinate, normalize, context) {
 
     try {
       const occurrenceContext = itemContext(context, entry, index)
+      const key = projectKey(spec, occurrenceContext, index)
+
+      if (indexesByKey !== null) {
+        if (indexesByKey.has(key)) {
+          const firstIndex = /** @type {number} */ (indexesByKey.get(key))
+          throw new TypeError(
+            `Lumi repeat key for "${spec.runtime.descriptor.selector}" `
+            + `is duplicated at item positions ${firstIndex + 1} `
+            + `and ${index + 1}`,
+          )
+        }
+        indexesByKey.set(key, index)
+      }
+
       const ownSinks = spec.ownSinks.map(sink => {
         return prepareSink(
           sink,
@@ -603,6 +625,7 @@ function prepareRegion(spec, data, coordinate, normalize, context) {
         mode: 'context',
         ownSinks,
         context: occurrenceContext,
+        key,
         scope: prepareScope(
           spec.scope,
           data,
@@ -620,6 +643,38 @@ function prepareRegion(spec, data, coordinate, normalize, context) {
     spec,
     occurrences,
     isArray: true,
+  }
+}
+
+/**
+ * Evaluates a keyed repeat without exposing an occurrence element before
+ * reconciliation has selected it.
+ *
+ * @param {RegionSpec} spec
+ * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
+ * @param {number} index
+ * @returns {unknown}
+ */
+function projectKey(spec, context, index) {
+  const project = spec.runtime.descriptor.key
+
+  if (project === undefined) {
+    return noKey
+  }
+
+  try {
+    return project(context)
+  } catch (error) {
+    const detail = error instanceof Error
+      ? error.message
+      : String(error)
+
+    throw new Error(
+      `Lumi repeat key projection for "${spec.runtime.descriptor.selector}" `
+      + `at matched position ${spec.matchIndex + 1}, item ${index + 1} `
+      + `failed: ${detail}`,
+      {cause: error},
+    )
   }
 }
 
@@ -1407,16 +1462,10 @@ class RegionState {
       return
     }
 
-    while (this.occurrences.length < plan.occurrences.length) {
-      const element = /** @type {Element} */ (
-        importElementTree(this.anchor.ownerDocument, this.spec.target)
-      )
-      this.anchor.parentNode?.insertBefore(element, this.anchor)
-      this.occurrences.push(new OccurrenceState(element))
-    }
-
-    while (this.occurrences.length > plan.occurrences.length) {
-      this.occurrences.pop()?.destroy()
+    if (this.spec.runtime.descriptor.key === undefined) {
+      this.applyPositional(plan.occurrences)
+    } else {
+      this.applyKeyed(plan.occurrences)
     }
 
     for (let index = 0; index < plan.occurrences.length; index += 1) {
@@ -1427,6 +1476,84 @@ class RegionState {
         this.applyOccurrence(occurrence, occurrencePlan)
       }
     }
+  }
+
+  /** @param {OccurrencePlan[]} plans */
+  applyPositional(plans) {
+    while (this.occurrences.length < plans.length) {
+      this.occurrences.push(this.createOccurrence())
+    }
+
+    while (this.occurrences.length > plans.length) {
+      this.occurrences.pop()?.destroy()
+    }
+  }
+
+  /** @param {OccurrencePlan[]} plans */
+  applyKeyed(plans) {
+    /** @type {Map<unknown, OccurrenceState>} */
+    const available = new Map()
+    /** @type {OccurrenceState | null} */
+    let pristine = null
+
+    for (const occurrence of this.occurrences) {
+      if (occurrence.key === noKey) {
+        pristine = occurrence
+      } else {
+        available.set(occurrence.key, occurrence)
+      }
+    }
+
+    const next = plans.map(plan => {
+      const existing = available.get(plan.key)
+      const occurrence = existing ?? pristine ?? this.createOccurrence()
+
+      if (existing !== undefined) {
+        available.delete(plan.key)
+      } else if (pristine !== null) {
+        pristine = null
+      }
+
+      occurrence.key = plan.key
+      return occurrence
+    })
+
+    pristine?.destroy()
+    for (const occurrence of available.values()) {
+      occurrence.destroy()
+    }
+
+    const parent = this.anchor.parentNode
+
+    if (parent === null) {
+      throw new Error('Lumi array binding anchor lost its parent')
+    }
+
+    let reference = /** @type {Node} */ (this.anchor)
+
+    for (let index = next.length - 1; index >= 0; index -= 1) {
+      const occurrence = next[index]
+
+      if (occurrence === undefined) {
+        continue
+      }
+
+      if (occurrence.element.nextSibling !== reference) {
+        moveBefore(parent, occurrence.element, reference)
+      }
+      reference = occurrence.element
+    }
+
+    this.occurrences = next
+  }
+
+  /** @returns {OccurrenceState} */
+  createOccurrence() {
+    const element = /** @type {Element} */ (
+      importElementTree(this.anchor.ownerDocument, this.spec.target)
+    )
+    this.anchor.parentNode?.insertBefore(element, this.anchor)
+    return new OccurrenceState(element)
   }
 
   /**
@@ -1477,10 +1604,29 @@ class RegionState {
   }
 }
 
+/**
+ * Uses the state-preserving DOM move operation when the browser provides it.
+ *
+ * @param {Node} parent
+ * @param {Node} node
+ * @param {Node | null} reference
+ */
+function moveBefore(parent, node, reference) {
+  const move = Reflect.get(parent, 'moveBefore')
+
+  if (typeof move === 'function') {
+    Reflect.apply(move, parent, [node, reference])
+    return
+  }
+
+  parent.insertBefore(node, reference)
+}
+
 class OccurrenceState {
   /** @param {Element} element */
   constructor(element) {
     this.element = element
+    this.key = /** @type {unknown} */ (noKey)
     /** @type {'unknown' | 'text' | 'context'} */
     this.mode = 'unknown'
     /** @type {ScopeState | null} */

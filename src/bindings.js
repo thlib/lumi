@@ -102,7 +102,7 @@ export function repeat(selector, project, keyOrBindings, bindings) {
     project: /** @type {(context: import('./types.js').ProjectionContext<Parent, Data>, el: Element) => unknown} */ (
       /** @type {unknown} */ (project)
     ),
-    ...(key === undefined ? {} : {key}),
+    key,
     bindings: repeatBindingDescriptors(localBindings),
   })
 }

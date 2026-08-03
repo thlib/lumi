@@ -344,6 +344,30 @@ export function shadowIncludingContains(ancestor, descendant) {
 }
 
 /**
+ * Returns an element's depth in a shadow-including component tree.
+ *
+ * @param {Element} root
+ * @param {Element} element
+ */
+export function elementDepth(root, element) {
+  let depth = 0
+  let current = element
+
+  while (current !== root) {
+    const parent = shadowIncludingParent(current)
+
+    if (parent === null) {
+      throw new Error('Lumi lost a DOM target')
+    }
+
+    current = parent
+    depth += 1
+  }
+
+  return depth
+}
+
+/**
  * Returns an element-only path. Negative steps enter the current element's
  * open shadow root; non-negative steps enter its light DOM.
  *
@@ -439,16 +463,6 @@ export function importElementTree(document, source) {
   }
 
   return imported
-}
-
-/**
- * Clones an element and its open shadow trees.
- *
- * @param {Element} source
- * @returns {Element}
- */
-export function cloneElementTree(source) {
-  return importElementTree(source.ownerDocument, source)
 }
 
 /**

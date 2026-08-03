@@ -8,17 +8,17 @@
  */
 
 import {
-  cloneElementTree,
   elementAtPath,
+  elementDepth,
   elementPath,
   importElementTree,
-  queryElements,
-  shadowIncludingContains,
+  queryOwnedElements,
   shadowIncludingParent,
 } from './dom.js'
 import { isNoValue } from './internal/no-value.js'
 import { projectionError } from './internal/projection-error.js'
 import {itemContext, rootContext} from './internal/projection-context.js'
+import {isStructuralBinding} from './internal/structural.js'
 
 const noKey = Symbol('Lumi unkeyed occurrence')
 
@@ -28,7 +28,7 @@ const noKey = Symbol('Lumi unkeyed occurrence')
  *   kind: 'repeat' | 'text' | 'property' | 'attribute' | 'class' | 'style',
  *   selector: string,
  *   project: (input: unknown, el: Element) => unknown,
- *   key?: (input: unknown) => unknown,
+ *   key?: ((input: unknown) => unknown) | undefined,
  *   name?: string,
  *   scope?: Runtime['descriptor']
  * }} descriptor
@@ -119,14 +119,18 @@ export function connectCardinalityDomBindings(
   normalize,
   apply,
 ) {
+  const runtimesByDescriptor = new Map(
+    runtimes.map(runtime => [runtime.descriptor, runtime]),
+  )
   const ownedBlueprints = ownedSubtreePaths.map(path => {
-    return elementAtPath(
-      blueprintRoot,
-      path,
-      'Lumi array template lost a binding target',
-    )
+    return elementAtBindingPath(blueprintRoot, path)
   })
-  const scope = compileScope(blueprintRoot, runtimes, ownedBlueprints)
+  const scope = compileScope(
+    blueprintRoot,
+    runtimes,
+    runtimesByDescriptor,
+    ownedBlueprints,
+  )
   const needsDynamicPlanning = runtimes.some(runtime => {
     return canCreateTargets(runtime.descriptor)
   })
@@ -146,34 +150,25 @@ export function connectCardinalityDomBindings(
           scope,
           plan,
           runtimes,
+          runtimesByDescriptor,
           ownedSubtreePaths,
           data,
           normalize,
           apply,
         )
         : []
-      let settled = false
-
       return {
         commit() {
-          if (settled) {
-            throw new Error('Cannot commit a settled Lumi update')
-          }
-
           state ??= new ScopeState(root, scope, apply)
           state.apply(plan)
           commitDynamicOperations(
             root,
             dynamicOperations,
             runtimes,
+            runtimesByDescriptor,
             ownedSubtreePaths,
             apply,
           )
-          settled = true
-        },
-
-        discard() {
-          settled = true
         },
       }
     },
@@ -190,18 +185,15 @@ export function connectCardinalityDomBindings(
  *
  * @param {Element} root
  * @param {ReadonlyArray<Runtime>} runtimes
+ * @param {ReadonlyMap<Runtime['descriptor'], Runtime>} runtimesByDescriptor
  * @param {ReadonlyArray<Element>} ownedSubtrees
  * @returns {ScopeSpec}
  */
-function compileScope(root, runtimes, ownedSubtrees) {
+function compileScope(root, runtimes, runtimesByDescriptor, ownedSubtrees) {
   /** @type {RegionSpec[]} */
   const regions = []
   /** @type {Map<Element, RegionSpec>} */
   const regionByTarget = new Map()
-  const runtimesByDescriptor = new Map(
-    runtimes.map(runtime => [runtime.descriptor, runtime]),
-  )
-
   for (const runtime of runtimes) {
     if (runtime.descriptor.kind !== 'repeat') {
       continue
@@ -258,9 +250,7 @@ function compileScope(root, runtimes, ownedSubtrees) {
 
   for (const region of regions) {
     const scope = scopeRuntime(region.runtime, runtimesByDescriptor)
-    const parent = scope === null
-      ? nearestRegion(region.target, regions, true)
-      : nearestRegionForRuntime(region.target, regions, scope, true)
+    const parent = nearestRegion(region.target, regions, true, scope)
 
     if (scope !== null && parent === null) {
       throw new Error('Lumi repeat binding escaped its owning repeat')
@@ -298,9 +288,7 @@ function compileScope(root, runtimes, ownedSubtrees) {
       const target = /** @type {Element} */ (targets[matchIndex])
       const scope = scopeRuntime(runtime, runtimesByDescriptor)
       const nearest = nearestRegion(target, regions, false)
-      const parent = scope === null
-        ? nearest
-        : nearestRegionForRuntime(target, regions, scope, false)
+      const parent = nearestRegion(target, regions, false, scope)
 
       if (scope !== null && parent === null) {
         throw new Error('Lumi repeat binding escaped its owning repeat')
@@ -343,14 +331,17 @@ function compileScope(root, runtimes, ownedSubtrees) {
  * @param {Element} target
  * @param {ReadonlyArray<RegionSpec>} regions
  * @param {boolean} strict
+ * @param {Runtime | null} [runtime]
  * @returns {RegionSpec | null}
  */
-function nearestRegion(target, regions, strict) {
+function nearestRegion(target, regions, strict, runtime = null) {
   /** @type {RegionSpec | null} */
   let nearest = null
 
   for (const candidate of regions) {
     if (
+      (runtime !== null && candidate.runtime !== runtime)
+      ||
       (strict && candidate.target === target)
       || !candidate.target.contains(target)
     ) {
@@ -369,23 +360,6 @@ function nearestRegion(target, regions, strict) {
 }
 
 /**
- * Finds the nearest region created by one particular repeat declaration.
- *
- * @param {Element} target
- * @param {ReadonlyArray<RegionSpec>} regions
- * @param {Runtime} runtime
- * @param {boolean} strict
- * @returns {RegionSpec | null}
- */
-function nearestRegionForRuntime(target, regions, runtime, strict) {
-  return nearestRegion(
-    target,
-    regions.filter(region => region.runtime === runtime),
-    strict,
-  )
-}
-
-/**
  * @param {ScopeSpec} scope
  */
 function sortScope(scope) {
@@ -393,7 +367,10 @@ function sortScope(scope) {
     return left.runtime.index - right.runtime.index
   })
   scope.regions.sort((left, right) => {
-    return compareElementPosition(left.target, right.target)
+    const following = 4
+    return left.target.compareDocumentPosition(right.target) & following
+      ? -1
+      : 1
   })
 
   for (const region of scope.regions) {
@@ -405,16 +382,6 @@ function sortScope(scope) {
 }
 
 /**
- * @param {Element} left
- * @param {Element} right
- */
-function compareElementPosition(left, right) {
-  const position = left.compareDocumentPosition(right)
-  const following = 4
-  return position & following ? -1 : 1
-}
-
-/**
  * Array regions cannot safely live below another rule that replaces their
  * complete containing subtree.
  *
@@ -422,7 +389,7 @@ function compareElementPosition(left, right) {
  */
 function assertNoStructuralSinkOwnsRegion(scope) {
   for (const sink of scope.sinks) {
-    if (!isContentSink(sink.runtime.descriptor)) {
+    if (!isStructuralBinding(sink.runtime.descriptor)) {
       continue
     }
 
@@ -438,22 +405,6 @@ function assertNoStructuralSinkOwnsRegion(scope) {
   for (const region of scope.regions) {
     assertNoStructuralSinkOwnsRegion(region.scope)
   }
-}
-
-/**
- * @param {{ kind: string, name?: string }} descriptor
- */
-function isContentSink(descriptor) {
-  return descriptor.kind === 'text'
-    || (
-      descriptor.kind === 'property'
-      && (
-      descriptor.name === 'innerHTML'
-      || descriptor.name === 'outerHTML'
-      || descriptor.name === 'textContent'
-      || descriptor.name === 'innerText'
-      )
-    )
 }
 
 /**
@@ -628,6 +579,7 @@ function projectValue(runtime, element, matchIndex, context) {
  * @param {ScopeSpec} scope
  * @param {ScopePlan} plan
  * @param {ReadonlyArray<Runtime>} runtimes
+ * @param {ReadonlyMap<Runtime['descriptor'], Runtime>} runtimesByDescriptor
  * @param {ReadonlyArray<number[]>} ownedSubtreePaths
  * @param {unknown} data
  * @param {(runtime: Runtime, projected: unknown) => unknown} normalize
@@ -639,18 +591,18 @@ function prepareDynamicOperations(
   scope,
   plan,
   runtimes,
+  runtimesByDescriptor,
   ownedSubtreePaths,
   data,
   normalize,
   apply,
 ) {
-  const planningRoot = cloneElementTree(blueprintRoot)
+  const planningRoot = importElementTree(
+    blueprintRoot.ownerDocument,
+    blueprintRoot,
+  )
   const ownedSubtrees = ownedSubtreePaths.map(path => {
-    return elementAtPath(
-      planningRoot,
-      path,
-      'Lumi array template lost a binding target',
-    )
+    return elementAtBindingPath(planningRoot, path)
   })
   /** @type {Map<Runtime, WeakSet<Element>>} */
   const handledByRuntime = new Map(
@@ -730,10 +682,6 @@ function prepareDynamicOperations(
   const operations = []
   /** @type {Map<Runtime, WeakSet<Element>>} */
   const processedByRuntime = new Map()
-  const runtimesByDescriptor = new Map(
-    runtimes.map(runtime => [runtime.descriptor, runtime]),
-  )
-
   for (const runtime of runtimes) {
     if (isStructuralRuntime(runtime)) {
       processedByRuntime.set(runtime, new WeakSet())
@@ -814,6 +762,7 @@ function prepareDynamicOperations(
  * @param {Element} root
  * @param {ReadonlyArray<DynamicOperation>} operations
  * @param {ReadonlyArray<Runtime>} runtimes
+ * @param {ReadonlyMap<Runtime['descriptor'], Runtime>} runtimesByDescriptor
  * @param {ReadonlyArray<number[]>} ownedSubtreePaths
  * @param {(runtime: Runtime, element: Element, value: unknown) => void} apply
  */
@@ -821,6 +770,7 @@ function commitDynamicOperations(
   root,
   operations,
   runtimes,
+  runtimesByDescriptor,
   ownedSubtreePaths,
   apply,
 ) {
@@ -829,15 +779,8 @@ function commitDynamicOperations(
   }
 
   const ownedSubtrees = ownedSubtreePaths.map(path => {
-    return elementAtPath(
-      root,
-      path,
-      'Lumi array template lost a binding target',
-    )
+    return elementAtBindingPath(root, path)
   })
-  const runtimesByDescriptor = new Map(
-    runtimes.map(runtime => [runtime.descriptor, runtime]),
-  )
 
   for (const operation of operations) {
     const elements = queryRuntimeElements(
@@ -973,7 +916,7 @@ function nextDynamicStructuralTask(
         continue
       }
 
-      const depth = dynamicElementDepth(root, element)
+      const depth = elementDepth(root, element)
 
       if (
         selected === null
@@ -1041,7 +984,7 @@ function prepareDynamicValue(
  */
 function isStructuralRuntime(runtime) {
   return runtime.descriptor.kind === 'repeat'
-    || isContentSink(runtime.descriptor)
+    || isStructuralBinding(runtime.descriptor)
 }
 
 /**
@@ -1062,28 +1005,6 @@ function findContext(el, contextByElement) {
   }
 
   throw new Error('Lumi lost a dynamic projection context')
-}
-
-/**
- * @param {Element} root
- * @param {Element} element
- */
-function dynamicElementDepth(root, element) {
-  let depth = 0
-  let current = element
-
-  while (current !== root) {
-    const parent = shadowIncludingParent(current)
-
-    if (parent === null) {
-      throw new Error('Lumi lost a dynamic DOM target')
-    }
-
-    current = parent
-    depth += 1
-  }
-
-  return depth
 }
 
 /**
@@ -1231,22 +1152,13 @@ class ScopeState {
    */
   constructor(root, spec, apply) {
     this.root = root
-    this.spec = spec
     this.applyValue = apply
     this.sinkElements = spec.sinks.map(sink => {
-      return elementAtPath(
-        root,
-        sink.path,
-        'Lumi array template lost a binding target',
-      )
+      return elementAtBindingPath(root, sink.path)
     })
     this.regions = spec.regions.map(region => {
       return new RegionState(
-        elementAtPath(
-          root,
-          region.path,
-          'Lumi array template lost a binding target',
-        ),
+        elementAtBindingPath(root, region.path),
         region,
         apply,
       )
@@ -1456,7 +1368,6 @@ class OccurrenceState {
 
   destroy() {
     this.scope?.destroy()
-    this.scope = null
     this.element.remove()
   }
 }
@@ -1533,14 +1444,12 @@ function queryRuntimeElements(
 
 /**
  * @param {Element} root
- * @param {string} selector
- * @param {ReadonlyArray<Element>} ownedSubtrees
+ * @param {ReadonlyArray<number>} path
  */
-function queryOwnedElements(root, selector, ownedSubtrees) {
-  return queryElements(root, selector).filter(element => {
-    return !ownedSubtrees.some(owned => {
-      return owned !== element
-        && shadowIncludingContains(owned, element)
-    })
-  })
+function elementAtBindingPath(root, path) {
+  return elementAtPath(
+    root,
+    path,
+    'Lumi array template lost a binding target',
+  )
 }

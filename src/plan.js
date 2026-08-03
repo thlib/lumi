@@ -9,17 +9,20 @@
 
 import {
   createElementQuery,
+  elementDepth,
   elementPath,
   importElementTree,
-  queryElements,
   queryOwnedElements,
-  shadowIncludingParent,
 } from './dom.js'
 import { connectCardinalityDomBindings } from './cardinality.js'
 import {warn} from './internal/diagnostics.js'
 import { isNoValue, noValue } from './internal/no-value.js'
 import { projectionError } from './internal/projection-error.js'
 import {rootContext} from './internal/projection-context.js'
+import {
+  isStructuralBinding,
+  isStructuralProperty,
+} from './internal/structural.js'
 
 const domBindingDescriptor = Symbol('Lumi DOM binding descriptor')
 const ownedDomSubtrees = Symbol('Lumi owned DOM subtrees')
@@ -38,8 +41,7 @@ const classWhitespace = '[\\t\\n\\f\\r ]'
  * The Trusted Types capability Lumi needs to authenticate TrustedHTML.
  * Some TypeScript DOM libraries do not yet declare this browser API.
  *
- * @typedef {object} TrustedTypesFactory
- * @property {(value: unknown) => boolean} isHTML
+ * @typedef {(value: unknown) => boolean} TrustedHTMLCheck
  */
 
 /**
@@ -52,7 +54,7 @@ const classWhitespace = '[\\t\\n\\f\\r ]'
  * @property {DomBindingKind} kind
  * @property {string} selector
  * @property {(input: any, el: Element) => unknown} project
- * @property {(input: any) => unknown} [key]
+ * @property {((input: any) => unknown) | undefined} [key]
  * @property {string} [name]
  * @property {DomBindingDescriptor<Data>} [scope]
  * @property {ReadonlyArray<DomBindingDescriptor<Data>>} [bindings]
@@ -73,7 +75,7 @@ const classWhitespace = '[\\t\\n\\f\\r ]'
  * @property {boolean} requiresTrustedHTML
  * @property {Set<string>} warnings
  * @property {Window | null} view
- * @property {(projected: unknown, trustedTypes: TrustedTypesFactory | null) => unknown} normalize
+ * @property {(projected: unknown, trustedTypes: TrustedHTMLCheck | null) => unknown} normalize
  * @property {(element: Element, value: unknown) => boolean} apply
  */
 
@@ -289,7 +291,7 @@ export function connectDomBindings(
  */
 function createDomBindingRuntime(descriptor, index, root) {
   const requiresTrustedHTML = descriptor.kind === 'property'
-    && isTrustedHTMLProperty(descriptor.name)
+    && (descriptor.name === 'innerHTML' || descriptor.name === 'outerHTML')
   /** @type {DomBindingRuntime<Data>} */
   const runtime = {
     descriptor,
@@ -347,10 +349,10 @@ function createRuntimeNormalizer(runtime) {
         return (/** @type {unknown} */ projected) => projected
       }
 
-      const name = requiredName(descriptor)
+      const name = /** @type {string} */ (descriptor.name)
       return (
         /** @type {unknown} */ projected,
-        /** @type {TrustedTypesFactory | null} */ trustedTypes,
+        /** @type {TrustedHTMLCheck | null} */ trustedTypes,
       ) => {
         assertTrustedHTML(projected, trustedTypes, name)
         return projected
@@ -407,7 +409,7 @@ function createRuntimeApply(runtime) {
         return true
       }
     case 'property': {
-      const name = requiredName(descriptor)
+      const name = /** @type {string} */ (descriptor.name)
       return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
         const current = Reflect.get(element, name)
         const projectedValue = projectedCacheValue(runtime, value)
@@ -434,20 +436,17 @@ function createRuntimeApply(runtime) {
       }
     }
     case 'attribute': {
-      const name = requiredName(descriptor)
+      const name = /** @type {string} */ (descriptor.name)
       return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
         return setAttributeValue(element, name, value)
       }
     }
     case 'class': {
-      const name = requiredName(descriptor)
+      const name = /** @type {string} */ (descriptor.name)
       const valid = name !== '' && !/[\t\n\f\r ]/.test(name)
-      const token = escapeRegularExpression(name)
-      const contains = new RegExp(
-        `(^|${classWhitespace})${token}(?=$|${classWhitespace})`,
-      )
-      const remove = new RegExp(
-        `(^|${classWhitespace})${token}(?=$|${classWhitespace})`,
+      const occurrence = new RegExp(
+        `(^|${classWhitespace})${escapeRegularExpression(name)}`
+        + `(?=$|${classWhitespace})`,
         'g',
       )
 
@@ -468,22 +467,20 @@ function createRuntimeApply(runtime) {
 
         const current = element.getAttribute('class') ?? ''
 
-        if (contains.test(current) === next) {
+        if ((current.search(occurrence) >= 0) === next) {
           return false
         }
 
         const className = next
           ? appendClassToken(current, name)
-          : current.replace(remove, '$1')
+          : current.replace(occurrence, '$1')
         element.setAttribute('class', className)
         return true
       }
     }
     case 'style': {
-      const name = requiredName(descriptor)
-      const property = supportsStyleProperty(runtime.view, name)
-        ? styleProperty(name)
-        : null
+      const name = /** @type {string} */ (descriptor.name)
+      const property = styleProperty(name)
 
       return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
         const styledElement = asStyledElement(element)
@@ -530,7 +527,7 @@ function createRuntimeApply(runtime) {
  * @param {Element} root
  * @param {ReadonlyArray<DomBindingRuntime<Data>>} runtimes
  * @param {ReadonlyArray<Element>} ownedSubtrees
- * @param {TrustedTypesFactory | null} trustedTypes
+ * @param {TrustedHTMLCheck | null} trustedTypes
  * @param {(roots: ReadonlySet<ShadowRoot>) => void} [publishShadowRoots]
  * @returns {import('./types.js').ConnectedBinding<Data>}
  */
@@ -594,7 +591,7 @@ function connectScalarDomBindings(
       const operations = []
 
       for (const runtime of runtimes) {
-        if (isStructural(runtime.descriptor)) {
+        if (isStructuralBinding(runtime.descriptor)) {
           processedByRuntime.set(runtime, new WeakSet())
         }
       }
@@ -645,7 +642,7 @@ function connectScalarDomBindings(
       }
 
       for (const runtime of runtimes) {
-        if (isStructural(runtime.descriptor)) {
+        if (isStructuralBinding(runtime.descriptor)) {
           continue
         }
 
@@ -713,7 +710,7 @@ function connectScalarDomBindings(
  * @param {ReadonlyArray<Element>} ownedSubtrees
  * @param {ReadonlyArray<ReadonlyArray<Element>>} elementsByRuntime
  * @param {Data} data
- * @param {TrustedTypesFactory | null} trustedTypes
+ * @param {TrustedHTMLCheck | null} trustedTypes
  * @param {ElementQuery} liveQuery
  * @param {(roots: ReadonlySet<ShadowRoot>) => void} [publishShadowRoots]
  * @returns {import('./types.js').PreparedUpdate}
@@ -749,7 +746,7 @@ function prepareDirectUpdate(
       )
     })
 
-    if (isStructural(runtime.descriptor)) {
+    if (isStructuralBinding(runtime.descriptor)) {
       for (let index = 0; index < elements.length; index += 1) {
         const element = elements[index]
 
@@ -822,7 +819,7 @@ function analyzeStaging(root, runtimes, ownedSubtrees, liveQuery) {
     for (const element of elements) {
       recordRuntime(runtimeByElement, element, runtimeIndex)
 
-      if (isStructural(runtime.descriptor)) {
+      if (isStructuralBinding(runtime.descriptor)) {
         recordRuntime(structuralRuntimeByElement, element, runtimeIndex)
       }
     }
@@ -1025,7 +1022,7 @@ function preparedDomUpdate(
 function trackParentCache(records, runtime, element, value) {
   for (const record of records) {
     if (record.element === element) {
-      if (ownsElementContent(runtime.descriptor)) {
+      if (isStructuralBinding(runtime.descriptor)) {
         record.isSuperseded = true
       }
     } else if (record.element.contains(element)) {
@@ -1063,26 +1060,16 @@ function refreshParentCaches(records) {
 
     const runtime = record.runtime
     const descriptor = runtime.descriptor
-    const domValue = Reflect.get(record.element, requiredName(descriptor))
+    const domValue = Reflect.get(
+      record.element,
+      /** @type {string} */ (descriptor.name),
+    )
 
     runtime.values.set(record.element, {
       projectedValue: projectedCacheValue(runtime, record.value),
       domValue,
     })
   }
-}
-
-/**
- * @template Data
- * @param {DomBindingDescriptor<Data>} descriptor
- * @returns {boolean}
- */
-function ownsElementContent(descriptor) {
-  return descriptor.kind === 'text'
-    || (
-      descriptor.kind === 'property'
-      && isStructuralProperty(descriptor.name)
-    )
 }
 
 /**
@@ -1129,7 +1116,7 @@ function nextStructuralTask(
   let selected = null
 
   for (const runtime of runtimes) {
-    if (!isStructural(runtime.descriptor)) {
+    if (!isStructuralBinding(runtime.descriptor)) {
       continue
     }
 
@@ -1180,61 +1167,6 @@ function nextStructuralTask(
 }
 
 /**
- * @param {Element} root
- * @param {Element} element
- * @returns {number}
- */
-function elementDepth(root, element) {
-  let depth = 0
-  let current = element
-
-  while (current !== root) {
-    const parent = shadowIncludingParent(current)
-
-    if (parent === null) {
-      throw new Error('Lumi lost a planned DOM target')
-    }
-
-    current = parent
-    depth += 1
-  }
-
-  return depth
-}
-
-/**
- * @template Data
- * @param {DomBindingDescriptor<Data>} descriptor
- * @returns {boolean}
- */
-function isStructural(descriptor) {
-  return descriptor.kind === 'text'
-    || (
-      descriptor.kind === 'property'
-      && isStructuralProperty(descriptor.name)
-    )
-}
-
-/**
- * @param {string | undefined} name
- * @returns {boolean}
- */
-function isStructuralProperty(name) {
-  return name === 'innerHTML'
-    || name === 'outerHTML'
-    || name === 'textContent'
-    || name === 'innerText'
-}
-
-/**
- * @param {string | undefined} name
- * @returns {boolean}
- */
-function isTrustedHTMLProperty(name) {
-  return name === 'innerHTML' || name === 'outerHTML'
-}
-
-/**
  * Keeps the authenticated TrustedHTML object intact for the native setter,
  * while comparing its immutable string data with the DOM's serialized value.
  *
@@ -1253,7 +1185,7 @@ function projectedCacheValue(runtime, value) {
  * @param {Data} data
  * @param {Element} element
  * @param {number} matchIndex
- * @param {TrustedTypesFactory | null} trustedTypes
+ * @param {TrustedHTMLCheck | null} trustedTypes
  * @returns {unknown}
  */
 function projectValue(runtime, data, element, matchIndex, trustedTypes) {
@@ -1273,7 +1205,7 @@ function projectValue(runtime, data, element, matchIndex, trustedTypes) {
  * @template Data
  * @param {DomBindingRuntime<Data>} runtime
  * @param {unknown} projected
- * @param {TrustedTypesFactory | null} trustedTypes
+ * @param {TrustedHTMLCheck | null} trustedTypes
  * @returns {unknown}
  */
 function normalizeProjectedValue(runtime, projected, trustedTypes) {
@@ -1325,7 +1257,7 @@ function applyPlannedValue(
       return
     }
     case 'property': {
-      const name = requiredName(descriptor)
+      const name = /** @type {string} */ (descriptor.name)
 
       if (name === 'outerHTML' && element === planningRoot) {
         throw new TypeError(
@@ -1374,7 +1306,11 @@ function applyPlannedValue(
       return
     }
     case 'attribute': {
-      setAttributeValue(element, requiredName(descriptor), value)
+      setAttributeValue(
+        element,
+        /** @type {string} */ (descriptor.name),
+        value,
+      )
       return
     }
     case 'class': {
@@ -1488,28 +1424,6 @@ function styleProperty(name) {
 }
 
 /**
- * Tests a CSS property name without assuming that the DOM types expose the
- * CSS namespace.
- *
- * @param {Window | null} view
- * @param {string} name
- * @returns {boolean}
- */
-function supportsStyleProperty(view, name) {
-  if (view === null) {
-    return false
-  }
-
-  const css = Reflect.get(view, 'CSS')
-  const supports = css === null || css === undefined
-    ? undefined
-    : Reflect.get(css, 'supports')
-
-  return typeof supports === 'function'
-    && Reflect.apply(supports, css, [name, 'initial']) === true
-}
-
-/**
  * @param {Element} element
  * @returns {HTMLElement | SVGElement}
  */
@@ -1521,19 +1435,6 @@ function asStyledElement(element) {
   }
 
   return /** @type {HTMLElement | SVGElement} */ (element)
-}
-
-/**
- * @template Data
- * @param {DomBindingDescriptor<Data>} descriptor
- * @returns {string}
- */
-function requiredName(descriptor) {
-  if (descriptor.name === undefined) {
-    throw new Error(`Lumi ${descriptor.kind} binding lost its name`)
-  }
-
-  return descriptor.name
 }
 
 /**
@@ -1681,7 +1582,7 @@ function changedDuringCommit(selector) {
  * realm for authenticating values used during both planning and commit.
  *
  * @param {Element} root
- * @returns {TrustedTypesFactory | null}
+ * @returns {TrustedHTMLCheck | null}
  */
 function trustedTypesFactory(root) {
   const view = root.ownerDocument.defaultView
@@ -1702,16 +1603,14 @@ function trustedTypesFactory(root) {
     return null
   }
 
-  return {
-    isHTML(value) {
-      return Reflect.apply(isHTML, factory, [value]) === true
-    },
+  return value => {
+    return Reflect.apply(isHTML, factory, [value]) === true
   }
 }
 
 /**
  * @param {unknown} value
- * @param {TrustedTypesFactory | null} trustedTypes
+ * @param {TrustedHTMLCheck | null} trustedTypes
  * @param {string} name
  */
 function assertTrustedHTML(value, trustedTypes, name) {
@@ -1722,7 +1621,7 @@ function assertTrustedHTML(value, trustedTypes, name) {
     )
   }
 
-  if (!trustedTypes.isHTML(value)) {
+  if (!trustedTypes(value)) {
     throw invalidProjectionValue(
       `property "${name}"`,
       'TrustedHTML',

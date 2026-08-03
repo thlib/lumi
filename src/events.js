@@ -9,7 +9,7 @@
  */
 
 import {
-  elementWalker,
+  collectOpenShadowRoots,
   isInsideOwnedSubtree,
   queryElements,
   queryOwnedElements,
@@ -32,43 +32,13 @@ const optionNames = ['at', 'capture', 'passive', 'freq']
  *
  * @type {ReadonlySet<string>}
  */
-const nonBubblingEventTypes = new Set([
-  'abort',
-  'beforetoggle',
-  'blur',
-  'canplay',
-  'canplaythrough',
-  'durationchange',
-  'emptied',
-  'ended',
-  'error',
-  'focus',
-  'invalid',
-  'load',
-  'loadeddata',
-  'loadedmetadata',
-  'loadstart',
-  'mouseenter',
-  'mouseleave',
-  'pause',
-  'play',
-  'playing',
-  'pointerenter',
-  'pointerleave',
-  'progress',
-  'ratechange',
-  'resize',
-  'scroll',
-  'seeked',
-  'seeking',
-  'stalled',
-  'suspend',
-  'timeupdate',
-  'toggle',
-  'unload',
-  'volumechange',
-  'waiting',
-])
+const nonBubblingEventTypes = new Set(
+  ('abort beforetoggle blur canplay canplaythrough durationchange emptied '
+    + 'ended error focus invalid load loadeddata loadedmetadata loadstart '
+    + 'mouseenter mouseleave pause play playing pointerenter pointerleave '
+    + 'progress ratechange resize scroll seeked seeking stalled suspend '
+    + 'timeupdate toggle unload volumechange waiting').split(' '),
+)
 
 /**
  * One validated event declaration. Descriptors belong to the declaration, not
@@ -375,27 +345,22 @@ export function connectEventBindings(
   /** @param {EventRuntime} runtime */
   function detachElementListeners(runtime) {
     const descriptor = runtime.descriptor
-
-    for (const element of runtime.elements) {
-      element.removeEventListener(
-        descriptor.type,
-        elementListener(runtime),
-        { capture: descriptor.capture },
-      )
-    }
-
-    runtime.elements.clear()
+    detachListeners(
+      runtime.elements,
+      descriptor.type,
+      elementListener(runtime),
+      descriptor.capture,
+    )
   }
 
   /** @param {EventRouter} router */
   function detachRouter(router) {
-    for (const boundary of router.boundaries) {
-      boundary.removeEventListener(router.type, router.listen, {
-        capture: router.capture,
-      })
-    }
-
-    router.boundaries.clear()
+    detachListeners(
+      router.boundaries,
+      router.type,
+      router.listen,
+      router.capture,
+    )
   }
 
   /**
@@ -431,26 +396,14 @@ export function connectEventBindings(
         continue
       }
 
-      for (const boundary of router.boundaries) {
-        if (!boundaries.has(boundary)) {
-          boundary.removeEventListener(router.type, router.listen, {
-            capture: router.capture,
-          })
-          router.boundaries.delete(boundary)
-        }
-      }
-
-      for (const boundary of boundaries) {
-        if (router.boundaries.has(boundary)) {
-          continue
-        }
-
-        boundary.addEventListener(router.type, router.listen, {
-          capture: router.capture,
-          passive: router.passive,
-        })
-        router.boundaries.add(boundary)
-      }
+      reconcileListeners(
+        router.boundaries,
+        boundaries,
+        router.type,
+        router.listen,
+        router.capture,
+        router.passive,
+      )
     }
   }
 
@@ -466,29 +419,14 @@ export function connectEventBindings(
         queryOwnedElements(root, descriptor.selector, ownedSubtrees),
       )
 
-      for (const element of runtime.elements) {
-        if (!matches.has(element)) {
-          element.removeEventListener(
-            descriptor.type,
-            elementListener(runtime),
-            { capture: descriptor.capture },
-          )
-          runtime.elements.delete(element)
-        }
-      }
-
-      for (const element of matches) {
-        if (runtime.elements.has(element)) {
-          continue
-        }
-
-        element.addEventListener(
-          descriptor.type,
-          elementListener(runtime),
-          { capture: descriptor.capture, passive: descriptor.passive },
-        )
-        runtime.elements.add(element)
-      }
+      reconcileListeners(
+        runtime.elements,
+        matches,
+        descriptor.type,
+        elementListener(runtime),
+        descriptor.capture,
+        descriptor.passive,
+      )
     }
   }
 
@@ -525,6 +463,51 @@ export function connectEventBindings(
       routers.length = 0
     },
   }
+}
+
+/**
+ * @template {EventTarget} Target
+ * @param {Set<Target>} current
+ * @param {ReadonlySet<Target>} next
+ * @param {string} type
+ * @param {(event: Event) => void} listener
+ * @param {boolean} capture
+ * @param {boolean} passive
+ */
+function reconcileListeners(
+  current,
+  next,
+  type,
+  listener,
+  capture,
+  passive,
+) {
+  for (const target of current) {
+    if (!next.has(target)) {
+      target.removeEventListener(type, listener, {capture})
+      current.delete(target)
+    }
+  }
+
+  for (const target of next) {
+    if (!current.has(target)) {
+      target.addEventListener(type, listener, {capture, passive})
+      current.add(target)
+    }
+  }
+}
+
+/**
+ * @param {Set<EventTarget>} targets
+ * @param {string} type
+ * @param {(event: Event) => void} listener
+ * @param {boolean} capture
+ */
+function detachListeners(targets, type, listener, capture) {
+  for (const target of targets) {
+    target.removeEventListener(type, listener, {capture})
+  }
+  targets.clear()
 }
 
 /**
@@ -625,56 +608,11 @@ function nearestMatch(path, selector) {
  * @returns {Set<EventTarget>}
  */
 function collectEventBoundaries(root, ownedSubtrees) {
-  /** @type {Set<EventTarget>} */
-  const boundaries = new Set([root])
-  collectShadowBoundaries(root, boundaries, ownedSubtrees)
-  return boundaries
-}
-
-/**
- * @param {Element | ShadowRoot} scope
- * @param {Set<EventTarget>} boundaries
- * @param {ReadonlyArray<Element>} ownedSubtrees
- */
-function collectShadowBoundaries(scope, boundaries, ownedSubtrees) {
-  if (scope.nodeType === 1) {
-    collectShadowBoundary(
-      /** @type {Element} */ (scope),
-      boundaries,
-      ownedSubtrees,
-    )
-  }
-
-  // Native traversal keeps the common shadow-free component cheap; only a
-  // discovered shadow root costs another pass.
-  const walker = elementWalker(scope)
-
-  while (walker.nextNode() !== null) {
-    collectShadowBoundary(
-      /** @type {Element} */ (walker.currentNode),
-      boundaries,
-      ownedSubtrees,
-    )
-  }
-}
-
-/**
- * @param {Element} element
- * @param {Set<EventTarget>} boundaries
- * @param {ReadonlyArray<Element>} ownedSubtrees
- */
-function collectShadowBoundary(element, boundaries, ownedSubtrees) {
-  const shadowRoot = element.shadowRoot
-
-  if (
-    shadowRoot === null
-    || isInsideOwnedSubtree(element, ownedSubtrees)
-  ) {
-    return
-  }
-
-  boundaries.add(shadowRoot)
-  collectShadowBoundaries(shadowRoot, boundaries, ownedSubtrees)
+  return eventBoundariesFromShadowRoots(
+    root,
+    collectOpenShadowRoots(root),
+    ownedSubtrees,
+  )
 }
 
 /**

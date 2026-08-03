@@ -187,7 +187,7 @@ function connectComponent(root, bindings) {
 
       if (descriptor !== null) {
         domBindingIndex ??= connected.length
-        domBindings.push(...flattenDomBindingDescriptors([descriptor]))
+        domBindings.push(descriptor)
       } else {
         const connectedBinding = binding.connect(root)
         connected.push(connectedBinding)
@@ -210,7 +210,7 @@ function connectComponent(root, bindings) {
         0,
         connectDomBindings(
           root,
-          domBindings,
+          flattenDomBindingDescriptors(domBindings),
           ownedSubtrees,
           sharedShadowTopology === null
             ? undefined

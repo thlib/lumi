@@ -70,7 +70,6 @@ const classWhitespace = '[\\t\\n\\f\\r ]'
  * @property {DomBindingDescriptor<Data>} descriptor
  * @property {number} index
  * @property {WeakMap<Element, CachedValue>} values
- * @property {unknown[]} replay
  * @property {boolean} requiresTrustedHTML
  * @property {Set<string>} warnings
  * @property {Window | null} view
@@ -156,12 +155,14 @@ export function getDomBindingDescriptor(binding) {
  * @template Data
  * @param {ReadonlyArray<DomBindingDescriptor<Data>>} descriptors
  * @param {DomBindingDescriptor<Data> | undefined} [scope]
+ * @param {Array<DomBindingDescriptor<Data>>} [flattened]
  * @returns {ReadonlyArray<DomBindingDescriptor<Data>>}
  */
-export function flattenDomBindingDescriptors(descriptors, scope = undefined) {
-  /** @type {Array<DomBindingDescriptor<Data>>} */
-  const flattened = []
-
+export function flattenDomBindingDescriptors(
+  descriptors,
+  scope = undefined,
+  flattened = [],
+) {
   for (const descriptor of descriptors) {
     const declaration = scope === undefined
       ? descriptor
@@ -170,10 +171,11 @@ export function flattenDomBindingDescriptors(descriptors, scope = undefined) {
     flattened.push(declaration)
 
     if (descriptor.bindings !== undefined) {
-      flattened.push(...flattenDomBindingDescriptors(
+      flattenDomBindingDescriptors(
         descriptor.bindings,
         declaration,
-      ))
+        flattened,
+      )
     }
   }
 
@@ -230,6 +232,17 @@ export function connectDomBindings(
   const trustedTypes = runtimes.some(runtime => runtime.requiresTrustedHTML)
     ? trustedTypesFactory(root)
     : null
+
+  if (!runtimes.some(runtime => runtime.descriptor.kind === 'repeat')) {
+    return connectScalarDomBindings(
+      root,
+      runtimes,
+      ownedSubtrees,
+      trustedTypes,
+      publishShadowRoots,
+    )
+  }
+
   const planningDocument = root.ownerDocument.implementation
     .createHTMLDocument()
   const blueprintRoot = importElementTree(planningDocument, root)
@@ -240,63 +253,28 @@ export function connectDomBindings(
       'Lumi owned subtree left its component boundary',
     )
   })
-  const scalar = connectScalarDomBindings(
+  return connectCardinalityDomBindings(
     root,
-    runtimes,
-    ownedSubtrees,
-    trustedTypes,
-    publishShadowRoots,
+    blueprintRoot,
+    /** @type {ReadonlyArray<import('./cardinality.js').Runtime>} */ (
+      runtimes
+    ),
+    ownedSubtreePaths,
+    (runtime, projected) => {
+      return normalizeProjectedValue(
+        /** @type {DomBindingRuntime<Data>} */ (runtime),
+        projected,
+        trustedTypes,
+      )
+    },
+    (runtime, element, value) => {
+      applyLiveValue(
+        /** @type {DomBindingRuntime<Data>} */ (runtime),
+        element,
+        value,
+      )
+    },
   )
-  /** @type {ReturnType<typeof connectCardinalityDomBindings> | null} */
-  let cardinality = runtimes.some(runtime => {
-    return runtime.descriptor.kind === 'repeat'
-  })
-    ? createCardinality()
-    : null
-
-  function createCardinality() {
-    return connectCardinalityDomBindings(
-      root,
-      blueprintRoot,
-      /** @type {ReadonlyArray<import('./cardinality.js').Runtime>} */ (
-        runtimes
-      ),
-      ownedSubtreePaths,
-      (runtime, projected) => {
-        const scalarRuntime = /** @type {DomBindingRuntime<Data>} */ (
-          /** @type {unknown} */ (runtime)
-        )
-        return normalizeProjectedValue(
-          scalarRuntime,
-          projected,
-          trustedTypes,
-        )
-      },
-      (runtime, element, value) => {
-        const scalarRuntime = /** @type {DomBindingRuntime<Data>} */ (
-          /** @type {unknown} */ (runtime)
-        )
-        applyLiveValue(scalarRuntime, element, value)
-      },
-    )
-  }
-
-  return {
-    prepare(data) {
-      if (cardinality !== null) {
-        return cardinality.prepare(data)
-      }
-
-      const prepared = scalar.prepare(data)
-      clearProjectionReplay(runtimes)
-      return prepared
-    },
-
-    destroy() {
-      cardinality?.destroy()
-      scalar.destroy()
-    },
-  }
 }
 
 /**
@@ -317,7 +295,6 @@ function createDomBindingRuntime(descriptor, index, root) {
     descriptor,
     index,
     values: new WeakMap(),
-    replay: [],
     requiresTrustedHTML,
     warnings: new Set(),
     view: root.ownerDocument.defaultView,
@@ -543,19 +520,6 @@ function createRuntimeApply(runtime) {
         return true
       }
     }
-  }
-}
-
-/**
- * Promotion replay belongs only to one preparation attempt. Clearing it on
- * every exit prevents a later snapshot from observing stale projected data.
- *
- * @template Data
- * @param {ReadonlyArray<DomBindingRuntime<Data>>} runtimes
- */
-function clearProjectionReplay(runtimes) {
-  for (const runtime of runtimes) {
-    runtime.replay.length = 0
   }
 }
 
@@ -841,33 +805,26 @@ function analyzeStaging(root, runtimes, ownedSubtrees, liveQuery) {
       liveQuery,
     )
   })
-  let hasMatchedStructure = false
-
-  /** @type {Map<Element, Set<number>>} */
-  const structuralRuntimeIndexesByElement = new Map()
+  /** @type {Map<Element, number>} */
+  const runtimeByElement = new Map()
+  /** @type {Map<Element, number>} */
+  const structuralRuntimeByElement = new Map()
 
   for (let runtimeIndex = 0; runtimeIndex < runtimes.length; runtimeIndex += 1) {
     const runtime = runtimes[runtimeIndex]
 
-    if (runtime === undefined || !isStructural(runtime.descriptor)) {
+    if (runtime === undefined) {
       continue
     }
 
-    const structuralElements = elementsByRuntime[runtimeIndex] ?? []
+    const elements = elementsByRuntime[runtimeIndex] ?? []
 
-    if (structuralElements.length > 0) {
-      hasMatchedStructure = true
-    }
+    for (const element of elements) {
+      recordRuntime(runtimeByElement, element, runtimeIndex)
 
-    for (const element of structuralElements) {
-      let indexes = structuralRuntimeIndexesByElement.get(element)
-
-      if (indexes === undefined) {
-        indexes = new Set()
-        structuralRuntimeIndexesByElement.set(element, indexes)
+      if (isStructural(runtime.descriptor)) {
+        recordRuntime(structuralRuntimeByElement, element, runtimeIndex)
       }
-
-      indexes.add(runtimeIndex)
     }
   }
 
@@ -878,7 +835,7 @@ function analyzeStaging(root, runtimes, ownedSubtrees, liveQuery) {
     let current = /** @type {Element | null} */ (owned)
 
     while (current !== null) {
-      if (structuralRuntimeIndexesByElement.has(current)) {
+      if (structuralRuntimeByElement.has(current)) {
         return { required: true, elementsByRuntime }
       }
 
@@ -886,51 +843,27 @@ function analyzeStaging(root, runtimes, ownedSubtrees, liveQuery) {
     }
   }
 
-  /** @type {Map<Element, Set<number>>} */
-  const runtimeIndexesByElement = new Map()
-
-  for (let runtimeIndex = 0; runtimeIndex < runtimes.length; runtimeIndex += 1) {
-    for (const element of elementsByRuntime[runtimeIndex] ?? []) {
-      let indexes = runtimeIndexesByElement.get(element)
-
-      if (indexes === undefined) {
-        indexes = new Set()
-        runtimeIndexesByElement.set(element, indexes)
-      }
-
-      indexes.add(runtimeIndex)
-    }
-  }
-
   // Walk each distinct match toward its tree root. This preserves the exact
   // contains() relationship used by the former nested search, including its
   // deliberate separation at ShadowRoot boundaries, while avoiding a full
   // structural-target × matched-element comparison.
-  for (const [element, matchingRuntimeIndexes] of runtimeIndexesByElement) {
+  for (const [element, matchingRuntime] of runtimeByElement) {
     let current = /** @type {Element | null} */ (element)
 
     while (current !== null) {
-      const structuralRuntimeIndexes =
-        structuralRuntimeIndexesByElement.get(current)
+      const structuralRuntime = structuralRuntimeByElement.get(current)
 
-      if (structuralRuntimeIndexes !== undefined) {
-        if (current !== element) {
-          return { required: true, elementsByRuntime }
-        }
-
+      if (
+        structuralRuntime !== undefined
+        && (
+          current !== element
+          || structuralRuntime !== matchingRuntime
+          || structuralRuntime === -1
+        )
+      ) {
         // A declaration does not depend on itself at one target. Any other
         // declaration at the same element is a real ordered dependency.
-        if (
-          structuralRuntimeIndexes.size !== 1
-          || matchingRuntimeIndexes.size !== 1
-          || !matchingRuntimeIndexes.has(
-            /** @type {number} */ (
-              structuralRuntimeIndexes.values().next().value
-            ),
-          )
-        ) {
-          return { required: true, elementsByRuntime }
-        }
+        return { required: true, elementsByRuntime }
       }
 
       current = current.parentElement
@@ -938,10 +871,22 @@ function analyzeStaging(root, runtimes, ownedSubtrees, liveQuery) {
   }
 
   return {
-    required: hasMatchedStructure
+    required: structuralRuntimeByElement.size > 0
       && elementsByRuntime.some(elements => elements.length === 0),
     elementsByRuntime,
   }
+}
+
+/**
+ * Records one declaration index, or -1 when several declarations share an
+ * element.
+ *
+ * @param {Map<Element, number>} owners
+ * @param {Element} element
+ * @param {number} runtimeIndex
+ */
+function recordRuntime(owners, element, runtimeIndex) {
+  owners.set(element, owners.has(element) ? -1 : runtimeIndex)
 }
 
 /**
@@ -1263,8 +1208,7 @@ function elementDepth(root, element) {
  * @returns {boolean}
  */
 function isStructural(descriptor) {
-  return descriptor.kind === 'repeat'
-    || descriptor.kind === 'text'
+  return descriptor.kind === 'text'
     || (
       descriptor.kind === 'property'
       && isStructuralProperty(descriptor.name)
@@ -1321,8 +1265,6 @@ function projectValue(runtime, data, element, matchIndex, trustedTypes) {
   } catch (error) {
     throw projectionError(descriptor, matchIndex, error)
   }
-
-  runtime.replay[matchIndex] = projected
 
   return normalizeProjectedValue(runtime, projected, trustedTypes)
 }

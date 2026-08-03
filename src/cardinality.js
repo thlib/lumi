@@ -23,10 +23,6 @@ import {itemContext, rootContext} from './internal/projection-context.js'
 const noKey = Symbol('Lumi unkeyed occurrence')
 
 /**
- * @typedef {string | number | boolean} TextValue
- */
-
-/**
  * @typedef {object} Runtime
  * @property {{
  *   kind: 'repeat' | 'text' | 'property' | 'attribute' | 'class' | 'style',
@@ -41,8 +37,6 @@ const noKey = Symbol('Lumi unkeyed occurrence')
  *   projectedValue: unknown,
  *   domValue: unknown
  * }>} values
- * @property {unknown[]} replay
- * @property {boolean} requiresTrustedHTML
  */
 
 /**
@@ -65,7 +59,6 @@ const noKey = Symbol('Lumi unkeyed occurrence')
  * @property {Element} target
  * @property {number} matchIndex
  * @property {number[]} path
- * @property {boolean} isRoot
  * @property {SinkSpec[]} ownSinks
  * @property {ScopeSpec} scope
  */
@@ -84,10 +77,8 @@ const noKey = Symbol('Lumi unkeyed occurrence')
 
 /**
  * @typedef {object} OccurrencePlan
- * @property {'text' | 'context'} mode
- * @property {string} [text]
  * @property {SinkPlan[]} ownSinks
- * @property {ScopePlan} [scope]
+ * @property {ScopePlan} scope
  * @property {import('./types.js').ProjectionContext<unknown, unknown>} context
  * @property {unknown} key
  */
@@ -96,7 +87,6 @@ const noKey = Symbol('Lumi unkeyed occurrence')
  * @typedef {object} RegionPlan
  * @property {RegionSpec} spec
  * @property {OccurrencePlan[]} occurrences
- * @property {boolean} isArray
  * @property {boolean} [isNoop]
  */
 
@@ -147,8 +137,6 @@ export function connectCardinalityDomBindings(
     prepare(/** @type {unknown} */ data) {
       const plan = prepareScope(
         scope,
-        data,
-        [],
         normalize,
         rootContext(data),
       )
@@ -215,9 +203,7 @@ function compileScope(root, runtimes, ownedSubtrees) {
   )
 
   for (const runtime of runtimes) {
-    if (
-      runtime.descriptor.kind !== 'repeat'
-    ) {
+    if (runtime.descriptor.kind !== 'repeat') {
       continue
     }
 
@@ -228,10 +214,7 @@ function compileScope(root, runtimes, ownedSubtrees) {
       ownedSubtrees,
     )
 
-    if (
-      runtime.descriptor.kind === 'repeat'
-      && targets.length === 0
-    ) {
+    if (targets.length === 0) {
       throw new TypeError(
         `Lumi repeat selector "${runtime.descriptor.selector}" must match `
         + 'the component template',
@@ -241,10 +224,7 @@ function compileScope(root, runtimes, ownedSubtrees) {
     for (let matchIndex = 0; matchIndex < targets.length; matchIndex += 1) {
       const target = /** @type {Element} */ (targets[matchIndex])
 
-      if (
-        runtime.descriptor.kind === 'repeat'
-        && target === root
-      ) {
+      if (target === root) {
         throw new TypeError(
           'Lumi cannot repeat a mounted component root',
         )
@@ -265,7 +245,6 @@ function compileScope(root, runtimes, ownedSubtrees) {
         target,
         matchIndex,
         path: [],
-        isRoot: target === root,
         ownSinks: [],
         scope: { sinks: [], regions: [] },
       })
@@ -490,35 +469,30 @@ function canCreateTargets(descriptor) {
 
 /**
  * @param {ScopeSpec} scope
- * @param {unknown} data
- * @param {number[]} coordinate
  * @param {(runtime: Runtime, projected: unknown) => unknown} normalize
  * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
  * @returns {ScopePlan}
  */
-function prepareScope(scope, data, coordinate, normalize, context) {
+function prepareScope(scope, normalize, context) {
   return {
     sinks: scope.sinks.map(spec => {
-      return prepareSink(spec, data, coordinate, normalize, context)
+      return prepareSink(spec, normalize, context)
     }),
     regions: scope.regions.map(spec => {
-      return prepareRegion(spec, data, coordinate, normalize, context)
+      return prepareRegion(spec, normalize, context)
     }),
   }
 }
 
 /**
  * @param {SinkSpec} spec
- * @param {unknown} data
- * @param {number[]} coordinate
  * @param {(runtime: Runtime, projected: unknown) => unknown} normalize
  * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
  * @returns {SinkPlan}
  */
-function prepareSink(spec, data, coordinate, normalize, context) {
+function prepareSink(spec, normalize, context) {
   const projected = projectValue(
     spec.runtime,
-    data,
     spec.target,
     spec.matchIndex,
     context,
@@ -531,58 +505,28 @@ function prepareSink(spec, data, coordinate, normalize, context) {
 
 /**
  * @param {RegionSpec} spec
- * @param {unknown} data
- * @param {number[]} coordinate
  * @param {(runtime: Runtime, projected: unknown) => unknown} normalize
  * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
  * @returns {RegionPlan}
  */
-function prepareRegion(spec, data, coordinate, normalize, context) {
+function prepareRegion(spec, normalize, context) {
   const projected = projectValue(
     spec.runtime,
-    data,
     spec.target,
     spec.matchIndex,
     context,
   )
-  let resolved = projected
-
-  if (resolved === null || resolved === undefined) {
-    return {
-      spec,
-      occurrences: [],
-      isArray: false,
-      isNoop: true,
-    }
-  }
-
-  resolved = normalize(spec.runtime, resolved)
+  const resolved = normalize(spec.runtime, projected)
 
   if (isNoValue(resolved)) {
     return {
       spec,
       occurrences: [],
-      isArray: false,
       isNoop: true,
     }
   }
 
-  if (!Array.isArray(resolved)) {
-    return {
-      spec,
-      occurrences: [],
-      isArray: false,
-      isNoop: true,
-    }
-  }
-
-  if (spec.isRoot) {
-    throw new TypeError(
-      'Lumi cannot apply array cardinality at a mounted component root',
-    )
-  }
-
-  const entries = resolved
+  const entries = /** @type {unknown[]} */ (resolved)
   /** @type {OccurrencePlan[]} */
   const occurrences = new Array(entries.length)
   /** @type {Map<unknown, number> | null} */
@@ -593,56 +537,35 @@ function prepareRegion(spec, data, coordinate, normalize, context) {
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index]
 
-    coordinate.push(index)
+    const occurrenceContext = itemContext(context, entry, index)
+    const key = projectKey(spec, occurrenceContext, index)
 
-    try {
-      const occurrenceContext = itemContext(context, entry, index)
-      const key = projectKey(spec, occurrenceContext, index)
-
-      if (indexesByKey !== null) {
-        if (indexesByKey.has(key)) {
-          const firstIndex = /** @type {number} */ (indexesByKey.get(key))
-          throw new TypeError(
-            `Lumi repeat key for "${spec.runtime.descriptor.selector}" `
-            + `is duplicated at item positions ${firstIndex + 1} `
-            + `and ${index + 1}`,
-          )
-        }
-        indexesByKey.set(key, index)
-      }
-
-      const ownSinks = spec.ownSinks.map(sink => {
-        return prepareSink(
-          sink,
-          data,
-          coordinate,
-          normalize,
-          occurrenceContext,
+    if (indexesByKey !== null) {
+      if (indexesByKey.has(key)) {
+        const firstIndex = /** @type {number} */ (indexesByKey.get(key))
+        throw new TypeError(
+          `Lumi repeat key for "${spec.runtime.descriptor.selector}" `
+          + `is duplicated at item positions ${firstIndex + 1} `
+          + `and ${index + 1}`,
         )
-      })
-
-      occurrences[index] = {
-        mode: 'context',
-        ownSinks,
-        context: occurrenceContext,
-        key,
-        scope: prepareScope(
-          spec.scope,
-          data,
-          coordinate,
-          normalize,
-          occurrenceContext,
-        ),
       }
-    } finally {
-      coordinate.pop()
+      indexesByKey.set(key, index)
+    }
+    const ownSinks = spec.ownSinks.map(sink => {
+      return prepareSink(sink, normalize, occurrenceContext)
+    })
+
+    occurrences[index] = {
+      ownSinks,
+      context: occurrenceContext,
+      key,
+      scope: prepareScope(spec.scope, normalize, occurrenceContext),
     }
   }
 
   return {
     spec,
     occurrences,
-    isArray: true,
   }
 }
 
@@ -679,34 +602,21 @@ function projectKey(spec, context, index) {
 }
 
 /**
- * Reuses a projection evaluated during the current update. Deleting on read
- * lets later inherited coordinates evaluate normally.
+ * Evaluates one projection with its repeat context.
  *
  * @param {Runtime} runtime
  * @param {Element} element
- * @param {unknown} data
  * @param {number} matchIndex
  * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
  * @returns {unknown}
  */
-function projectValue(runtime, data, element, matchIndex, context) {
-  if (!Object.hasOwn(runtime.replay, matchIndex)) {
-    try {
-      return runtime.descriptor.project(context, element)
-    } catch (error) {
-      throw projectionError(runtime.descriptor, matchIndex, error)
-    }
+function projectValue(runtime, element, matchIndex, context) {
+  try {
+    return runtime.descriptor.project(context, element)
+  } catch (error) {
+    throw projectionError(runtime.descriptor, matchIndex, error)
   }
-
-  const projected = runtime.replay[matchIndex]
-  delete runtime.replay[matchIndex]
-  return projected
 }
-
-/**
- * @param {unknown} value
- * @returns {value is TextValue}
- */
 
 /**
  * Structural properties are uncommon in array-rendering components. When
@@ -746,8 +656,6 @@ function prepareDynamicOperations(
   const handledByRuntime = new Map(
     runtimes.map(runtime => [runtime, new WeakSet()]),
   )
-  /** @type {WeakMap<Element, number[]>} */
-  const coordinateByElement = new WeakMap()
   /** @type {WeakMap<Element, import('./types.js').ProjectionContext<unknown, unknown>>} */
   const contextByElement = new WeakMap()
   /** @type {WeakMap<Element, ReadonlySet<number>>} */
@@ -758,7 +666,6 @@ function prepareDynamicOperations(
    * }>} */
   const structuralApplications = []
 
-  coordinateByElement.set(planningRoot, [])
   contextByElement.set(planningRoot, rootContext(data))
 
   /**
@@ -788,9 +695,7 @@ function prepareDynamicOperations(
   trackPlannedScope(
     planningState,
     plan,
-    [],
     handledByRuntime,
-    coordinateByElement,
     contextByElement,
   )
 
@@ -798,7 +703,6 @@ function prepareDynamicOperations(
     markStructuralCreation(
       application.runtime,
       application.element,
-      coordinateByElement,
       contextByElement,
       createdBy,
     )
@@ -816,7 +720,6 @@ function prepareDynamicOperations(
       markStructuralCreation(
         runtime,
         element,
-        coordinateByElement,
         contextByElement,
         createdBy,
       )
@@ -856,8 +759,6 @@ function prepareDynamicOperations(
     const value = prepareDynamicValue(
       task.runtime,
       task.element,
-      data,
-      coordinateByElement,
       contextByElement,
       normalize,
       task.matchIndex,
@@ -898,8 +799,6 @@ function prepareDynamicOperations(
         value: prepareDynamicValue(
           runtime,
           element,
-          data,
-          coordinateByElement,
           contextByElement,
           normalize,
           matchIndex,
@@ -1106,8 +1005,6 @@ function nextDynamicStructuralTask(
 /**
  * @param {Runtime} runtime
  * @param {Element} element
- * @param {unknown} data
- * @param {WeakMap<Element, number[]>} coordinateByElement
  * @param {WeakMap<Element, import('./types.js').ProjectionContext<unknown, unknown>>} contextByElement
  * @param {(runtime: Runtime, projected: unknown) => unknown} normalize
  * @param {number} matchIndex
@@ -1115,8 +1012,6 @@ function nextDynamicStructuralTask(
 function prepareDynamicValue(
   runtime,
   element,
-  data,
-  coordinateByElement,
   contextByElement,
   normalize,
   matchIndex,
@@ -1124,7 +1019,6 @@ function prepareDynamicValue(
   const context = findContext(element, contextByElement)
   const projected = projectValue(
     runtime,
-    data,
     element,
     matchIndex,
     context,
@@ -1147,29 +1041,7 @@ function prepareDynamicValue(
  */
 function isStructuralRuntime(runtime) {
   return runtime.descriptor.kind === 'repeat'
-    || runtime.descriptor.kind === 'text'
     || isContentSink(runtime.descriptor)
-}
-
-/**
- * @param {Element} element
- * @param {WeakMap<Element, number[]>} coordinateByElement
- * @returns {number[]}
- */
-function findCoordinate(element, coordinateByElement) {
-  let current = /** @type {Element | null} */ (element)
-
-  while (current !== null) {
-    const coordinate = coordinateByElement.get(current)
-
-    if (coordinate !== undefined) {
-      return coordinate
-    }
-
-    current = shadowIncludingParent(current)
-  }
-
-  throw new Error('Lumi lost a dynamic array coordinate')
 }
 
 /**
@@ -1221,17 +1093,13 @@ function dynamicElementDepth(root, element) {
  *
  * @param {ScopeState} state
  * @param {ScopePlan} plan
- * @param {number[]} coordinate
  * @param {Map<Runtime, WeakSet<Element>>} handledByRuntime
- * @param {WeakMap<Element, number[]>} coordinateByElement
  * @param {WeakMap<Element, import('./types.js').ProjectionContext<unknown, unknown>>} contextByElement
  */
 function trackPlannedScope(
   state,
   plan,
-  coordinate,
   handledByRuntime,
-  coordinateByElement,
   contextByElement,
 ) {
   const context = findContext(state.root, contextByElement)
@@ -1242,7 +1110,6 @@ function trackPlannedScope(
 
     if (sink !== undefined && element !== undefined) {
       handledByRuntime.get(sink.spec.runtime)?.add(element)
-      coordinateByElement.set(element, coordinate)
       contextByElement.set(element, context)
     }
   }
@@ -1262,9 +1129,6 @@ function trackPlannedScope(
     ) {
       const occurrencePlan = regionPlan.occurrences[occurrenceIndex]
       const occurrenceState = regionState.occurrences[occurrenceIndex]
-      const occurrenceCoordinate = regionPlan.isArray
-        ? [...coordinate, occurrenceIndex]
-        : coordinate
 
       if (occurrencePlan === undefined || occurrenceState === undefined) {
         continue
@@ -1272,10 +1136,6 @@ function trackPlannedScope(
 
       handledByRuntime.get(regionPlan.spec.runtime)
         ?.add(occurrenceState.element)
-      coordinateByElement.set(
-        occurrenceState.element,
-        occurrenceCoordinate,
-      )
       contextByElement.set(
         occurrenceState.element,
         occurrencePlan.context,
@@ -1285,17 +1145,11 @@ function trackPlannedScope(
         handledByRuntime.get(sink.spec.runtime)?.add(occurrenceState.element)
       }
 
-      if (
-        occurrencePlan.mode === 'context'
-        && occurrencePlan.scope !== undefined
-        && occurrenceState.scope !== null
-      ) {
+      if (occurrenceState.scope !== null) {
         trackPlannedScope(
           occurrenceState.scope,
           occurrencePlan.scope,
-          occurrenceCoordinate,
           handledByRuntime,
-          coordinateByElement,
           contextByElement,
         )
       }
@@ -1309,14 +1163,12 @@ function trackPlannedScope(
  *
  * @param {Runtime} runtime
  * @param {Element} element
- * @param {WeakMap<Element, number[]>} coordinateByElement
  * @param {WeakMap<Element, import('./types.js').ProjectionContext<unknown, unknown>>} contextByElement
  * @param {WeakMap<Element, ReadonlySet<number>>} createdBy
  */
 function markStructuralCreation(
   runtime,
   element,
-  coordinateByElement,
   contextByElement,
   createdBy,
 ) {
@@ -1326,7 +1178,6 @@ function markStructuralCreation(
     return
   }
 
-  const coordinate = findCoordinate(element, coordinateByElement)
   const context = findContext(element, contextByElement)
   const history = new Set(createdBy.get(element) ?? [])
   history.add(runtime.index)
@@ -1335,10 +1186,8 @@ function markStructuralCreation(
     for (const child of element.children) {
       markCreatedSubtree(
         child,
-        coordinate,
         context,
         history,
-        coordinateByElement,
         contextByElement,
         createdBy,
       )
@@ -1348,33 +1197,26 @@ function markStructuralCreation(
 
 /**
  * @param {Element} element
- * @param {number[]} coordinate
  * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
  * @param {ReadonlySet<number>} history
- * @param {WeakMap<Element, number[]>} coordinateByElement
  * @param {WeakMap<Element, import('./types.js').ProjectionContext<unknown, unknown>>} contextByElement
  * @param {WeakMap<Element, ReadonlySet<number>>} createdBy
  */
 function markCreatedSubtree(
   element,
-  coordinate,
   context,
   history,
-  coordinateByElement,
   contextByElement,
   createdBy,
 ) {
-  coordinateByElement.set(element, coordinate)
   contextByElement.set(element, context)
   createdBy.set(element, history)
 
   for (const child of element.children) {
     markCreatedSubtree(
       child,
-      coordinate,
       context,
       history,
-      coordinateByElement,
       contextByElement,
       createdBy,
     )
@@ -1561,38 +1403,19 @@ class RegionState {
    * @param {OccurrencePlan} plan
    */
   applyOccurrence(occurrence, plan) {
-    if (plan.mode === 'text') {
-      occurrence.scope?.destroy()
-      occurrence.scope = null
-
-      if (occurrence.element.textContent !== plan.text) {
-        occurrence.element.textContent = plan.text ?? ''
-      }
-      occurrence.mode = 'text'
-    } else {
-      if (occurrence.mode !== 'context' || occurrence.scope === null) {
-        if (
-          occurrence.mode !== 'unknown'
-          || !canResolveScope(occurrence.element, this.spec.scope)
-        ) {
-          restoreTemplateChildren(occurrence.element, this.spec.target)
-        }
-        occurrence.scope = new ScopeState(
-          occurrence.element,
-          this.spec.scope,
-          this.applyValue,
-        )
-      }
-      occurrence.mode = 'context'
+    if (occurrence.scope === null) {
+      occurrence.scope = new ScopeState(
+        occurrence.element,
+        this.spec.scope,
+        this.applyValue,
+      )
     }
 
     for (const sink of plan.ownSinks) {
       this.applyValue(sink.spec.runtime, occurrence.element, sink.value)
     }
 
-    if (plan.mode === 'context' && plan.scope !== undefined) {
-      occurrence.scope?.apply(plan.scope)
-    }
+    occurrence.scope.apply(plan.scope)
   }
 
   destroy() {
@@ -1627,8 +1450,6 @@ class OccurrenceState {
   constructor(element) {
     this.element = element
     this.key = /** @type {unknown} */ (noKey)
-    /** @type {'unknown' | 'text' | 'context'} */
-    this.mode = 'unknown'
     /** @type {ScopeState | null} */
     this.scope = null
   }
@@ -1637,48 +1458,6 @@ class OccurrenceState {
     this.scope?.destroy()
     this.scope = null
     this.element.remove()
-  }
-}
-
-/**
- * @param {Element} element
- * @param {Element} template
- */
-function restoreTemplateChildren(element, template) {
-  const children = Array.from(
-    template.childNodes,
-    child => element.ownerDocument.importNode(child, true),
-  )
-  element.replaceChildren(...children)
-}
-
-/**
- * Preserves existing descendants when their template locations are already
- * present. A prior scalar text write may have removed them, in which case the
- * pristine template is restored before the context becomes active again.
- *
- * @param {Element} root
- * @param {ScopeSpec} scope
- */
-function canResolveScope(root, scope) {
-  try {
-    for (const sink of scope.sinks) {
-      elementAtPath(
-        root,
-        sink.path,
-        'Lumi array template lost a binding target',
-      )
-    }
-    for (const region of scope.regions) {
-      elementAtPath(
-        root,
-        region.path,
-        'Lumi array template lost a binding target',
-      )
-    }
-    return true
-  } catch {
-    return false
   }
 }
 

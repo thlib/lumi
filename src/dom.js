@@ -114,7 +114,7 @@ export function createElementQuery(root) {
  * @param {Element | ShadowRoot} scope
  * @returns {Set<ShadowRoot>}
  */
-function collectOpenShadowRoots(scope) {
+export function collectOpenShadowRoots(scope) {
   /** @type {Set<ShadowRoot>} */
   const roots = new Set()
 

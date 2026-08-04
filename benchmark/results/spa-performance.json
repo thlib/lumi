@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-30T20:30:49.579Z",
+  "generatedAt": "2026-08-04T15:41:08.517Z",
   "environment": {
     "browser": "Chromium 149.0.7827.55",
     "node": "v26.5.1",
@@ -32,18 +32,18 @@
   "assets": {
     "lumi-native": {
       "files": 5,
-      "gzipBytes": 29395,
-      "rawBytes": 114370
+      "gzipBytes": 28573,
+      "rawBytes": 110665
     },
     "lumi-build": {
       "files": 3,
-      "gzipBytes": 28389,
-      "rawBytes": 102771
+      "gzipBytes": 27541,
+      "rawBytes": 99064
     },
     "lumi-dsl": {
       "files": 3,
-      "gzipBytes": 33306,
-      "rawBytes": 123492
+      "gzipBytes": 32465,
+      "rawBytes": 119785
     },
     "vue": {
       "files": 4,
@@ -70,31 +70,31 @@
     "lumi-native": {
       "domContentLoadedMs": {
         "count": 5,
-        "max": 36.800000000046566,
+        "max": 79.5,
         "median": 31.5,
-        "min": 30.4000000001397,
-        "p95": 36.800000000046566
+        "min": 30.599999997764826,
+        "p95": 79.5
       },
       "filterMsPerUpdate": {
         "count": 5,
-        "max": 0.085,
-        "median": 0.08366666666620101,
-        "min": 0.08166666666666667,
-        "p95": 0.085
+        "max": 0.08600000000248352,
+        "median": 0.08466666667411725,
+        "min": 0.07866666665921608,
+        "p95": 0.08600000000248352
       },
       "firstContentfulPaintMs": {
         "count": 5,
-        "max": 88,
+        "max": 176,
         "median": 84,
         "min": 80,
-        "p95": 88
+        "p95": 176
       },
       "heapDeltaBytes": {
         "count": 5,
-        "max": 279254,
-        "median": 279242,
-        "min": 279194,
-        "p95": 279254
+        "max": 262454,
+        "median": 262018,
+        "min": 261674,
+        "p95": 262454
       },
       "initialNodes": {
         "count": 5,
@@ -105,31 +105,31 @@
       },
       "loadMs": {
         "count": 5,
-        "max": 38.4000000001397,
+        "max": 85.60000000149012,
         "median": 33,
-        "min": 31.9000000001397,
-        "p95": 38.4000000001397
+        "min": 31.899999998509884,
+        "p95": 85.60000000149012
       },
       "blockingTaskCount": {
         "count": 5,
-        "max": 1,
+        "max": 2,
         "median": 1,
         "min": 1,
-        "p95": 1
+        "p95": 2
       },
       "blockingTaskMaxMs": {
         "count": 5,
-        "max": 25.752,
-        "median": 25.44,
-        "min": 24.811,
-        "p95": 25.752
+        "max": 25.977,
+        "median": 25.654,
+        "min": 23.823,
+        "p95": 25.977
       },
       "blockingTaskTotalMs": {
         "count": 5,
-        "max": 25.752,
-        "median": 25.44,
-        "min": 24.811,
-        "p95": 25.752
+        "max": 34.131,
+        "median": 25.961,
+        "min": 23.862,
+        "p95": 34.131
       },
       "nodeDelta": {
         "count": 5,
@@ -140,47 +140,47 @@
       },
       "routeMsPerUpdate": {
         "count": 5,
-        "max": 0.4890000000002328,
-        "median": 0.47199999999953435,
-        "min": 0.4629999999993015,
-        "p95": 0.4890000000002328
+        "max": 0.5015000000037253,
+        "median": 0.48449999999254945,
+        "min": 0.4575,
+        "p95": 0.5015000000037253
       },
       "recordFilterMsPerUpdate": {
         "count": 2,
-        "max": 13.13333333330229,
-        "median": 12.966666666674428,
-        "min": 12.800000000046566,
-        "p95": 13.13333333330229
+        "max": 13,
+        "median": 12.483333333705861,
+        "min": 11.966666667411724,
+        "p95": 13
       }
     },
     "lumi-build": {
       "domContentLoadedMs": {
         "count": 5,
-        "max": 29.199999999953434,
-        "median": 27.200000000186265,
-        "min": 26,
-        "p95": 29.199999999953434
+        "max": 27.700000002980232,
+        "median": 27.100000001490116,
+        "min": 25.600000001490116,
+        "p95": 27.700000002980232
       },
       "filterMsPerUpdate": {
         "count": 5,
-        "max": 0.08466666666635622,
-        "median": 0.08266666666682189,
-        "min": 0.081333333333799,
-        "p95": 0.08466666666635622
+        "max": 0.08466666667411725,
+        "median": 0.0823333333308498,
+        "min": 0.07733333333084981,
+        "p95": 0.08466666667411725
       },
       "firstContentfulPaintMs": {
         "count": 5,
         "max": 84,
         "median": 80,
-        "min": 76,
+        "min": 80,
         "p95": 84
       },
       "heapDeltaBytes": {
         "count": 5,
-        "max": 279782,
-        "median": 278106,
-        "min": 278062,
-        "p95": 279782
+        "max": 260810,
+        "median": 260714,
+        "min": 260126,
+        "p95": 260810
       },
       "initialNodes": {
         "count": 5,
@@ -191,10 +191,10 @@
       },
       "loadMs": {
         "count": 5,
-        "max": 30.699999999953434,
-        "median": 28.5,
-        "min": 27.5,
-        "p95": 30.699999999953434
+        "max": 29.100000001490116,
+        "median": 28.699999999254942,
+        "min": 27.100000001490116,
+        "p95": 29.100000001490116
       },
       "blockingTaskCount": {
         "count": 5,
@@ -205,17 +205,17 @@
       },
       "blockingTaskMaxMs": {
         "count": 5,
-        "max": 25.706,
-        "median": 25.095,
-        "min": 24.597,
-        "p95": 25.706
+        "max": 25.589,
+        "median": 25.024,
+        "min": 23.334,
+        "p95": 25.589
       },
       "blockingTaskTotalMs": {
         "count": 5,
-        "max": 25.706,
-        "median": 25.095,
-        "min": 24.597,
-        "p95": 25.706
+        "max": 25.589,
+        "median": 25.024,
+        "min": 23.334,
+        "p95": 25.589
       },
       "nodeDelta": {
         "count": 5,
@@ -226,47 +226,47 @@
       },
       "routeMsPerUpdate": {
         "count": 5,
-        "max": 0.46600000000093134,
-        "median": 0.46399999999906866,
-        "min": 0.45449999999953433,
-        "p95": 0.46600000000093134
+        "max": 0.5129999999888242,
+        "median": 0.4840000000037253,
+        "min": 0.4564999999850988,
+        "p95": 0.5129999999888242
       },
       "recordFilterMsPerUpdate": {
         "count": 2,
-        "max": 14,
-        "median": 13.299999999968957,
-        "min": 12.599999999937912,
-        "p95": 14
+        "max": 13.333333333333334,
+        "median": 12.733333333705863,
+        "min": 12.133333334078392,
+        "p95": 13.333333333333334
       }
     },
     "lumi-dsl": {
       "domContentLoadedMs": {
         "count": 5,
-        "max": 30.399999999906868,
-        "median": 29.800000000046566,
-        "min": 29.300000000046566,
-        "p95": 30.399999999906868
+        "max": 32.69999999925494,
+        "median": 30.599999997764826,
+        "min": 29.5,
+        "p95": 32.69999999925494
       },
       "filterMsPerUpdate": {
         "count": 5,
-        "max": 0.2023333333331781,
-        "median": 0.19666666666666666,
-        "min": 0.19433333333348857,
-        "p95": 0.2023333333331781
+        "max": 0.1986666666592161,
+        "median": 0.19333333333333333,
+        "min": 0.18433333333581686,
+        "p95": 0.1986666666592161
       },
       "firstContentfulPaintMs": {
         "count": 5,
-        "max": 84,
+        "max": 88,
         "median": 84,
         "min": 80,
-        "p95": 84
+        "p95": 88
       },
       "heapDeltaBytes": {
         "count": 5,
-        "max": 233494,
-        "median": 232846,
-        "min": 232510,
-        "p95": 233494
+        "max": 237238,
+        "median": 236622,
+        "min": 236346,
+        "p95": 237238
       },
       "initialNodes": {
         "count": 5,
@@ -277,31 +277,31 @@
       },
       "loadMs": {
         "count": 5,
-        "max": 32.0999999998603,
-        "median": 31.4000000001397,
-        "min": 30.800000000046566,
-        "p95": 32.0999999998603
+        "max": 34.19999999925494,
+        "median": 32.099999997764826,
+        "min": 30.899999998509884,
+        "p95": 34.19999999925494
       },
       "blockingTaskCount": {
         "count": 5,
-        "max": 1,
+        "max": 2,
         "median": 1,
         "min": 1,
-        "p95": 1
+        "p95": 2
       },
       "blockingTaskMaxMs": {
         "count": 5,
-        "max": 60.964,
-        "median": 59.324,
-        "min": 58.678,
-        "p95": 60.964
+        "max": 59.933,
+        "median": 58.28,
+        "min": 55.6,
+        "p95": 59.933
       },
       "blockingTaskTotalMs": {
         "count": 5,
-        "max": 60.964,
-        "median": 59.324,
-        "min": 58.678,
-        "p95": 60.964
+        "max": 70.134,
+        "median": 58.28,
+        "min": 55.6,
+        "p95": 70.134
       },
       "nodeDelta": {
         "count": 5,
@@ -312,47 +312,219 @@
       },
       "routeMsPerUpdate": {
         "count": 5,
-        "max": 0.6740000000002329,
-        "median": 0.6170000000006985,
-        "min": 0.5625,
-        "p95": 0.6740000000002329
+        "max": 0.6525,
+        "median": 0.605,
+        "min": 0.5934999999962747,
+        "p95": 0.6525
       },
       "recordFilterMsPerUpdate": {
         "count": 2,
-        "max": 11.5,
-        "median": 11.25,
-        "min": 11,
-        "p95": 11.5
+        "max": 17,
+        "median": 16.216666666790843,
+        "min": 15.433333333581686,
+        "p95": 17
       }
     },
     "vue": {
       "domContentLoadedMs": {
         "count": 5,
-        "max": 10.099999999860302,
-        "median": 8,
-        "min": 7.699999999953434,
-        "p95": 10.099999999860302
+        "max": 9.200000002980232,
+        "median": 8.599999997764826,
+        "min": 7.699999999254942,
+        "p95": 9.200000002980232
       },
       "filterMsPerUpdate": {
         "count": 5,
-        "max": 0.07966666666713233,
-        "median": 0.07266666666682188,
-        "min": 0.07166666666666667,
-        "p95": 0.07966666666713233
+        "max": 0.07700000000496705,
+        "median": 0.07600000000248353,
+        "min": 0.07200000000496705,
+        "p95": 0.07700000000496705
       },
       "firstContentfulPaintMs": {
         "count": 5,
-        "max": 100,
+        "max": 88,
         "median": 84,
         "min": 84,
-        "p95": 100
+        "p95": 88
       },
       "heapDeltaBytes": {
         "count": 5,
-        "max": 354297,
-        "median": 353357,
-        "min": 353033,
-        "p95": 354297
+        "max": 354217,
+        "median": 353717,
+        "min": 353125,
+        "p95": 354217
+      },
+      "initialNodes": {
+        "count": 5,
+        "max": 197,
+        "median": 197,
+        "min": 197,
+        "p95": 197
+      },
+      "loadMs": {
+        "count": 5,
+        "max": 12.100000001490116,
+        "median": 11.399999998509884,
+        "min": 10.399999998509884,
+        "p95": 12.100000001490116
+      },
+      "blockingTaskCount": {
+        "count": 5,
+        "max": 1,
+        "median": 1,
+        "min": 1,
+        "p95": 1
+      },
+      "blockingTaskMaxMs": {
+        "count": 5,
+        "max": 23.577,
+        "median": 23.048,
+        "min": 22.032,
+        "p95": 23.577
+      },
+      "blockingTaskTotalMs": {
+        "count": 5,
+        "max": 23.577,
+        "median": 23.048,
+        "min": 22.032,
+        "p95": 23.577
+      },
+      "nodeDelta": {
+        "count": 5,
+        "max": 0,
+        "median": 0,
+        "min": 0,
+        "p95": 0
+      },
+      "routeMsPerUpdate": {
+        "count": 5,
+        "max": 0.6609999999962747,
+        "median": 0.6210000000149012,
+        "min": 0.5915000000037253,
+        "p95": 0.6609999999962747
+      },
+      "recordFilterMsPerUpdate": {
+        "count": 2,
+        "max": 19.5,
+        "median": 17.083333333333332,
+        "min": 14.666666666666666,
+        "p95": 19.5
+      }
+    },
+    "react": {
+      "domContentLoadedMs": {
+        "count": 5,
+        "max": 8.600000001490116,
+        "median": 8.099999997764826,
+        "min": 7.800000000745058,
+        "p95": 8.600000001490116
+      },
+      "filterMsPerUpdate": {
+        "count": 5,
+        "max": 0.16666666666666666,
+        "median": 0.135,
+        "min": 0.10933333333581687,
+        "p95": 0.16666666666666666
+      },
+      "firstContentfulPaintMs": {
+        "count": 5,
+        "max": 108,
+        "median": 92,
+        "min": 88,
+        "p95": 108
+      },
+      "heapDeltaBytes": {
+        "count": 5,
+        "max": 436472,
+        "median": 426364,
+        "min": 426188,
+        "p95": 436472
+      },
+      "initialNodes": {
+        "count": 5,
+        "max": 197,
+        "median": 197,
+        "min": 197,
+        "p95": 197
+      },
+      "loadMs": {
+        "count": 5,
+        "max": 11.700000002980232,
+        "median": 10.900000002235174,
+        "min": 10.300000000745058,
+        "p95": 11.700000002980232
+      },
+      "blockingTaskCount": {
+        "count": 5,
+        "max": 2,
+        "median": 1,
+        "min": 1,
+        "p95": 2
+      },
+      "blockingTaskMaxMs": {
+        "count": 5,
+        "max": 50.537,
+        "median": 40.762,
+        "min": 33.292,
+        "p95": 50.537
+      },
+      "blockingTaskTotalMs": {
+        "count": 5,
+        "max": 50.943,
+        "median": 48.548,
+        "min": 33.292,
+        "p95": 50.943
+      },
+      "nodeDelta": {
+        "count": 5,
+        "max": 0,
+        "median": 0,
+        "min": 0,
+        "p95": 0
+      },
+      "routeMsPerUpdate": {
+        "count": 5,
+        "max": 1.0409999999962747,
+        "median": 0.7834999999962747,
+        "min": 0.7389999999850988,
+        "p95": 1.0409999999962747
+      },
+      "recordFilterMsPerUpdate": {
+        "count": 2,
+        "max": 19.300000000745058,
+        "median": 18.883333333457507,
+        "min": 18.46666666616996,
+        "p95": 19.300000000745058
+      }
+    },
+    "lit": {
+      "domContentLoadedMs": {
+        "count": 5,
+        "max": 10.5,
+        "median": 8,
+        "min": 7.699999999254942,
+        "p95": 10.5
+      },
+      "filterMsPerUpdate": {
+        "count": 5,
+        "max": 0.11399999999751648,
+        "median": 0.08399999999751648,
+        "min": 0.07133333332836628,
+        "p95": 0.11399999999751648
+      },
+      "firstContentfulPaintMs": {
+        "count": 5,
+        "max": 92,
+        "median": 88,
+        "min": 80,
+        "p95": 92
+      },
+      "heapDeltaBytes": {
+        "count": 5,
+        "max": 227157,
+        "median": 221373,
+        "min": 221113,
+        "p95": 227157
       },
       "initialNodes": {
         "count": 5,
@@ -364,8 +536,8 @@
       "loadMs": {
         "count": 5,
         "max": 13.5,
-        "median": 10.600000000093132,
-        "min": 10.199999999953434,
+        "median": 11.800000000745058,
+        "min": 10.300000000745058,
         "p95": 13.5
       },
       "blockingTaskCount": {
@@ -377,17 +549,17 @@
       },
       "blockingTaskMaxMs": {
         "count": 5,
-        "max": 24.263,
-        "median": 22.163,
-        "min": 21.795,
-        "p95": 24.263
+        "max": 34.518,
+        "median": 25.457,
+        "min": 21.685,
+        "p95": 34.518
       },
       "blockingTaskTotalMs": {
         "count": 5,
-        "max": 24.263,
-        "median": 22.163,
-        "min": 21.795,
-        "p95": 24.263
+        "max": 34.518,
+        "median": 25.457,
+        "min": 21.685,
+        "p95": 34.518
       },
       "nodeDelta": {
         "count": 5,
@@ -398,119 +570,33 @@
       },
       "routeMsPerUpdate": {
         "count": 5,
-        "max": 0.7115000000002328,
-        "median": 0.6325,
-        "min": 0.5615000000002328,
-        "p95": 0.7115000000002328
+        "max": 0.61,
+        "median": 0.5559999999962747,
+        "min": 0.5244999999925494,
+        "p95": 0.61
       },
       "recordFilterMsPerUpdate": {
         "count": 2,
-        "max": 16.033333333286766,
-        "median": 15.683333333310049,
-        "min": 15.333333333333334,
-        "p95": 16.033333333286766
+        "max": 527.96666666617,
+        "median": 519.5999999996275,
+        "min": 511.233333333085,
+        "p95": 527.96666666617
       }
     },
-    "react": {
+    "angular": {
       "domContentLoadedMs": {
         "count": 5,
-        "max": 8,
-        "median": 7.599999999860302,
-        "min": 7.5,
-        "p95": 8
+        "max": 38.400000002235174,
+        "median": 34,
+        "min": 31.900000002235174,
+        "p95": 38.400000002235174
       },
       "filterMsPerUpdate": {
         "count": 5,
-        "max": 0.12833333333333333,
-        "median": 0.12699999999953435,
-        "min": 0.10600000000015522,
-        "p95": 0.12833333333333333
-      },
-      "firstContentfulPaintMs": {
-        "count": 5,
-        "max": 96,
-        "median": 92,
-        "min": 88,
-        "p95": 96
-      },
-      "heapDeltaBytes": {
-        "count": 5,
-        "max": 447844,
-        "median": 436412,
-        "min": 432852,
-        "p95": 447844
-      },
-      "initialNodes": {
-        "count": 5,
-        "max": 197,
-        "median": 197,
-        "min": 197,
-        "p95": 197
-      },
-      "loadMs": {
-        "count": 5,
-        "max": 11.100000000093132,
-        "median": 10.199999999953434,
-        "min": 9.900000000139698,
-        "p95": 11.100000000093132
-      },
-      "blockingTaskCount": {
-        "count": 5,
-        "max": 1,
-        "median": 1,
-        "min": 1,
-        "p95": 1
-      },
-      "blockingTaskMaxMs": {
-        "count": 5,
-        "max": 38.908,
-        "median": 38.423,
-        "min": 32.196,
-        "p95": 38.908
-      },
-      "blockingTaskTotalMs": {
-        "count": 5,
-        "max": 38.908,
-        "median": 38.423,
-        "min": 32.196,
-        "p95": 38.908
-      },
-      "nodeDelta": {
-        "count": 5,
-        "max": 0,
-        "median": 0,
-        "min": 0,
-        "p95": 0
-      },
-      "routeMsPerUpdate": {
-        "count": 5,
-        "max": 0.7565000000002329,
-        "median": 0.7215000000002328,
-        "min": 0.7070000000006985,
-        "p95": 0.7565000000002329
-      },
-      "recordFilterMsPerUpdate": {
-        "count": 2,
-        "max": 22.36666666669771,
-        "median": 19.800000000007763,
-        "min": 17.233333333317812,
-        "p95": 22.36666666669771
-      }
-    },
-    "lit": {
-      "domContentLoadedMs": {
-        "count": 5,
-        "max": 11.699999999953434,
-        "median": 8.100000000093132,
-        "min": 7.399999999906868,
-        "p95": 11.699999999953434
-      },
-      "filterMsPerUpdate": {
-        "count": 5,
-        "max": 0.08099999999937912,
-        "median": 0.07733333333317811,
-        "min": 0.07300000000046566,
-        "p95": 0.08099999999937912
+        "max": 1.6453333333258828,
+        "median": 1.6346666666616996,
+        "min": 1.6253333333258828,
+        "p95": 1.6453333333258828
       },
       "firstContentfulPaintMs": {
         "count": 5,
@@ -521,96 +607,10 @@
       },
       "heapDeltaBytes": {
         "count": 5,
-        "max": 229073,
-        "median": 221581,
-        "min": 220757,
-        "p95": 229073
-      },
-      "initialNodes": {
-        "count": 5,
-        "max": 197,
-        "median": 197,
-        "min": 197,
-        "p95": 197
-      },
-      "loadMs": {
-        "count": 5,
-        "max": 14.300000000046566,
-        "median": 10.900000000139698,
-        "min": 10.100000000093132,
-        "p95": 14.300000000046566
-      },
-      "blockingTaskCount": {
-        "count": 5,
-        "max": 1,
-        "median": 1,
-        "min": 1,
-        "p95": 1
-      },
-      "blockingTaskMaxMs": {
-        "count": 5,
-        "max": 24.586,
-        "median": 23.469,
-        "min": 22.126,
-        "p95": 24.586
-      },
-      "blockingTaskTotalMs": {
-        "count": 5,
-        "max": 24.586,
-        "median": 23.469,
-        "min": 22.126,
-        "p95": 24.586
-      },
-      "nodeDelta": {
-        "count": 5,
-        "max": 0,
-        "median": 0,
-        "min": 0,
-        "p95": 0
-      },
-      "routeMsPerUpdate": {
-        "count": 5,
-        "max": 0.5865000000002328,
-        "median": 0.5409999999997672,
-        "min": 0.5225,
-        "p95": 0.5865000000002328
-      },
-      "recordFilterMsPerUpdate": {
-        "count": 2,
-        "max": 505.6666666666667,
-        "median": 493.68333333334886,
-        "min": 481.700000000031,
-        "p95": 505.6666666666667
-      }
-    },
-    "angular": {
-      "domContentLoadedMs": {
-        "count": 5,
-        "max": 36,
-        "median": 32.89999999990687,
-        "min": 31.899999999906868,
-        "p95": 36
-      },
-      "filterMsPerUpdate": {
-        "count": 5,
-        "max": 1.6643333333334887,
-        "median": 1.6446666666671323,
-        "min": 1.6293333333334885,
-        "p95": 1.6643333333334887
-      },
-      "firstContentfulPaintMs": {
-        "count": 5,
-        "max": 84,
-        "median": 84,
-        "min": 84,
-        "p95": 84
-      },
-      "heapDeltaBytes": {
-        "count": 5,
-        "max": 595740,
-        "median": 592200,
-        "min": 413104,
-        "p95": 595740
+        "max": 597516,
+        "median": 592888,
+        "min": 591464,
+        "p95": 597516
       },
       "initialNodes": {
         "count": 5,
@@ -621,31 +621,31 @@
       },
       "loadMs": {
         "count": 5,
-        "max": 37.39999999990687,
-        "median": 34.39999999990687,
-        "min": 33.39999999990687,
-        "p95": 37.39999999990687
+        "max": 40,
+        "median": 35.80000000074506,
+        "min": 33.400000002235174,
+        "p95": 40
       },
       "blockingTaskCount": {
         "count": 5,
-        "max": 0,
+        "max": 1,
         "median": 0,
         "min": 0,
-        "p95": 0
+        "p95": 1
       },
       "blockingTaskMaxMs": {
         "count": 5,
-        "max": 0,
+        "max": 10.063,
         "median": 0,
         "min": 0,
-        "p95": 0
+        "p95": 10.063
       },
       "blockingTaskTotalMs": {
         "count": 5,
-        "max": 0,
+        "max": 10.063,
         "median": 0,
         "min": 0,
-        "p95": 0
+        "p95": 10.063
       },
       "nodeDelta": {
         "count": 5,
@@ -656,17 +656,17 @@
       },
       "routeMsPerUpdate": {
         "count": 5,
-        "max": 0.735,
-        "median": 0.6795000000006985,
-        "min": 0.6229999999993016,
-        "p95": 0.735
+        "max": 0.805,
+        "median": 0.7184999999962747,
+        "min": 0.6909999999962747,
+        "p95": 0.805
       },
       "recordFilterMsPerUpdate": {
         "count": 2,
-        "max": 153.6333333333023,
-        "median": 152.25,
-        "min": 150.8666666666977,
-        "p95": 153.6333333333023
+        "max": 156.10000000024834,
+        "median": 154.75000000062087,
+        "min": 153.4000000009934,
+        "p95": 156.10000000024834
       }
     }
   },
@@ -674,34 +674,34 @@
     "lumi-native": [
       {
         "resources": [
-          "http://127.0.0.1:38315/examples/spa/lumi-native/?sample=1#/overview",
-          "http://127.0.0.1:38315/examples/spa/spa.css",
-          "http://127.0.0.1:38315/examples/spa/lumi-native/demo-app.js",
-          "http://127.0.0.1:38315/dist/lumi.js",
-          "http://127.0.0.1:38315/examples/spa/data-content.json",
-          "http://127.0.0.1:38315/examples/spa/data-records.json",
-          "http://127.0.0.1:38315/examples/spa/lumi-native/email-validation.js"
+          "http://127.0.0.1:41151/examples/spa/lumi-native/?sample=1#/overview",
+          "http://127.0.0.1:41151/examples/spa/spa.css",
+          "http://127.0.0.1:41151/examples/spa/lumi-native/demo-app.js",
+          "http://127.0.0.1:41151/dist/lumi.js",
+          "http://127.0.0.1:41151/examples/spa/data-content.json",
+          "http://127.0.0.1:41151/examples/spa/data-records.json",
+          "http://127.0.0.1:41151/examples/spa/lumi-native/email-validation.js"
         ],
         "startup": {
-          "domContentLoadedMs": 36.800000000046566,
-          "firstContentfulPaintMs": 88,
-          "loadMs": 38.4000000001397
+          "domContentLoadedMs": 79.5,
+          "firstContentfulPaintMs": 176,
+          "loadMs": 85.60000000149012
         },
         "stress": {
-          "filterElapsedMs": 25.199999999953434,
-          "filterMsPerUpdate": 0.08399999999984478,
+          "filterElapsedMs": 23.599999997764826,
+          "filterMsPerUpdate": 0.07866666665921608,
           "filterUpdates": 300,
-          "finalHeapBytes": 7765265,
+          "finalHeapBytes": 7718136,
           "finalNodes": 218,
-          "heapDeltaBytes": 279242,
-          "initialHeapBytes": 7486023,
+          "heapDeltaBytes": 262454,
+          "initialHeapBytes": 7455682,
           "initialNodes": 218,
-          "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 25.44,
-          "blockingTaskTotalMs": 25.44,
+          "blockingTaskCount": 2,
+          "blockingTaskMaxMs": 23.823,
+          "blockingTaskTotalMs": 34.131,
           "nodeDelta": 0,
-          "routeElapsedMs": 97.80000000004657,
-          "routeMsPerUpdate": 0.4890000000002328,
+          "routeElapsedMs": 100.30000000074506,
+          "routeMsPerUpdate": 0.5015000000037253,
           "routeUpdates": 200,
           "recordFilterElapsedMs": null,
           "recordFilterMsPerUpdate": null,
@@ -710,70 +710,34 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/examples/spa/lumi-native/?sample=2#/overview",
-          "http://127.0.0.1:38315/examples/spa/spa.css",
-          "http://127.0.0.1:38315/examples/spa/lumi-native/demo-app.js",
-          "http://127.0.0.1:38315/dist/lumi.js",
-          "http://127.0.0.1:38315/examples/spa/data-content.json",
-          "http://127.0.0.1:38315/examples/spa/data-records.json",
-          "http://127.0.0.1:38315/examples/spa/lumi-native/email-validation.js"
+          "http://127.0.0.1:41151/examples/spa/lumi-native/?sample=2#/overview",
+          "http://127.0.0.1:41151/examples/spa/spa.css",
+          "http://127.0.0.1:41151/examples/spa/lumi-native/demo-app.js",
+          "http://127.0.0.1:41151/dist/lumi.js",
+          "http://127.0.0.1:41151/examples/spa/data-content.json",
+          "http://127.0.0.1:41151/examples/spa/data-records.json",
+          "http://127.0.0.1:41151/examples/spa/lumi-native/email-validation.js"
         ],
         "startup": {
-          "domContentLoadedMs": 31.799999999813735,
-          "firstContentfulPaintMs": 84,
-          "loadMs": 33
-        },
-        "stress": {
-          "filterElapsedMs": 24.800000000046566,
-          "filterMsPerUpdate": 0.08266666666682189,
-          "filterUpdates": 300,
-          "finalHeapBytes": 7765217,
-          "finalNodes": 218,
-          "heapDeltaBytes": 279194,
-          "initialHeapBytes": 7486023,
-          "initialNodes": 218,
-          "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 25.081,
-          "blockingTaskTotalMs": 25.081,
-          "nodeDelta": 0,
-          "routeElapsedMs": 94,
-          "routeMsPerUpdate": 0.47,
-          "routeUpdates": 200,
-          "recordFilterElapsedMs": null,
-          "recordFilterMsPerUpdate": null,
-          "recordFilterUpdates": 0
-        }
-      },
-      {
-        "resources": [
-          "http://127.0.0.1:38315/examples/spa/lumi-native/?sample=3#/overview",
-          "http://127.0.0.1:38315/examples/spa/spa.css",
-          "http://127.0.0.1:38315/examples/spa/lumi-native/demo-app.js",
-          "http://127.0.0.1:38315/dist/lumi.js",
-          "http://127.0.0.1:38315/examples/spa/data-content.json",
-          "http://127.0.0.1:38315/examples/spa/data-records.json",
-          "http://127.0.0.1:38315/examples/spa/lumi-native/email-validation.js"
-        ],
-        "startup": {
-          "domContentLoadedMs": 30.4000000001397,
+          "domContentLoadedMs": 30.600000001490116,
           "firstContentfulPaintMs": 80,
-          "loadMs": 31.9000000001397
+          "loadMs": 31.899999998509884
         },
         "stress": {
-          "filterElapsedMs": 25.0999999998603,
-          "filterMsPerUpdate": 0.08366666666620101,
+          "filterElapsedMs": 23.600000001490116,
+          "filterMsPerUpdate": 0.07866666667163372,
           "filterUpdates": 300,
-          "finalHeapBytes": 7765277,
+          "finalHeapBytes": 7718436,
           "finalNodes": 218,
-          "heapDeltaBytes": 279254,
-          "initialHeapBytes": 7486023,
+          "heapDeltaBytes": 262126,
+          "initialHeapBytes": 7456310,
           "initialNodes": 218,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 25.45,
-          "blockingTaskTotalMs": 25.45,
+          "blockingTaskMaxMs": 23.862,
+          "blockingTaskTotalMs": 23.862,
           "nodeDelta": 0,
-          "routeElapsedMs": 94.39999999990687,
-          "routeMsPerUpdate": 0.47199999999953435,
+          "routeElapsedMs": 91.5,
+          "routeMsPerUpdate": 0.4575,
           "routeUpdates": 200,
           "recordFilterElapsedMs": null,
           "recordFilterMsPerUpdate": null,
@@ -782,73 +746,109 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/examples/spa/lumi-native/?sample=4#/records",
-          "http://127.0.0.1:38315/examples/spa/spa.css",
-          "http://127.0.0.1:38315/examples/spa/lumi-native/demo-app.js",
-          "http://127.0.0.1:38315/dist/lumi.js",
-          "http://127.0.0.1:38315/examples/spa/data-content.json",
-          "http://127.0.0.1:38315/examples/spa/data-records.json",
-          "http://127.0.0.1:38315/examples/spa/lumi-native/email-validation.js"
+          "http://127.0.0.1:41151/examples/spa/lumi-native/?sample=3#/overview",
+          "http://127.0.0.1:41151/examples/spa/spa.css",
+          "http://127.0.0.1:41151/examples/spa/lumi-native/demo-app.js",
+          "http://127.0.0.1:41151/dist/lumi.js",
+          "http://127.0.0.1:41151/examples/spa/data-content.json",
+          "http://127.0.0.1:41151/examples/spa/data-records.json",
+          "http://127.0.0.1:41151/examples/spa/lumi-native/email-validation.js"
+        ],
+        "startup": {
+          "domContentLoadedMs": 30.599999997764826,
+          "firstContentfulPaintMs": 84,
+          "loadMs": 32.399999998509884
+        },
+        "stress": {
+          "filterElapsedMs": 25.800000000745058,
+          "filterMsPerUpdate": 0.08600000000248352,
+          "filterUpdates": 300,
+          "finalHeapBytes": 7718328,
+          "finalNodes": 218,
+          "heapDeltaBytes": 262018,
+          "initialHeapBytes": 7456310,
+          "initialNodes": 218,
+          "blockingTaskCount": 1,
+          "blockingTaskMaxMs": 25.961,
+          "blockingTaskTotalMs": 25.961,
+          "nodeDelta": 0,
+          "routeElapsedMs": 97.39999999850988,
+          "routeMsPerUpdate": 0.4869999999925494,
+          "routeUpdates": 200,
+          "recordFilterElapsedMs": null,
+          "recordFilterMsPerUpdate": null,
+          "recordFilterUpdates": 0
+        }
+      },
+      {
+        "resources": [
+          "http://127.0.0.1:41151/examples/spa/lumi-native/?sample=4#/records",
+          "http://127.0.0.1:41151/examples/spa/spa.css",
+          "http://127.0.0.1:41151/examples/spa/lumi-native/demo-app.js",
+          "http://127.0.0.1:41151/dist/lumi.js",
+          "http://127.0.0.1:41151/examples/spa/data-records.json",
+          "http://127.0.0.1:41151/examples/spa/data-content.json",
+          "http://127.0.0.1:41151/examples/spa/lumi-native/email-validation.js"
         ],
         "startup": {
           "domContentLoadedMs": 31.5,
           "firstContentfulPaintMs": 88,
-          "loadMs": 33.0999999998603
+          "loadMs": 33
         },
         "stress": {
-          "filterElapsedMs": 25.5,
-          "filterMsPerUpdate": 0.085,
+          "filterElapsedMs": 25.400000002235174,
+          "filterMsPerUpdate": 0.08466666667411725,
           "filterUpdates": 300,
-          "finalHeapBytes": 7765265,
+          "finalHeapBytes": 7718220,
           "finalNodes": 218,
-          "heapDeltaBytes": 279242,
-          "initialHeapBytes": 7486023,
+          "heapDeltaBytes": 261910,
+          "initialHeapBytes": 7456310,
           "initialNodes": 218,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 25.752,
-          "blockingTaskTotalMs": 25.752,
+          "blockingTaskMaxMs": 25.654,
+          "blockingTaskTotalMs": 25.654,
           "nodeDelta": 0,
-          "routeElapsedMs": 92.5999999998603,
-          "routeMsPerUpdate": 0.4629999999993015,
+          "routeElapsedMs": 92.80000000074506,
+          "routeMsPerUpdate": 0.46400000000372527,
           "routeUpdates": 200,
-          "recordFilterElapsedMs": 39.39999999990687,
-          "recordFilterMsPerUpdate": 13.13333333330229,
+          "recordFilterElapsedMs": 35.900000002235174,
+          "recordFilterMsPerUpdate": 11.966666667411724,
           "recordFilterUpdates": 3
         }
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/examples/spa/lumi-native/?sample=5#/records",
-          "http://127.0.0.1:38315/examples/spa/spa.css",
-          "http://127.0.0.1:38315/examples/spa/lumi-native/demo-app.js",
-          "http://127.0.0.1:38315/dist/lumi.js",
-          "http://127.0.0.1:38315/examples/spa/data-content.json",
-          "http://127.0.0.1:38315/examples/spa/data-records.json",
-          "http://127.0.0.1:38315/examples/spa/lumi-native/email-validation.js"
+          "http://127.0.0.1:41151/examples/spa/lumi-native/?sample=5#/records",
+          "http://127.0.0.1:41151/examples/spa/spa.css",
+          "http://127.0.0.1:41151/examples/spa/lumi-native/demo-app.js",
+          "http://127.0.0.1:41151/dist/lumi.js",
+          "http://127.0.0.1:41151/examples/spa/data-content.json",
+          "http://127.0.0.1:41151/examples/spa/data-records.json",
+          "http://127.0.0.1:41151/examples/spa/lumi-native/email-validation.js"
         ],
         "startup": {
-          "domContentLoadedMs": 31.199999999953434,
+          "domContentLoadedMs": 32.19999999925494,
           "firstContentfulPaintMs": 84,
-          "loadMs": 32.60000000009313
+          "loadMs": 33.5
         },
         "stress": {
-          "filterElapsedMs": 24.5,
-          "filterMsPerUpdate": 0.08166666666666667,
+          "filterElapsedMs": 25.700000002980232,
+          "filterMsPerUpdate": 0.08566666667660078,
           "filterUpdates": 300,
-          "finalHeapBytes": 7765241,
+          "finalHeapBytes": 7718168,
           "finalNodes": 218,
-          "heapDeltaBytes": 279218,
-          "initialHeapBytes": 7486023,
+          "heapDeltaBytes": 261674,
+          "initialHeapBytes": 7456494,
           "initialNodes": 218,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 24.811,
-          "blockingTaskTotalMs": 24.811,
+          "blockingTaskMaxMs": 25.977,
+          "blockingTaskTotalMs": 25.977,
           "nodeDelta": 0,
-          "routeElapsedMs": 95.20000000018626,
-          "routeMsPerUpdate": 0.47600000000093134,
+          "routeElapsedMs": 96.89999999850988,
+          "routeMsPerUpdate": 0.48449999999254945,
           "routeUpdates": 200,
-          "recordFilterElapsedMs": 38.4000000001397,
-          "recordFilterMsPerUpdate": 12.800000000046566,
+          "recordFilterElapsedMs": 39,
+          "recordFilterMsPerUpdate": 13,
           "recordFilterUpdates": 3
         }
       }
@@ -856,30 +856,30 @@
     "lumi-build": [
       {
         "resources": [
-          "http://127.0.0.1:38315/lumi-build/?sample=1#/overview",
-          "http://127.0.0.1:38315/lumi-build/spa.css",
-          "http://127.0.0.1:38315/lumi-build/app.js"
+          "http://127.0.0.1:41151/lumi-build/?sample=1#/overview",
+          "http://127.0.0.1:41151/lumi-build/spa.css",
+          "http://127.0.0.1:41151/lumi-build/app.js"
         ],
         "startup": {
-          "domContentLoadedMs": 29.199999999953434,
+          "domContentLoadedMs": 27.700000002980232,
           "firstContentfulPaintMs": 80,
-          "loadMs": 30.699999999953434
+          "loadMs": 29.100000001490116
         },
         "stress": {
-          "filterElapsedMs": 24.800000000046566,
-          "filterMsPerUpdate": 0.08266666666682189,
+          "filterElapsedMs": 23.199999999254942,
+          "filterMsPerUpdate": 0.07733333333084981,
           "filterUpdates": 300,
-          "finalHeapBytes": 7734934,
+          "finalHeapBytes": 7685727,
           "finalNodes": 208,
-          "heapDeltaBytes": 278106,
-          "initialHeapBytes": 7456828,
+          "heapDeltaBytes": 260150,
+          "initialHeapBytes": 7425577,
           "initialNodes": 208,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 25.095,
-          "blockingTaskTotalMs": 25.095,
+          "blockingTaskMaxMs": 23.334,
+          "blockingTaskTotalMs": 23.334,
           "nodeDelta": 0,
-          "routeElapsedMs": 90.89999999990687,
-          "routeMsPerUpdate": 0.45449999999953433,
+          "routeElapsedMs": 91.29999999701977,
+          "routeMsPerUpdate": 0.4564999999850988,
           "routeUpdates": 200,
           "recordFilterElapsedMs": null,
           "recordFilterMsPerUpdate": null,
@@ -888,30 +888,30 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/lumi-build/?sample=2#/overview",
-          "http://127.0.0.1:38315/lumi-build/spa.css",
-          "http://127.0.0.1:38315/lumi-build/app.js"
+          "http://127.0.0.1:41151/lumi-build/?sample=2#/overview",
+          "http://127.0.0.1:41151/lumi-build/spa.css",
+          "http://127.0.0.1:41151/lumi-build/app.js"
         ],
         "startup": {
-          "domContentLoadedMs": 27.200000000186265,
-          "firstContentfulPaintMs": 80,
-          "loadMs": 28.5
+          "domContentLoadedMs": 27.100000001490116,
+          "firstContentfulPaintMs": 84,
+          "loadMs": 28.699999999254942
         },
         "stress": {
-          "filterElapsedMs": 25,
-          "filterMsPerUpdate": 0.08333333333333333,
+          "filterElapsedMs": 23.199999999254942,
+          "filterMsPerUpdate": 0.07733333333084981,
           "filterUpdates": 300,
-          "finalHeapBytes": 7734890,
+          "finalHeapBytes": 7685703,
           "finalNodes": 208,
-          "heapDeltaBytes": 278062,
-          "initialHeapBytes": 7456828,
+          "heapDeltaBytes": 260126,
+          "initialHeapBytes": 7425577,
           "initialNodes": 208,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 25.254,
-          "blockingTaskTotalMs": 25.254,
+          "blockingTaskMaxMs": 23.451,
+          "blockingTaskTotalMs": 23.451,
           "nodeDelta": 0,
-          "routeElapsedMs": 92.89999999990687,
-          "routeMsPerUpdate": 0.46449999999953434,
+          "routeElapsedMs": 95.60000000149012,
+          "routeMsPerUpdate": 0.4780000000074506,
           "routeUpdates": 200,
           "recordFilterElapsedMs": null,
           "recordFilterMsPerUpdate": null,
@@ -920,30 +920,30 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/lumi-build/?sample=3#/overview",
-          "http://127.0.0.1:38315/lumi-build/spa.css",
-          "http://127.0.0.1:38315/lumi-build/app.js"
+          "http://127.0.0.1:41151/lumi-build/?sample=3#/overview",
+          "http://127.0.0.1:41151/lumi-build/spa.css",
+          "http://127.0.0.1:41151/lumi-build/app.js"
         ],
         "startup": {
-          "domContentLoadedMs": 26,
-          "firstContentfulPaintMs": 76,
-          "loadMs": 27.5
+          "domContentLoadedMs": 26.5,
+          "firstContentfulPaintMs": 80,
+          "loadMs": 28
         },
         "stress": {
-          "filterElapsedMs": 25.399999999906868,
-          "filterMsPerUpdate": 0.08466666666635622,
+          "filterElapsedMs": 25.400000002235174,
+          "filterMsPerUpdate": 0.08466666667411725,
           "filterUpdates": 300,
-          "finalHeapBytes": 7734902,
+          "finalHeapBytes": 7685703,
           "finalNodes": 208,
-          "heapDeltaBytes": 278074,
-          "initialHeapBytes": 7456828,
+          "heapDeltaBytes": 260774,
+          "initialHeapBytes": 7424929,
           "initialNodes": 208,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 25.706,
-          "blockingTaskTotalMs": 25.706,
+          "blockingTaskMaxMs": 25.589,
+          "blockingTaskTotalMs": 25.589,
           "nodeDelta": 0,
-          "routeElapsedMs": 92.69999999995343,
-          "routeMsPerUpdate": 0.46349999999976715,
+          "routeElapsedMs": 96.80000000074506,
+          "routeMsPerUpdate": 0.4840000000037253,
           "routeUpdates": 200,
           "recordFilterElapsedMs": null,
           "recordFilterMsPerUpdate": null,
@@ -952,65 +952,65 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/lumi-build/?sample=4#/records",
-          "http://127.0.0.1:38315/lumi-build/spa.css",
-          "http://127.0.0.1:38315/lumi-build/app.js"
+          "http://127.0.0.1:41151/lumi-build/?sample=4#/records",
+          "http://127.0.0.1:41151/lumi-build/spa.css",
+          "http://127.0.0.1:41151/lumi-build/app.js"
         ],
         "startup": {
-          "domContentLoadedMs": 26.199999999953434,
+          "domContentLoadedMs": 27.5,
           "firstContentfulPaintMs": 80,
-          "loadMs": 27.600000000093132
+          "loadMs": 28.899999998509884
         },
         "stress": {
-          "filterElapsedMs": 24.4000000001397,
-          "filterMsPerUpdate": 0.081333333333799,
+          "filterElapsedMs": 24.699999999254942,
+          "filterMsPerUpdate": 0.0823333333308498,
           "filterUpdates": 300,
-          "finalHeapBytes": 7736610,
+          "finalHeapBytes": 7685739,
           "finalNodes": 208,
-          "heapDeltaBytes": 279782,
-          "initialHeapBytes": 7456828,
+          "heapDeltaBytes": 260810,
+          "initialHeapBytes": 7424929,
           "initialNodes": 208,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 24.597,
-          "blockingTaskTotalMs": 24.597,
+          "blockingTaskMaxMs": 25.024,
+          "blockingTaskTotalMs": 25.024,
           "nodeDelta": 0,
-          "routeElapsedMs": 92.79999999981374,
-          "routeMsPerUpdate": 0.46399999999906866,
+          "routeElapsedMs": 99.30000000074506,
+          "routeMsPerUpdate": 0.4965000000037253,
           "routeUpdates": 200,
-          "recordFilterElapsedMs": 37.799999999813735,
-          "recordFilterMsPerUpdate": 12.599999999937912,
+          "recordFilterElapsedMs": 40,
+          "recordFilterMsPerUpdate": 13.333333333333334,
           "recordFilterUpdates": 3
         }
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/lumi-build/?sample=5#/records",
-          "http://127.0.0.1:38315/lumi-build/spa.css",
-          "http://127.0.0.1:38315/lumi-build/app.js"
+          "http://127.0.0.1:41151/lumi-build/?sample=5#/records",
+          "http://127.0.0.1:41151/lumi-build/spa.css",
+          "http://127.0.0.1:41151/lumi-build/app.js"
         ],
         "startup": {
-          "domContentLoadedMs": 27.600000000093132,
-          "firstContentfulPaintMs": 84,
-          "loadMs": 29.300000000046566
+          "domContentLoadedMs": 25.600000001490116,
+          "firstContentfulPaintMs": 80,
+          "loadMs": 27.100000001490116
         },
         "stress": {
-          "filterElapsedMs": 24.800000000046566,
-          "filterMsPerUpdate": 0.08266666666682189,
+          "filterElapsedMs": 24.900000002235174,
+          "filterMsPerUpdate": 0.08300000000745059,
           "filterUpdates": 300,
-          "finalHeapBytes": 7734934,
+          "finalHeapBytes": 7685643,
           "finalNodes": 208,
-          "heapDeltaBytes": 278106,
-          "initialHeapBytes": 7456828,
+          "heapDeltaBytes": 260714,
+          "initialHeapBytes": 7424929,
           "initialNodes": 208,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 24.946,
-          "blockingTaskTotalMs": 24.946,
+          "blockingTaskMaxMs": 25.142,
+          "blockingTaskTotalMs": 25.142,
           "nodeDelta": 0,
-          "routeElapsedMs": 93.20000000018626,
-          "routeMsPerUpdate": 0.46600000000093134,
+          "routeElapsedMs": 102.59999999776483,
+          "routeMsPerUpdate": 0.5129999999888242,
           "routeUpdates": 200,
-          "recordFilterElapsedMs": 42,
-          "recordFilterMsPerUpdate": 14,
+          "recordFilterElapsedMs": 36.400000002235174,
+          "recordFilterMsPerUpdate": 12.133333334078392,
           "recordFilterUpdates": 3
         }
       }
@@ -1018,30 +1018,62 @@
     "lumi-dsl": [
       {
         "resources": [
-          "http://127.0.0.1:38315/lumi-dsl/?sample=1#/overview",
-          "http://127.0.0.1:38315/lumi-dsl/spa.css",
-          "http://127.0.0.1:38315/lumi-dsl/app.js"
+          "http://127.0.0.1:41151/lumi-dsl/?sample=1#/overview",
+          "http://127.0.0.1:41151/lumi-dsl/spa.css",
+          "http://127.0.0.1:41151/lumi-dsl/app.js"
         ],
         "startup": {
-          "domContentLoadedMs": 29.4000000001397,
+          "domContentLoadedMs": 32.69999999925494,
+          "firstContentfulPaintMs": 88,
+          "loadMs": 34.19999999925494
+        },
+        "stress": {
+          "filterElapsedMs": 58,
+          "filterMsPerUpdate": 0.19333333333333333,
+          "filterUpdates": 300,
+          "finalHeapBytes": 7756239,
+          "finalNodes": 586,
+          "heapDeltaBytes": 236618,
+          "initialHeapBytes": 7519621,
+          "initialNodes": 586,
+          "blockingTaskCount": 1,
+          "blockingTaskMaxMs": 58.28,
+          "blockingTaskTotalMs": 58.28,
+          "nodeDelta": 0,
+          "routeElapsedMs": 127.79999999701977,
+          "routeMsPerUpdate": 0.6389999999850988,
+          "routeUpdates": 200,
+          "recordFilterElapsedMs": null,
+          "recordFilterMsPerUpdate": null,
+          "recordFilterUpdates": 0
+        }
+      },
+      {
+        "resources": [
+          "http://127.0.0.1:41151/lumi-dsl/?sample=2#/overview",
+          "http://127.0.0.1:41151/lumi-dsl/spa.css",
+          "http://127.0.0.1:41151/lumi-dsl/app.js"
+        ],
+        "startup": {
+          "domContentLoadedMs": 30.599999997764826,
           "firstContentfulPaintMs": 80,
-          "loadMs": 30.9000000001397
+          "loadMs": 31.899999998509884
         },
         "stress": {
-          "filterElapsedMs": 59,
-          "filterMsPerUpdate": 0.19666666666666666,
+          "filterElapsedMs": 55.30000000074506,
+          "filterMsPerUpdate": 0.18433333333581686,
           "filterUpdates": 300,
-          "finalHeapBytes": 7780416,
+          "finalHeapBytes": 7756667,
           "finalNodes": 586,
-          "heapDeltaBytes": 232690,
-          "initialHeapBytes": 7547726,
+          "heapDeltaBytes": 237238,
+          "initialHeapBytes": 7519429,
           "initialNodes": 586,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 59.324,
-          "blockingTaskTotalMs": 59.324,
+          "blockingTaskMaxMs": 55.6,
+          "blockingTaskTotalMs": 55.6,
           "nodeDelta": 0,
-          "routeElapsedMs": 121.80000000004657,
-          "routeMsPerUpdate": 0.6090000000002328,
+          "routeElapsedMs": 121,
+          "routeMsPerUpdate": 0.605,
           "routeUpdates": 200,
           "recordFilterElapsedMs": null,
           "recordFilterMsPerUpdate": null,
@@ -1050,30 +1082,30 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/lumi-dsl/?sample=2#/overview",
-          "http://127.0.0.1:38315/lumi-dsl/spa.css",
-          "http://127.0.0.1:38315/lumi-dsl/app.js"
+          "http://127.0.0.1:41151/lumi-dsl/?sample=3#/overview",
+          "http://127.0.0.1:41151/lumi-dsl/spa.css",
+          "http://127.0.0.1:41151/lumi-dsl/app.js"
         ],
         "startup": {
-          "domContentLoadedMs": 29.800000000046566,
-          "firstContentfulPaintMs": 84,
-          "loadMs": 31.4000000001397
+          "domContentLoadedMs": 29.5,
+          "firstContentfulPaintMs": 80,
+          "loadMs": 30.899999998509884
         },
         "stress": {
-          "filterElapsedMs": 60.699999999953434,
-          "filterMsPerUpdate": 0.2023333333331781,
+          "filterElapsedMs": 57,
+          "filterMsPerUpdate": 0.19,
           "filterUpdates": 300,
-          "finalHeapBytes": 7779772,
+          "finalHeapBytes": 7756547,
           "finalNodes": 586,
-          "heapDeltaBytes": 233026,
-          "initialHeapBytes": 7546746,
+          "heapDeltaBytes": 236638,
+          "initialHeapBytes": 7519909,
           "initialNodes": 586,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 60.964,
-          "blockingTaskTotalMs": 60.964,
+          "blockingTaskMaxMs": 57.248,
+          "blockingTaskTotalMs": 57.248,
           "nodeDelta": 0,
-          "routeElapsedMs": 134.80000000004657,
-          "routeMsPerUpdate": 0.6740000000002329,
+          "routeElapsedMs": 119.39999999850988,
+          "routeMsPerUpdate": 0.5969999999925494,
           "routeUpdates": 200,
           "recordFilterElapsedMs": null,
           "recordFilterMsPerUpdate": null,
@@ -1082,97 +1114,65 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/lumi-dsl/?sample=3#/overview",
-          "http://127.0.0.1:38315/lumi-dsl/spa.css",
-          "http://127.0.0.1:38315/lumi-dsl/app.js"
+          "http://127.0.0.1:41151/lumi-dsl/?sample=4#/records",
+          "http://127.0.0.1:41151/lumi-dsl/spa.css",
+          "http://127.0.0.1:41151/lumi-dsl/app.js"
         ],
         "startup": {
-          "domContentLoadedMs": 30.200000000186265,
+          "domContentLoadedMs": 31.5,
           "firstContentfulPaintMs": 84,
-          "loadMs": 31.700000000186265
+          "loadMs": 32.899999998509884
         },
         "stress": {
-          "filterElapsedMs": 58.300000000046566,
-          "filterMsPerUpdate": 0.19433333333348857,
+          "filterElapsedMs": 59.100000001490116,
+          "filterMsPerUpdate": 0.19700000000496706,
           "filterUpdates": 300,
-          "finalHeapBytes": 7781492,
+          "finalHeapBytes": 7755579,
           "finalNodes": 586,
-          "heapDeltaBytes": 233494,
-          "initialHeapBytes": 7547998,
+          "heapDeltaBytes": 236622,
+          "initialHeapBytes": 7518957,
           "initialNodes": 586,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 58.678,
-          "blockingTaskTotalMs": 58.678,
+          "blockingTaskMaxMs": 59.348,
+          "blockingTaskTotalMs": 59.348,
           "nodeDelta": 0,
-          "routeElapsedMs": 112.5,
-          "routeMsPerUpdate": 0.5625,
+          "routeElapsedMs": 118.69999999925494,
+          "routeMsPerUpdate": 0.5934999999962747,
           "routeUpdates": 200,
-          "recordFilterElapsedMs": null,
-          "recordFilterMsPerUpdate": null,
-          "recordFilterUpdates": 0
-        }
-      },
-      {
-        "resources": [
-          "http://127.0.0.1:38315/lumi-dsl/?sample=4#/records",
-          "http://127.0.0.1:38315/lumi-dsl/spa.css",
-          "http://127.0.0.1:38315/lumi-dsl/app.js"
-        ],
-        "startup": {
-          "domContentLoadedMs": 30.399999999906868,
-          "firstContentfulPaintMs": 84,
-          "loadMs": 32.0999999998603
-        },
-        "stress": {
-          "filterElapsedMs": 58.39999999990687,
-          "filterMsPerUpdate": 0.19466666666635624,
-          "filterUpdates": 300,
-          "finalHeapBytes": 7780924,
-          "finalNodes": 586,
-          "heapDeltaBytes": 232510,
-          "initialHeapBytes": 7548414,
-          "initialNodes": 586,
-          "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 58.768,
-          "blockingTaskTotalMs": 58.768,
-          "nodeDelta": 0,
-          "routeElapsedMs": 123.4000000001397,
-          "routeMsPerUpdate": 0.6170000000006985,
-          "routeUpdates": 200,
-          "recordFilterElapsedMs": 33,
-          "recordFilterMsPerUpdate": 11,
+          "recordFilterElapsedMs": 51,
+          "recordFilterMsPerUpdate": 17,
           "recordFilterUpdates": 3
         }
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/lumi-dsl/?sample=5#/records",
-          "http://127.0.0.1:38315/lumi-dsl/spa.css",
-          "http://127.0.0.1:38315/lumi-dsl/app.js"
+          "http://127.0.0.1:41151/lumi-dsl/?sample=5#/records",
+          "http://127.0.0.1:41151/lumi-dsl/spa.css",
+          "http://127.0.0.1:41151/lumi-dsl/app.js"
         ],
         "startup": {
-          "domContentLoadedMs": 29.300000000046566,
-          "firstContentfulPaintMs": 80,
-          "loadMs": 30.800000000046566
+          "domContentLoadedMs": 30.599999997764826,
+          "firstContentfulPaintMs": 84,
+          "loadMs": 32.099999997764826
         },
         "stress": {
-          "filterElapsedMs": 60.39999999990687,
-          "filterMsPerUpdate": 0.2013333333330229,
+          "filterElapsedMs": 59.599999997764826,
+          "filterMsPerUpdate": 0.1986666666592161,
           "filterUpdates": 300,
-          "finalHeapBytes": 7780412,
+          "finalHeapBytes": 7756271,
           "finalNodes": 586,
-          "heapDeltaBytes": 232846,
-          "initialHeapBytes": 7547566,
+          "heapDeltaBytes": 236346,
+          "initialHeapBytes": 7519925,
           "initialNodes": 586,
-          "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 60.701,
-          "blockingTaskTotalMs": 60.701,
+          "blockingTaskCount": 2,
+          "blockingTaskMaxMs": 59.933,
+          "blockingTaskTotalMs": 70.134,
           "nodeDelta": 0,
-          "routeElapsedMs": 128.89999999990687,
-          "routeMsPerUpdate": 0.6444999999995343,
+          "routeElapsedMs": 130.5,
+          "routeMsPerUpdate": 0.6525,
           "routeUpdates": 200,
-          "recordFilterElapsedMs": 34.5,
-          "recordFilterMsPerUpdate": 11.5,
+          "recordFilterElapsedMs": 46.30000000074506,
+          "recordFilterMsPerUpdate": 15.433333333581686,
           "recordFilterUpdates": 3
         }
       }
@@ -1180,64 +1180,31 @@
     "vue": [
       {
         "resources": [
-          "http://127.0.0.1:38315/vue/?sample=1#/overview",
-          "http://127.0.0.1:38315/vue/assets/index-ToyLRC8s.js",
-          "http://127.0.0.1:38315/vue/assets/main-CCRqept8.js",
-          "http://127.0.0.1:38315/vue/assets/main-C_c7sl77.css"
+          "http://127.0.0.1:41151/vue/?sample=1#/overview",
+          "http://127.0.0.1:41151/vue/assets/index-ToyLRC8s.js",
+          "http://127.0.0.1:41151/vue/assets/main-CCRqept8.js",
+          "http://127.0.0.1:41151/vue/assets/main-C_c7sl77.css"
         ],
         "startup": {
-          "domContentLoadedMs": 8,
-          "firstContentfulPaintMs": 84,
-          "loadMs": 10.600000000093132
+          "domContentLoadedMs": 9.200000002980232,
+          "firstContentfulPaintMs": 88,
+          "loadMs": 12.100000001490116
         },
         "stress": {
-          "filterElapsedMs": 21.800000000046566,
-          "filterMsPerUpdate": 0.07266666666682188,
+          "filterElapsedMs": 21.899999998509884,
+          "filterMsPerUpdate": 0.07299999999503294,
           "filterUpdates": 300,
-          "finalHeapBytes": 8093509,
+          "finalHeapBytes": 8093453,
           "finalNodes": 197,
-          "heapDeltaBytes": 353357,
-          "initialHeapBytes": 7740152,
-          "initialNodes": 197,
-          "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 22.163,
-          "blockingTaskTotalMs": 22.163,
-          "nodeDelta": 0,
-          "routeElapsedMs": 120.4000000001397,
-          "routeMsPerUpdate": 0.6020000000006985,
-          "routeUpdates": 200,
-          "recordFilterElapsedMs": null,
-          "recordFilterMsPerUpdate": null,
-          "recordFilterUpdates": 0
-        }
-      },
-      {
-        "resources": [
-          "http://127.0.0.1:38315/vue/?sample=2#/overview",
-          "http://127.0.0.1:38315/vue/assets/index-ToyLRC8s.js",
-          "http://127.0.0.1:38315/vue/assets/main-CCRqept8.js",
-          "http://127.0.0.1:38315/vue/assets/main-C_c7sl77.css"
-        ],
-        "startup": {
-          "domContentLoadedMs": 7.699999999953434,
-          "firstContentfulPaintMs": 84,
-          "loadMs": 10.199999999953434
-        },
-        "stress": {
-          "filterElapsedMs": 21.5,
-          "filterMsPerUpdate": 0.07166666666666667,
-          "filterUpdates": 300,
-          "finalHeapBytes": 8093429,
-          "finalNodes": 197,
-          "heapDeltaBytes": 353769,
+          "heapDeltaBytes": 353793,
           "initialHeapBytes": 7739660,
           "initialNodes": 197,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 21.795,
-          "blockingTaskTotalMs": 21.795,
+          "blockingTaskMaxMs": 22.249,
+          "blockingTaskTotalMs": 22.249,
           "nodeDelta": 0,
-          "routeElapsedMs": 126.5,
-          "routeMsPerUpdate": 0.6325,
+          "routeElapsedMs": 118.80000000074506,
+          "routeMsPerUpdate": 0.5940000000037253,
           "routeUpdates": 200,
           "recordFilterElapsedMs": null,
           "recordFilterMsPerUpdate": null,
@@ -1246,100 +1213,133 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/vue/?sample=3#/overview",
-          "http://127.0.0.1:38315/vue/assets/index-ToyLRC8s.js",
-          "http://127.0.0.1:38315/vue/assets/main-CCRqept8.js",
-          "http://127.0.0.1:38315/vue/assets/main-C_c7sl77.css"
+          "http://127.0.0.1:41151/vue/?sample=2#/overview",
+          "http://127.0.0.1:41151/vue/assets/index-ToyLRC8s.js",
+          "http://127.0.0.1:41151/vue/assets/main-CCRqept8.js",
+          "http://127.0.0.1:41151/vue/assets/main-C_c7sl77.css"
         ],
         "startup": {
-          "domContentLoadedMs": 10.099999999860302,
-          "firstContentfulPaintMs": 100,
-          "loadMs": 13.5
+          "domContentLoadedMs": 7.699999999254942,
+          "firstContentfulPaintMs": 84,
+          "loadMs": 11
         },
         "stress": {
-          "filterElapsedMs": 21.5999999998603,
-          "filterMsPerUpdate": 0.07199999999953434,
+          "filterElapsedMs": 21.600000001490116,
+          "filterMsPerUpdate": 0.07200000000496705,
+          "filterUpdates": 300,
+          "finalHeapBytes": 8093497,
+          "finalNodes": 197,
+          "heapDeltaBytes": 353125,
+          "initialHeapBytes": 7740372,
+          "initialNodes": 197,
+          "blockingTaskCount": 1,
+          "blockingTaskMaxMs": 22.032,
+          "blockingTaskTotalMs": 22.032,
+          "nodeDelta": 0,
+          "routeElapsedMs": 118.30000000074506,
+          "routeMsPerUpdate": 0.5915000000037253,
+          "routeUpdates": 200,
+          "recordFilterElapsedMs": null,
+          "recordFilterMsPerUpdate": null,
+          "recordFilterUpdates": 0
+        }
+      },
+      {
+        "resources": [
+          "http://127.0.0.1:41151/vue/?sample=3#/overview",
+          "http://127.0.0.1:41151/vue/assets/index-ToyLRC8s.js",
+          "http://127.0.0.1:41151/vue/assets/main-CCRqept8.js",
+          "http://127.0.0.1:41151/vue/assets/main-C_c7sl77.css"
+        ],
+        "startup": {
+          "domContentLoadedMs": 8.599999997764826,
+          "firstContentfulPaintMs": 84,
+          "loadMs": 11.399999998509884
+        },
+        "stress": {
+          "filterElapsedMs": 23.100000001490116,
+          "filterMsPerUpdate": 0.07700000000496705,
+          "filterUpdates": 300,
+          "finalHeapBytes": 8093981,
+          "finalNodes": 197,
+          "heapDeltaBytes": 353717,
+          "initialHeapBytes": 7740264,
+          "initialNodes": 197,
+          "blockingTaskCount": 1,
+          "blockingTaskMaxMs": 23.577,
+          "blockingTaskTotalMs": 23.577,
+          "nodeDelta": 0,
+          "routeElapsedMs": 130.09999999776483,
+          "routeMsPerUpdate": 0.6504999999888241,
+          "routeUpdates": 200,
+          "recordFilterElapsedMs": null,
+          "recordFilterMsPerUpdate": null,
+          "recordFilterUpdates": 0
+        }
+      },
+      {
+        "resources": [
+          "http://127.0.0.1:41151/vue/?sample=4#/records",
+          "http://127.0.0.1:41151/vue/assets/index-ToyLRC8s.js",
+          "http://127.0.0.1:41151/vue/assets/main-CCRqept8.js",
+          "http://127.0.0.1:41151/vue/assets/main-C_c7sl77.css"
+        ],
+        "startup": {
+          "domContentLoadedMs": 7.899999998509884,
+          "firstContentfulPaintMs": 88,
+          "loadMs": 10.399999998509884
+        },
+        "stress": {
+          "filterElapsedMs": 23,
+          "filterMsPerUpdate": 0.07666666666666666,
           "filterUpdates": 300,
           "finalHeapBytes": 8093441,
           "finalNodes": 197,
-          "heapDeltaBytes": 353117,
-          "initialHeapBytes": 7740324,
+          "heapDeltaBytes": 353161,
+          "initialHeapBytes": 7740280,
           "initialNodes": 197,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 21.966,
-          "blockingTaskTotalMs": 21.966,
+          "blockingTaskMaxMs": 23.345,
+          "blockingTaskTotalMs": 23.345,
           "nodeDelta": 0,
-          "routeElapsedMs": 129.0999999998603,
-          "routeMsPerUpdate": 0.6454999999993015,
+          "routeElapsedMs": 124.20000000298023,
+          "routeMsPerUpdate": 0.6210000000149012,
           "routeUpdates": 200,
-          "recordFilterElapsedMs": null,
-          "recordFilterMsPerUpdate": null,
-          "recordFilterUpdates": 0
-        }
-      },
-      {
-        "resources": [
-          "http://127.0.0.1:38315/vue/?sample=4#/records",
-          "http://127.0.0.1:38315/vue/assets/index-ToyLRC8s.js",
-          "http://127.0.0.1:38315/vue/assets/main-CCRqept8.js",
-          "http://127.0.0.1:38315/vue/assets/main-C_c7sl77.css"
-        ],
-        "startup": {
-          "domContentLoadedMs": 8,
-          "firstContentfulPaintMs": 84,
-          "loadMs": 10.899999999906868
-        },
-        "stress": {
-          "filterElapsedMs": 23.399999999906868,
-          "filterMsPerUpdate": 0.07799999999968955,
-          "filterUpdates": 300,
-          "finalHeapBytes": 8090277,
-          "finalNodes": 197,
-          "heapDeltaBytes": 353033,
-          "initialHeapBytes": 7737244,
-          "initialNodes": 197,
-          "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 23.701,
-          "blockingTaskTotalMs": 23.701,
-          "nodeDelta": 0,
-          "routeElapsedMs": 112.30000000004657,
-          "routeMsPerUpdate": 0.5615000000002328,
-          "routeUpdates": 200,
-          "recordFilterElapsedMs": 46,
-          "recordFilterMsPerUpdate": 15.333333333333334,
+          "recordFilterElapsedMs": 58.5,
+          "recordFilterMsPerUpdate": 19.5,
           "recordFilterUpdates": 3
         }
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/vue/?sample=5#/records",
-          "http://127.0.0.1:38315/vue/assets/index-ToyLRC8s.js",
-          "http://127.0.0.1:38315/vue/assets/main-CCRqept8.js",
-          "http://127.0.0.1:38315/vue/assets/main-C_c7sl77.css"
+          "http://127.0.0.1:41151/vue/?sample=5#/records",
+          "http://127.0.0.1:41151/vue/assets/index-ToyLRC8s.js",
+          "http://127.0.0.1:41151/vue/assets/main-CCRqept8.js",
+          "http://127.0.0.1:41151/vue/assets/main-C_c7sl77.css"
         ],
         "startup": {
-          "domContentLoadedMs": 7.900000000139698,
-          "firstContentfulPaintMs": 88,
-          "loadMs": 10.600000000093132
+          "domContentLoadedMs": 8.599999997764826,
+          "firstContentfulPaintMs": 84,
+          "loadMs": 11.399999998509884
         },
         "stress": {
-          "filterElapsedMs": 23.9000000001397,
-          "filterMsPerUpdate": 0.07966666666713233,
+          "filterElapsedMs": 22.800000000745058,
+          "filterMsPerUpdate": 0.07600000000248353,
           "filterUpdates": 300,
-          "finalHeapBytes": 8093993,
+          "finalHeapBytes": 8093913,
           "finalNodes": 197,
-          "heapDeltaBytes": 354297,
+          "heapDeltaBytes": 354217,
           "initialHeapBytes": 7739696,
           "initialNodes": 197,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 24.263,
-          "blockingTaskTotalMs": 24.263,
+          "blockingTaskMaxMs": 23.048,
+          "blockingTaskTotalMs": 23.048,
           "nodeDelta": 0,
-          "routeElapsedMs": 142.30000000004657,
-          "routeMsPerUpdate": 0.7115000000002328,
+          "routeElapsedMs": 132.19999999925494,
+          "routeMsPerUpdate": 0.6609999999962747,
           "routeUpdates": 200,
-          "recordFilterElapsedMs": 48.0999999998603,
-          "recordFilterMsPerUpdate": 16.033333333286766,
+          "recordFilterElapsedMs": 44,
+          "recordFilterMsPerUpdate": 14.666666666666666,
           "recordFilterUpdates": 3
         }
       }
@@ -1347,31 +1347,31 @@
     "react": [
       {
         "resources": [
-          "http://127.0.0.1:38315/react/?sample=1#/overview",
-          "http://127.0.0.1:38315/react/assets/index-C4EYmU5Q.js",
-          "http://127.0.0.1:38315/react/assets/main-D9xzDJdL.js",
-          "http://127.0.0.1:38315/react/assets/main-C_c7sl77.css"
+          "http://127.0.0.1:41151/react/?sample=1#/overview",
+          "http://127.0.0.1:41151/react/assets/index-C4EYmU5Q.js",
+          "http://127.0.0.1:41151/react/assets/main-D9xzDJdL.js",
+          "http://127.0.0.1:41151/react/assets/main-C_c7sl77.css"
         ],
         "startup": {
-          "domContentLoadedMs": 7.599999999860302,
+          "domContentLoadedMs": 7.800000000745058,
           "firstContentfulPaintMs": 92,
-          "loadMs": 10.199999999953434
+          "loadMs": 10.899999998509884
         },
         "stress": {
-          "filterElapsedMs": 37.800000000046566,
-          "filterMsPerUpdate": 0.1260000000001552,
+          "filterElapsedMs": 37,
+          "filterMsPerUpdate": 0.12333333333333334,
           "filterUpdates": 300,
-          "finalHeapBytes": 8681220,
+          "finalHeapBytes": 8660168,
           "finalNodes": 197,
-          "heapDeltaBytes": 447844,
-          "initialHeapBytes": 8233376,
+          "heapDeltaBytes": 426300,
+          "initialHeapBytes": 8233868,
           "initialNodes": 197,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 38.057,
-          "blockingTaskTotalMs": 38.057,
+          "blockingTaskMaxMs": 37.326,
+          "blockingTaskTotalMs": 37.326,
           "nodeDelta": 0,
-          "routeElapsedMs": 142.60000000009313,
-          "routeMsPerUpdate": 0.7130000000004657,
+          "routeElapsedMs": 147.79999999701977,
+          "routeMsPerUpdate": 0.7389999999850988,
           "routeUpdates": 200,
           "recordFilterElapsedMs": null,
           "recordFilterMsPerUpdate": null,
@@ -1380,64 +1380,31 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/react/?sample=2#/overview",
-          "http://127.0.0.1:38315/react/assets/index-C4EYmU5Q.js",
-          "http://127.0.0.1:38315/react/assets/main-D9xzDJdL.js",
-          "http://127.0.0.1:38315/react/assets/main-C_c7sl77.css"
+          "http://127.0.0.1:41151/react/?sample=2#/overview",
+          "http://127.0.0.1:41151/react/assets/index-C4EYmU5Q.js",
+          "http://127.0.0.1:41151/react/assets/main-D9xzDJdL.js",
+          "http://127.0.0.1:41151/react/assets/main-C_c7sl77.css"
         ],
         "startup": {
-          "domContentLoadedMs": 7.599999999860302,
-          "firstContentfulPaintMs": 92,
-          "loadMs": 10.099999999860302
-        },
-        "stress": {
-          "filterElapsedMs": 38.0999999998603,
-          "filterMsPerUpdate": 0.12699999999953435,
-          "filterUpdates": 300,
-          "finalHeapBytes": 8659634,
-          "finalNodes": 197,
-          "heapDeltaBytes": 436048,
-          "initialHeapBytes": 8223586,
-          "initialNodes": 197,
-          "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 38.423,
-          "blockingTaskTotalMs": 38.423,
-          "nodeDelta": 0,
-          "routeElapsedMs": 141.4000000001397,
-          "routeMsPerUpdate": 0.7070000000006985,
-          "routeUpdates": 200,
-          "recordFilterElapsedMs": null,
-          "recordFilterMsPerUpdate": null,
-          "recordFilterUpdates": 0
-        }
-      },
-      {
-        "resources": [
-          "http://127.0.0.1:38315/react/?sample=3#/overview",
-          "http://127.0.0.1:38315/react/assets/index-C4EYmU5Q.js",
-          "http://127.0.0.1:38315/react/assets/main-D9xzDJdL.js",
-          "http://127.0.0.1:38315/react/assets/main-C_c7sl77.css"
-        ],
-        "startup": {
-          "domContentLoadedMs": 7.5,
+          "domContentLoadedMs": 8.099999997764826,
           "firstContentfulPaintMs": 88,
-          "loadMs": 9.900000000139698
+          "loadMs": 10.300000000745058
         },
         "stress": {
-          "filterElapsedMs": 38.39999999990687,
-          "filterMsPerUpdate": 0.12799999999968956,
+          "filterElapsedMs": 48.29999999701977,
+          "filterMsPerUpdate": 0.1609999999900659,
           "filterUpdates": 300,
-          "finalHeapBytes": 8660408,
+          "finalHeapBytes": 8660948,
           "finalNodes": 197,
-          "heapDeltaBytes": 436412,
-          "initialHeapBytes": 8223996,
+          "heapDeltaBytes": 436472,
+          "initialHeapBytes": 8224476,
           "initialNodes": 197,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 38.776,
-          "blockingTaskTotalMs": 38.776,
+          "blockingTaskMaxMs": 48.548,
+          "blockingTaskTotalMs": 48.548,
           "nodeDelta": 0,
-          "routeElapsedMs": 144.30000000004657,
-          "routeMsPerUpdate": 0.7215000000002328,
+          "routeElapsedMs": 156.69999999925494,
+          "routeMsPerUpdate": 0.7834999999962747,
           "routeUpdates": 200,
           "recordFilterElapsedMs": null,
           "recordFilterMsPerUpdate": null,
@@ -1446,67 +1413,100 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/react/?sample=4#/records",
-          "http://127.0.0.1:38315/react/assets/index-C4EYmU5Q.js",
-          "http://127.0.0.1:38315/react/assets/main-D9xzDJdL.js",
-          "http://127.0.0.1:38315/react/assets/main-C_c7sl77.css"
+          "http://127.0.0.1:41151/react/?sample=3#/overview",
+          "http://127.0.0.1:41151/react/assets/index-C4EYmU5Q.js",
+          "http://127.0.0.1:41151/react/assets/main-D9xzDJdL.js",
+          "http://127.0.0.1:41151/react/assets/main-C_c7sl77.css"
         ],
         "startup": {
-          "domContentLoadedMs": 8,
-          "firstContentfulPaintMs": 92,
-          "loadMs": 11.100000000093132
+          "domContentLoadedMs": 8.099999997764826,
+          "firstContentfulPaintMs": 108,
+          "loadMs": 11.399999998509884
         },
         "stress": {
-          "filterElapsedMs": 38.5,
-          "filterMsPerUpdate": 0.12833333333333333,
+          "filterElapsedMs": 40.5,
+          "filterMsPerUpdate": 0.135,
           "filterUpdates": 300,
-          "finalHeapBytes": 8665608,
+          "finalHeapBytes": 8663380,
           "finalNodes": 197,
-          "heapDeltaBytes": 438892,
-          "initialHeapBytes": 8226716,
+          "heapDeltaBytes": 429872,
+          "initialHeapBytes": 8233508,
+          "initialNodes": 197,
+          "blockingTaskCount": 2,
+          "blockingTaskMaxMs": 40.762,
+          "blockingTaskTotalMs": 50.943,
+          "nodeDelta": 0,
+          "routeElapsedMs": 154.39999999850988,
+          "routeMsPerUpdate": 0.7719999999925494,
+          "routeUpdates": 200,
+          "recordFilterElapsedMs": null,
+          "recordFilterMsPerUpdate": null,
+          "recordFilterUpdates": 0
+        }
+      },
+      {
+        "resources": [
+          "http://127.0.0.1:41151/react/?sample=4#/records",
+          "http://127.0.0.1:41151/react/assets/index-C4EYmU5Q.js",
+          "http://127.0.0.1:41151/react/assets/main-D9xzDJdL.js",
+          "http://127.0.0.1:41151/react/assets/main-C_c7sl77.css"
+        ],
+        "startup": {
+          "domContentLoadedMs": 7.900000002235174,
+          "firstContentfulPaintMs": 92,
+          "loadMs": 10.900000002235174
+        },
+        "stress": {
+          "filterElapsedMs": 32.80000000074506,
+          "filterMsPerUpdate": 0.10933333333581687,
+          "filterUpdates": 300,
+          "finalHeapBytes": 8659650,
+          "finalNodes": 197,
+          "heapDeltaBytes": 426188,
+          "initialHeapBytes": 8233462,
           "initialNodes": 197,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 38.908,
-          "blockingTaskTotalMs": 38.908,
+          "blockingTaskMaxMs": 33.292,
+          "blockingTaskTotalMs": 33.292,
           "nodeDelta": 0,
-          "routeElapsedMs": 151.0999999998603,
-          "routeMsPerUpdate": 0.7554999999993015,
+          "routeElapsedMs": 159.89999999850988,
+          "routeMsPerUpdate": 0.7994999999925494,
           "routeUpdates": 200,
-          "recordFilterElapsedMs": 67.10000000009313,
-          "recordFilterMsPerUpdate": 22.36666666669771,
+          "recordFilterElapsedMs": 55.399999998509884,
+          "recordFilterMsPerUpdate": 18.46666666616996,
           "recordFilterUpdates": 3
         }
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/react/?sample=5#/records",
-          "http://127.0.0.1:38315/react/assets/index-C4EYmU5Q.js",
-          "http://127.0.0.1:38315/react/assets/main-D9xzDJdL.js",
-          "http://127.0.0.1:38315/react/assets/main-C_c7sl77.css"
+          "http://127.0.0.1:41151/react/?sample=5#/records",
+          "http://127.0.0.1:41151/react/assets/index-C4EYmU5Q.js",
+          "http://127.0.0.1:41151/react/assets/main-D9xzDJdL.js",
+          "http://127.0.0.1:41151/react/assets/main-C_c7sl77.css"
         ],
         "startup": {
-          "domContentLoadedMs": 7.600000000093132,
-          "firstContentfulPaintMs": 96,
-          "loadMs": 10.300000000046566
+          "domContentLoadedMs": 8.600000001490116,
+          "firstContentfulPaintMs": 92,
+          "loadMs": 11.700000002980232
         },
         "stress": {
-          "filterElapsedMs": 31.800000000046566,
-          "filterMsPerUpdate": 0.10600000000015522,
+          "filterElapsedMs": 50,
+          "filterMsPerUpdate": 0.16666666666666666,
           "filterUpdates": 300,
-          "finalHeapBytes": 8665800,
+          "finalHeapBytes": 8659752,
           "finalNodes": 197,
-          "heapDeltaBytes": 432852,
-          "initialHeapBytes": 8232948,
+          "heapDeltaBytes": 426364,
+          "initialHeapBytes": 8233388,
           "initialNodes": 197,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 32.196,
-          "blockingTaskTotalMs": 32.196,
+          "blockingTaskMaxMs": 50.537,
+          "blockingTaskTotalMs": 50.537,
           "nodeDelta": 0,
-          "routeElapsedMs": 151.30000000004657,
-          "routeMsPerUpdate": 0.7565000000002329,
+          "routeElapsedMs": 208.19999999925494,
+          "routeMsPerUpdate": 1.0409999999962747,
           "routeUpdates": 200,
-          "recordFilterElapsedMs": 51.699999999953434,
-          "recordFilterMsPerUpdate": 17.233333333317812,
+          "recordFilterElapsedMs": 57.900000002235174,
+          "recordFilterMsPerUpdate": 19.300000000745058,
           "recordFilterUpdates": 3
         }
       }
@@ -1514,31 +1514,31 @@
     "lit": [
       {
         "resources": [
-          "http://127.0.0.1:38315/lit/?sample=1#/overview",
-          "http://127.0.0.1:38315/lit/assets/index-DUC5NGAl.js",
-          "http://127.0.0.1:38315/lit/assets/main-CCEVWL2R.js",
-          "http://127.0.0.1:38315/lit/assets/main-C_c7sl77.css"
+          "http://127.0.0.1:41151/lit/?sample=1#/overview",
+          "http://127.0.0.1:41151/lit/assets/index-DUC5NGAl.js",
+          "http://127.0.0.1:41151/lit/assets/main-CCEVWL2R.js",
+          "http://127.0.0.1:41151/lit/assets/main-C_c7sl77.css"
         ],
         "startup": {
           "domContentLoadedMs": 8,
-          "firstContentfulPaintMs": 88,
-          "loadMs": 10.700000000186265
+          "firstContentfulPaintMs": 80,
+          "loadMs": 10.400000002235174
         },
         "stress": {
-          "filterElapsedMs": 22.800000000046566,
-          "filterMsPerUpdate": 0.07600000000015522,
+          "filterElapsedMs": 21.399999998509884,
+          "filterMsPerUpdate": 0.07133333332836628,
           "filterUpdates": 300,
-          "finalHeapBytes": 7502779,
+          "finalHeapBytes": 7488879,
           "finalNodes": 197,
-          "heapDeltaBytes": 226809,
-          "initialHeapBytes": 7275970,
+          "heapDeltaBytes": 221113,
+          "initialHeapBytes": 7267766,
           "initialNodes": 197,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 23.083,
-          "blockingTaskTotalMs": 23.083,
+          "blockingTaskMaxMs": 21.685,
+          "blockingTaskTotalMs": 21.685,
           "nodeDelta": 0,
-          "routeElapsedMs": 111.4000000001397,
-          "routeMsPerUpdate": 0.5570000000006985,
+          "routeElapsedMs": 107.10000000149012,
+          "routeMsPerUpdate": 0.5355000000074506,
           "routeUpdates": 200,
           "recordFilterElapsedMs": null,
           "recordFilterMsPerUpdate": null,
@@ -1547,31 +1547,31 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/lit/?sample=2#/overview",
-          "http://127.0.0.1:38315/lit/assets/index-DUC5NGAl.js",
-          "http://127.0.0.1:38315/lit/assets/main-CCEVWL2R.js",
-          "http://127.0.0.1:38315/lit/assets/main-C_c7sl77.css"
+          "http://127.0.0.1:41151/lit/?sample=2#/overview",
+          "http://127.0.0.1:41151/lit/assets/index-DUC5NGAl.js",
+          "http://127.0.0.1:41151/lit/assets/main-CCEVWL2R.js",
+          "http://127.0.0.1:41151/lit/assets/main-C_c7sl77.css"
         ],
         "startup": {
-          "domContentLoadedMs": 7.399999999906868,
+          "domContentLoadedMs": 9.100000001490116,
           "firstContentfulPaintMs": 88,
-          "loadMs": 10.100000000093132
+          "loadMs": 11.800000000745058
         },
         "stress": {
-          "filterElapsedMs": 24.299999999813735,
-          "filterMsPerUpdate": 0.08099999999937912,
+          "filterElapsedMs": 21.5,
+          "filterMsPerUpdate": 0.07166666666666667,
           "filterUpdates": 300,
-          "finalHeapBytes": 7496715,
+          "finalHeapBytes": 7495071,
           "finalNodes": 197,
-          "heapDeltaBytes": 220829,
-          "initialHeapBytes": 7275886,
+          "heapDeltaBytes": 227157,
+          "initialHeapBytes": 7267914,
           "initialNodes": 197,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 24.586,
-          "blockingTaskTotalMs": 24.586,
+          "blockingTaskMaxMs": 21.773,
+          "blockingTaskTotalMs": 21.773,
           "nodeDelta": 0,
-          "routeElapsedMs": 117.30000000004657,
-          "routeMsPerUpdate": 0.5865000000002328,
+          "routeElapsedMs": 104.89999999850988,
+          "routeMsPerUpdate": 0.5244999999925494,
           "routeUpdates": 200,
           "recordFilterElapsedMs": null,
           "recordFilterMsPerUpdate": null,
@@ -1580,31 +1580,31 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/lit/?sample=3#/overview",
-          "http://127.0.0.1:38315/lit/assets/index-DUC5NGAl.js",
-          "http://127.0.0.1:38315/lit/assets/main-CCEVWL2R.js",
-          "http://127.0.0.1:38315/lit/assets/main-C_c7sl77.css"
+          "http://127.0.0.1:41151/lit/?sample=3#/overview",
+          "http://127.0.0.1:41151/lit/assets/index-DUC5NGAl.js",
+          "http://127.0.0.1:41151/lit/assets/main-CCEVWL2R.js",
+          "http://127.0.0.1:41151/lit/assets/main-C_c7sl77.css"
         ],
         "startup": {
-          "domContentLoadedMs": 8.100000000093132,
-          "firstContentfulPaintMs": 92,
-          "loadMs": 10.900000000139698
+          "domContentLoadedMs": 7.699999999254942,
+          "firstContentfulPaintMs": 88,
+          "loadMs": 10.300000000745058
         },
         "stress": {
-          "filterElapsedMs": 23.300000000046566,
-          "filterMsPerUpdate": 0.07766666666682188,
+          "filterElapsedMs": 34.19999999925494,
+          "filterMsPerUpdate": 0.11399999999751648,
           "filterUpdates": 300,
-          "finalHeapBytes": 7496643,
+          "finalHeapBytes": 7488943,
           "finalNodes": 197,
-          "heapDeltaBytes": 220757,
-          "initialHeapBytes": 7275886,
+          "heapDeltaBytes": 221177,
+          "initialHeapBytes": 7267766,
           "initialNodes": 197,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 23.576,
-          "blockingTaskTotalMs": 23.576,
+          "blockingTaskMaxMs": 34.518,
+          "blockingTaskTotalMs": 34.518,
           "nodeDelta": 0,
-          "routeElapsedMs": 104.5,
-          "routeMsPerUpdate": 0.5225,
+          "routeElapsedMs": 122,
+          "routeMsPerUpdate": 0.61,
           "routeUpdates": 200,
           "recordFilterElapsedMs": null,
           "recordFilterMsPerUpdate": null,
@@ -1613,67 +1613,67 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/lit/?sample=4#/records",
-          "http://127.0.0.1:38315/lit/assets/index-DUC5NGAl.js",
-          "http://127.0.0.1:38315/lit/assets/main-CCEVWL2R.js",
-          "http://127.0.0.1:38315/lit/assets/main-C_c7sl77.css"
+          "http://127.0.0.1:41151/lit/?sample=4#/records",
+          "http://127.0.0.1:41151/lit/assets/index-DUC5NGAl.js",
+          "http://127.0.0.1:41151/lit/assets/main-CCEVWL2R.js",
+          "http://127.0.0.1:41151/lit/assets/main-C_c7sl77.css"
         ],
         "startup": {
-          "domContentLoadedMs": 11.699999999953434,
+          "domContentLoadedMs": 10.5,
           "firstContentfulPaintMs": 88,
-          "loadMs": 14.300000000046566
+          "loadMs": 13.5
         },
         "stress": {
-          "filterElapsedMs": 21.9000000001397,
-          "filterMsPerUpdate": 0.07300000000046566,
+          "filterElapsedMs": 25.199999999254942,
+          "filterMsPerUpdate": 0.08399999999751648,
           "filterUpdates": 300,
-          "finalHeapBytes": 7489007,
+          "finalHeapBytes": 7496727,
           "finalNodes": 197,
-          "heapDeltaBytes": 221581,
-          "initialHeapBytes": 7267426,
+          "heapDeltaBytes": 221373,
+          "initialHeapBytes": 7275354,
           "initialNodes": 197,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 22.126,
-          "blockingTaskTotalMs": 22.126,
+          "blockingTaskMaxMs": 25.457,
+          "blockingTaskTotalMs": 25.457,
           "nodeDelta": 0,
-          "routeElapsedMs": 108.19999999995343,
-          "routeMsPerUpdate": 0.5409999999997672,
+          "routeElapsedMs": 114.59999999776483,
+          "routeMsPerUpdate": 0.5729999999888241,
           "routeUpdates": 200,
-          "recordFilterElapsedMs": 1517,
-          "recordFilterMsPerUpdate": 505.6666666666667,
+          "recordFilterElapsedMs": 1583.8999999985099,
+          "recordFilterMsPerUpdate": 527.96666666617,
           "recordFilterUpdates": 3
         }
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/lit/?sample=5#/records",
-          "http://127.0.0.1:38315/lit/assets/index-DUC5NGAl.js",
-          "http://127.0.0.1:38315/lit/assets/main-CCEVWL2R.js",
-          "http://127.0.0.1:38315/lit/assets/main-C_c7sl77.css"
+          "http://127.0.0.1:41151/lit/?sample=5#/records",
+          "http://127.0.0.1:41151/lit/assets/index-DUC5NGAl.js",
+          "http://127.0.0.1:41151/lit/assets/main-CCEVWL2R.js",
+          "http://127.0.0.1:41151/lit/assets/main-C_c7sl77.css"
         ],
         "startup": {
-          "domContentLoadedMs": 8.300000000046566,
-          "firstContentfulPaintMs": 84,
-          "loadMs": 11.199999999953434
+          "domContentLoadedMs": 8,
+          "firstContentfulPaintMs": 92,
+          "loadMs": 12
         },
         "stress": {
-          "filterElapsedMs": 23.199999999953434,
-          "filterMsPerUpdate": 0.07733333333317811,
+          "filterElapsedMs": 26.100000001490116,
+          "filterMsPerUpdate": 0.08700000000496705,
           "filterUpdates": 300,
-          "finalHeapBytes": 7502863,
+          "finalHeapBytes": 7496715,
           "finalNodes": 197,
-          "heapDeltaBytes": 229073,
-          "initialHeapBytes": 7273790,
+          "heapDeltaBytes": 223245,
+          "initialHeapBytes": 7273470,
           "initialNodes": 197,
           "blockingTaskCount": 1,
-          "blockingTaskMaxMs": 23.469,
-          "blockingTaskTotalMs": 23.469,
+          "blockingTaskMaxMs": 26.341,
+          "blockingTaskTotalMs": 26.341,
           "nodeDelta": 0,
-          "routeElapsedMs": 104.80000000004657,
-          "routeMsPerUpdate": 0.5240000000002328,
+          "routeElapsedMs": 111.19999999925494,
+          "routeMsPerUpdate": 0.5559999999962747,
           "routeUpdates": 200,
-          "recordFilterElapsedMs": 1445.1000000000931,
-          "recordFilterMsPerUpdate": 481.700000000031,
+          "recordFilterElapsedMs": 1533.699999999255,
+          "recordFilterMsPerUpdate": 511.233333333085,
           "recordFilterUpdates": 3
         }
       }
@@ -1681,30 +1681,30 @@
     "angular": [
       {
         "resources": [
-          "http://127.0.0.1:38315/angular/#/overview",
-          "http://127.0.0.1:38315/angular/main-SYTJHENI.js",
-          "http://127.0.0.1:38315/angular/styles-UWOHLYLW.css"
+          "http://127.0.0.1:41151/angular/#/overview",
+          "http://127.0.0.1:41151/angular/main-SYTJHENI.js",
+          "http://127.0.0.1:41151/angular/styles-UWOHLYLW.css"
         ],
         "startup": {
-          "domContentLoadedMs": 32.89999999990687,
+          "domContentLoadedMs": 32.30000000074506,
           "firstContentfulPaintMs": 84,
-          "loadMs": 34.39999999990687
+          "loadMs": 33.80000000074506
         },
         "stress": {
-          "filterElapsedMs": 499.30000000004657,
-          "filterMsPerUpdate": 1.6643333333334887,
+          "filterElapsedMs": 490.3999999985099,
+          "filterMsPerUpdate": 1.6346666666616996,
           "filterUpdates": 300,
-          "finalHeapBytes": 8805999,
+          "finalHeapBytes": 8805527,
           "finalNodes": 199,
-          "heapDeltaBytes": 413104,
-          "initialHeapBytes": 8392895,
+          "heapDeltaBytes": 592356,
+          "initialHeapBytes": 8213171,
           "initialNodes": 199,
           "blockingTaskCount": 0,
           "blockingTaskMaxMs": 0,
           "blockingTaskTotalMs": 0,
           "nodeDelta": 0,
-          "routeElapsedMs": 124.5999999998603,
-          "routeMsPerUpdate": 0.6229999999993016,
+          "routeElapsedMs": 138.19999999925494,
+          "routeMsPerUpdate": 0.6909999999962747,
           "routeUpdates": 200,
           "recordFilterElapsedMs": null,
           "recordFilterMsPerUpdate": null,
@@ -1713,30 +1713,30 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/angular/#/overview",
-          "http://127.0.0.1:38315/angular/main-SYTJHENI.js",
-          "http://127.0.0.1:38315/angular/styles-UWOHLYLW.css"
+          "http://127.0.0.1:41151/angular/#/overview",
+          "http://127.0.0.1:41151/angular/main-SYTJHENI.js",
+          "http://127.0.0.1:41151/angular/styles-UWOHLYLW.css"
         ],
         "startup": {
-          "domContentLoadedMs": 32.700000000186265,
+          "domContentLoadedMs": 31.900000002235174,
           "firstContentfulPaintMs": 84,
-          "loadMs": 34.200000000186265
+          "loadMs": 33.400000002235174
         },
         "stress": {
-          "filterElapsedMs": 497.29999999981374,
-          "filterMsPerUpdate": 1.6576666666660458,
+          "filterElapsedMs": 493.5999999977648,
+          "filterMsPerUpdate": 1.6453333333258828,
           "filterUpdates": 300,
-          "finalHeapBytes": 8792447,
+          "finalHeapBytes": 8806699,
           "finalNodes": 199,
-          "heapDeltaBytes": 580968,
-          "initialHeapBytes": 8211479,
+          "heapDeltaBytes": 594236,
+          "initialHeapBytes": 8212463,
           "initialNodes": 199,
           "blockingTaskCount": 0,
           "blockingTaskMaxMs": 0,
           "blockingTaskTotalMs": 0,
           "nodeDelta": 0,
-          "routeElapsedMs": 135.9000000001397,
-          "routeMsPerUpdate": 0.6795000000006985,
+          "routeElapsedMs": 138.80000000074506,
+          "routeMsPerUpdate": 0.6940000000037253,
           "routeUpdates": 200,
           "recordFilterElapsedMs": null,
           "recordFilterMsPerUpdate": null,
@@ -1745,30 +1745,30 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/angular/#/overview",
-          "http://127.0.0.1:38315/angular/main-SYTJHENI.js",
-          "http://127.0.0.1:38315/angular/styles-UWOHLYLW.css"
+          "http://127.0.0.1:41151/angular/#/overview",
+          "http://127.0.0.1:41151/angular/main-SYTJHENI.js",
+          "http://127.0.0.1:41151/angular/styles-UWOHLYLW.css"
         ],
         "startup": {
-          "domContentLoadedMs": 36,
-          "firstContentfulPaintMs": 84,
-          "loadMs": 37.39999999990687
+          "domContentLoadedMs": 38.400000002235174,
+          "firstContentfulPaintMs": 88,
+          "loadMs": 40
         },
         "stress": {
-          "filterElapsedMs": 488.80000000004657,
-          "filterMsPerUpdate": 1.6293333333334885,
+          "filterElapsedMs": 487.5999999977648,
+          "filterMsPerUpdate": 1.6253333333258828,
           "filterUpdates": 300,
-          "finalHeapBytes": 8804335,
+          "finalHeapBytes": 8806031,
           "finalNodes": 199,
-          "heapDeltaBytes": 592200,
-          "initialHeapBytes": 8212135,
+          "heapDeltaBytes": 592888,
+          "initialHeapBytes": 8213143,
           "initialNodes": 199,
           "blockingTaskCount": 0,
           "blockingTaskMaxMs": 0,
           "blockingTaskTotalMs": 0,
           "nodeDelta": 0,
-          "routeElapsedMs": 145.5999999998603,
-          "routeMsPerUpdate": 0.7279999999993015,
+          "routeElapsedMs": 161,
+          "routeMsPerUpdate": 0.805,
           "routeUpdates": 200,
           "recordFilterElapsedMs": null,
           "recordFilterMsPerUpdate": null,
@@ -1777,65 +1777,65 @@
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/angular/#/records",
-          "http://127.0.0.1:38315/angular/main-SYTJHENI.js",
-          "http://127.0.0.1:38315/angular/styles-UWOHLYLW.css"
+          "http://127.0.0.1:41151/angular/#/records",
+          "http://127.0.0.1:41151/angular/main-SYTJHENI.js",
+          "http://127.0.0.1:41151/angular/styles-UWOHLYLW.css"
         ],
         "startup": {
-          "domContentLoadedMs": 35.10000000009313,
-          "firstContentfulPaintMs": 84,
-          "loadMs": 36.39999999990687
+          "domContentLoadedMs": 34,
+          "firstContentfulPaintMs": 88,
+          "loadMs": 35.80000000074506
         },
         "stress": {
-          "filterElapsedMs": 490.29999999981374,
-          "filterMsPerUpdate": 1.6343333333327124,
+          "filterElapsedMs": 489.0999999977648,
+          "filterMsPerUpdate": 1.6303333333258827,
           "filterUpdates": 300,
-          "finalHeapBytes": 8805703,
+          "finalHeapBytes": 8804663,
           "finalNodes": 199,
-          "heapDeltaBytes": 593512,
-          "initialHeapBytes": 8212191,
+          "heapDeltaBytes": 591464,
+          "initialHeapBytes": 8213199,
           "initialNodes": 199,
           "blockingTaskCount": 0,
           "blockingTaskMaxMs": 0,
           "blockingTaskTotalMs": 0,
           "nodeDelta": 0,
-          "routeElapsedMs": 147,
-          "routeMsPerUpdate": 0.735,
+          "routeElapsedMs": 143.69999999925494,
+          "routeMsPerUpdate": 0.7184999999962747,
           "routeUpdates": 200,
-          "recordFilterElapsedMs": 460.89999999990687,
-          "recordFilterMsPerUpdate": 153.6333333333023,
+          "recordFilterElapsedMs": 460.20000000298023,
+          "recordFilterMsPerUpdate": 153.4000000009934,
           "recordFilterUpdates": 3
         }
       },
       {
         "resources": [
-          "http://127.0.0.1:38315/angular/#/records",
-          "http://127.0.0.1:38315/angular/main-SYTJHENI.js",
-          "http://127.0.0.1:38315/angular/styles-UWOHLYLW.css"
+          "http://127.0.0.1:41151/angular/#/records",
+          "http://127.0.0.1:41151/angular/main-SYTJHENI.js",
+          "http://127.0.0.1:41151/angular/styles-UWOHLYLW.css"
         ],
         "startup": {
-          "domContentLoadedMs": 31.899999999906868,
-          "firstContentfulPaintMs": 84,
-          "loadMs": 33.39999999990687
+          "domContentLoadedMs": 35.19999999925494,
+          "firstContentfulPaintMs": 92,
+          "loadMs": 36.69999999925494
         },
         "stress": {
-          "filterElapsedMs": 493.4000000001397,
-          "filterMsPerUpdate": 1.6446666666671323,
+          "filterElapsedMs": 493.4000000022352,
+          "filterMsPerUpdate": 1.6446666666741172,
           "filterUpdates": 300,
-          "finalHeapBytes": 8809095,
+          "finalHeapBytes": 8810715,
           "finalNodes": 199,
-          "heapDeltaBytes": 595740,
-          "initialHeapBytes": 8213355,
+          "heapDeltaBytes": 597516,
+          "initialHeapBytes": 8213199,
           "initialNodes": 199,
-          "blockingTaskCount": 0,
-          "blockingTaskMaxMs": 0,
-          "blockingTaskTotalMs": 0,
+          "blockingTaskCount": 1,
+          "blockingTaskMaxMs": 10.063,
+          "blockingTaskTotalMs": 10.063,
           "nodeDelta": 0,
-          "routeElapsedMs": 135.30000000004657,
-          "routeMsPerUpdate": 0.6765000000002328,
+          "routeElapsedMs": 147.5,
+          "routeMsPerUpdate": 0.7375,
           "routeUpdates": 200,
-          "recordFilterElapsedMs": 452.60000000009313,
-          "recordFilterMsPerUpdate": 150.8666666666977,
+          "recordFilterElapsedMs": 468.30000000074506,
+          "recordFilterMsPerUpdate": 156.10000000024834,
           "recordFilterUpdates": 3
         }
       }

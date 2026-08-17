@@ -30,6 +30,31 @@ It intentionally does not:
 - Watch for changes
 - Decide when rendering should happen
 
+## Install
+
+Install Lumi from npm when the application uses a build step:
+
+```sh
+npm install @thlib/lumi
+```
+
+The package entry is unbundled ES module source. Bundlers can tree-shake and
+minify it with the rest of the application. Stack traces through Lumi stay
+readable.
+
+Without a build step, load the browser bundle from a CDN:
+
+```html
+<script type="module">
+  import {component, on, prop, text} from 'https://cdn.jsdelivr.net/npm/@thlib/lumi@0.1.0/dist/lumi.js'
+</script>
+```
+
+`dist/lumi.js` is one minified ES module of approximately 11 kB when compressed
+with gzip. One request replaces the module graph. Its source map resolves to
+the published source, so developer tools show the original code. Use a fixed
+version because an unpinned CDN URL follows the latest release.
+
 ## The idea
 
 * **Modern browsers provide far more than they used to.** Many capabilities that once required libraries, preprocessors, or framework abstractions are now built into HTML, CSS, JavaScript, and browser APIs.

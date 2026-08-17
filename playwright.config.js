@@ -28,6 +28,12 @@ export default defineConfig({
       },
     },
     {
+      name: 'webkit',
+      use: {
+        browserName: 'webkit',
+      },
+    },
+    {
       name: 'edge',
       use: {
         browserName: 'chromium',

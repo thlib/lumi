@@ -5,7 +5,7 @@
 .DEFAULT_GOAL := help
 
 PNPM ?= pnpm
-BROWSERS ?= chromium firefox
+BROWSERS ?= chromium firefox webkit
 PORT ?= 8008
 
 .PHONY: help install build types bundle spa spa-dev size lint test test-browser \

@@ -18,5 +18,3 @@
 - Can we make the lumi source smaller without losing functionality or performance?
 - Consider assigning clear ownership to a component subtree because it's simpler and more reliable... but mixed ownership can be valuable.
 - SSR and hydration?
-- engines.node: ">=22" is for devs only, also should be more new node...
-- Test WebKit 

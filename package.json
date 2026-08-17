@@ -62,7 +62,7 @@
     "prepack": "pnpm run build"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "devDependencies": {
     "@jsonjoy.com/json-path": "^18.28.0",
@@ -70,7 +70,7 @@
     "@types/jsdom": "^27.0.0",
     "esbuild": "^0.28.1",
     "jsdom": "^27.1.0",
-    "node": "^26.5.1",
+    "node": "^24.14.1",
     "typescript": "^7.0.2"
   }
 }

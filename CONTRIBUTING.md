@@ -5,7 +5,7 @@ Small fixes can go directly to a pull request.
 
 ## Development
 
-Lumi requires Node.js 22 or newer.
+Lumi requires Node.js 24 or newer.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -13,8 +13,8 @@ pnpm run lint
 pnpm test
 pnpm run benchmark
 pnpm run test:package
-pnpm exec playwright install chromium firefox
-pnpm run test:browser --project=chromium --project=firefox
+pnpm exec playwright install chromium firefox webkit
+pnpm run test:browser --project=chromium --project=firefox --project=webkit
 ```
 
 `pnpm run benchmark` is a small, repeatable Node/jsdom performance baseline for

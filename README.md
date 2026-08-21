@@ -46,7 +46,7 @@ Without a build step, load the browser bundle from a CDN:
 
 ```html
 <script type="module">
-  import {component, on, prop, text} from 'https://cdn.jsdelivr.net/npm/@thlibjs/lumi@0.1.0/dist/lumi.js'
+  import {component, on, prop, text} from 'https://cdn.jsdelivr.net/npm/@thlibjs/lumi@0.1.1/dist/lumi.js'
 </script>
 ```
 

@@ -6,7 +6,7 @@ import type {PageData} from '../page.js'
 import type {NavigationData} from '../view-data.js'
 
 export default {
-  template: document.querySelector('#navigation-view'),
+  source: document.querySelector('#navigation-view'),
   present: data => ({
     route: data.route,
     projectCount: data.projects.length,

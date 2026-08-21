@@ -1,6 +1,6 @@
 // @ts-check
 
-import { assertElement, cloneTemplateRoot } from './dom.js'
+import { assertElement, cloneSourceRoot } from './dom.js'
 import { connectEventBindings, getEventBindingDescriptor } from './events.js'
 import {
   connectDomBindings,
@@ -41,7 +41,7 @@ export function prepareMounted(mounted, data) {
 }
 
 /**
- * Defines a reusable component without changing its template.
+ * Defines a reusable component without changing its source.
  *
  * @template Data
  * @param {import('./types.js').ComponentOptions<Data>} options
@@ -53,7 +53,7 @@ export function component(options) {
   return Object.freeze({
     mount(target) {
       assertElement(target, 'mount target')
-      const root = cloneTemplateRoot(options.template)
+      const root = cloneSourceRoot(options.source)
       const previousChildren = Array.from(target.childNodes)
       target.replaceChildren(root)
 

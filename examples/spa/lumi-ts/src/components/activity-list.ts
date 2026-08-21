@@ -5,7 +5,7 @@ import type {DefinitionOptions} from '../components.js'
 import type {ActivityListData} from '../view-data.js'
 
 export default {
-  template: document.querySelector('#activity-list'),
+  source: document.querySelector('#activity-list'),
   present: activities => ({activities}),
   bindings: [
     repeat<Activity, ActivityListData>('.activity-item', ({data}) => data.activities, [

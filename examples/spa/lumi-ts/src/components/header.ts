@@ -6,7 +6,7 @@ import type {PageData} from '../page.js'
 import type {HeaderData} from '../view-data.js'
 
 export default {
-  template: document.querySelector('#header-view'),
+  source: document.querySelector('#header-view'),
   present: data => ({
     workspace: 'Luminate',
     userName: 'Freddy Fraggin',

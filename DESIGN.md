@@ -229,7 +229,7 @@ adapter:
 const slot = document.querySelector('#counter-slot')
 
 const counter = component({
-  template: document.querySelector('#counter'),
+  source: document.querySelector('#counter'),
   bindings: [
     text(
       '[data-path]',
@@ -290,8 +290,9 @@ not required.
 
 ## What an update actually does
 
-Mounting happens once. The template is cloned, replaces the mount target's
-existing contents, and has its bindings connected to that component boundary.
+Mounting happens once. The parsed DOM source is cloned, replaces the mount
+target's existing contents, and has its bindings connected to that component
+boundary.
 Scalar selectors are resolved again for each explicit update, so structural
 rules may create or remove later scalar targets without leaving stale
 references to detached nodes.
@@ -612,7 +613,7 @@ Changing pages selects a different composition of component instances. It
 does not require a new kind of component.
 
 The SPA example uses a small application-owned registry so each script can
-declare `template`, `bindings`, and `present` beside its native template. Its
+declare `source`, `bindings`, and `present` beside its native template. Its
 application module holds flat shell and route placement plans. Every plan entry
 explicitly names `at`, the registered definition to `use`, and an optional
 data-selection function. One plan loop derives all presentations and calls the
@@ -784,7 +785,8 @@ The design must not:
 
 The design remains intact only if all of these stay true:
 
-- A component template is valid ordinary HTML.
+- A component source is parsed DOM from a native template, document fragment,
+  or element.
 - Computed component rules are valid ordinary JavaScript or TypeScript.
 - No parser or syntax transform is needed to understand component
   behavior.

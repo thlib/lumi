@@ -32,7 +32,7 @@
       import {define, emailValidation, update} from './demo-app.js'
 
       define('appShell', {
-        template: document.querySelector('#app-shell'),
+        source: document.querySelector('#app-shell'),
         present: data => ({
           navOpen: data.navOpen,
         }),
@@ -95,7 +95,7 @@
       import {define, update} from './demo-app.js'
 
       define('header', {
-        template: document.querySelector('#header-view'),
+        source: document.querySelector('#header-view'),
         present: data => ({
           workspace: 'Luminate',
           userName: 'Freddy Fraggin',
@@ -171,7 +171,7 @@
       // Each link already carries its route in href, so the bindings read the
       // document rather than a parallel attribute.
       define('navigation', {
-        template: document.querySelector('#navigation-view'),
+        source: document.querySelector('#navigation-view'),
         present: data => ({
           route: data.route,
           projectCount: data.projects.length,
@@ -388,7 +388,7 @@
         const toastTimers = new Map()
 
         return {
-          template: document.querySelector('#teams-view'),
+          source: document.querySelector('#teams-view'),
           present: data => {
             const selectedMember = data.members.find(
               member => member.id === data.selectedMemberId,
@@ -512,7 +512,7 @@
       import {define} from './demo-app.js'
 
       define('projectList', {
-        template: document.querySelector('#project-list'),
+        source: document.querySelector('#project-list'),
         present: projects => ({projects}),
         bindings: [
           repeat('.project-card', ({data}) => data.projects, [
@@ -551,7 +551,7 @@
       import {define} from './demo-app.js'
 
       define('activityList', {
-        template: document.querySelector('#activity-list'),
+        source: document.querySelector('#activity-list'),
         present: activities => ({activities}),
         bindings: [
           repeat('.activity-item', ({data}) => data.activities, [
@@ -650,7 +650,7 @@
       const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
       define('overview', {
-        template: document.querySelector('#overview-view'),
+        source: document.querySelector('#overview-view'),
         present: data => ({
           ...overviewDetails(data.now),
           metrics: data.metrics,
@@ -705,7 +705,7 @@
       import {define, update} from './demo-app.js'
 
       define('projects', {
-        template: document.querySelector('#projects-view'),
+        source: document.querySelector('#projects-view'),
         present: data => {
           const projects = data.projects.filter(
             project => data.filter === 'all'
@@ -789,7 +789,7 @@
       } from './demo-app.js'
 
       define('records', {
-        template: document.querySelector('#records-view'),
+        source: document.querySelector('#records-view'),
         present: data => {
           const records = orderLargeRecords(
             filterLargeRecords(data.recordFilter),
@@ -890,7 +890,7 @@
       import {define} from './demo-app.js'
 
       define('activityPage', {
-        template: document.querySelector('#activity-page'),
+        source: document.querySelector('#activity-page'),
         present: data => ({
           count: `${data.activities.length} updates`,
         }),

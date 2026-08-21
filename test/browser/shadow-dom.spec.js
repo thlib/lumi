@@ -54,7 +54,7 @@ test('bindings plan and render through an open shadow root', async ({
     const template = document.createElement('template')
     template.innerHTML = '<shadow-contract></shadow-contract>'
     const mounted = component({
-      template,
+      source: template,
       bindings: [
         prop(
           '.shell',
@@ -110,7 +110,7 @@ test('events route through open shadow roots and clean up', async ({
     /** @type {Array<{type: string, tag: string}>} */
     const handled = []
     const mounted = component({
-      template,
+      source: template,
       bindings: [
         on('.action', 'click', (nativeEvent, element) => {
           handled.push({

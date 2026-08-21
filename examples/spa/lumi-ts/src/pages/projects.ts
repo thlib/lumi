@@ -6,7 +6,7 @@ import type {PageData} from '../page.js'
 import type {ProjectsData} from '../view-data.js'
 
 export default {
-  template: document.querySelector('#projects-view'),
+  source: document.querySelector('#projects-view'),
   present: data => {
     const projects = data.projects.filter(project => (
       data.filter === 'all' || project.status.toLowerCase() === data.filter

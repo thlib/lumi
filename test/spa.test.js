@@ -107,7 +107,7 @@ test('keeps only the active SPA page connected to the document', () => {
       countPresentation('appShell')
       return {route: data.route}
     },
-    template: createTemplate(document, `
+    source: createTemplate(document, `
       <div id="shell">
         <div id="header"></div>
         <aside id="sidebar"></aside>
@@ -185,7 +185,7 @@ test('keeps only the active SPA page connected to the document', () => {
         countPresentation(name)
         return `${name}: ${data.value}`
       },
-      template: createTemplate(
+      source: createTemplate(
         document,
         `<section id="${name}" data-page="${name}">
           <span class="page-value">Not presented</span>
@@ -253,7 +253,7 @@ function createTemplate(document, markup) {
  */
 function emptyDefinition(document, markup) {
   return {
-    template: createTemplate(document, markup),
+    source: createTemplate(document, markup),
     present: () => ({}),
   }
 }

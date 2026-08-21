@@ -145,14 +145,16 @@ in control of the surrounding responsibilities.
 The experimental implementation is plain JavaScript with no runtime
 dependencies.
 
-It currently supports template mounting, scalar bindings, positional and
-keyed repetition from array projections, nested components, and bindings
+It currently supports parsed-DOM source mounting, scalar bindings, positional
+and keyed repetition from array projections, nested components, and bindings
 through open Shadow DOM. Managed event bindings route native events at the
 component boundary, or follow matching elements when a binding declares
 `{at: 'elements'}`, without introducing a synthetic event system.
 
 Mounting replaces the target's existing contents with a fresh clone of the
-component template. Array repetition preserves identity by position unless
+component source. A source may be a native `<template>`, `DocumentFragment`,
+or `Element`; Lumi always clones it and never infers adoption from its form or
+connection state. Array repetition preserves identity by position unless
 the application gives `repeat` an explicit key projection. Lumi does not
 infer keys from item properties or object identity.
 
@@ -183,7 +185,7 @@ type CounterData = {
 }
 
 const options: ComponentOptions<CounterData> = {
-  template: document.querySelector('#counter'),
+  source: document.querySelector('#counter'),
   bindings: [
     text('output', ({data}, output) => {
       // data is CounterData; output is HTMLOutputElement.
@@ -266,7 +268,7 @@ function bindFields() {
 }
 
 const counter = component({
-  template,
+  source: template,
   bindings: [bindFields()],
 })
 ```

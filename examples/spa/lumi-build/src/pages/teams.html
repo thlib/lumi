@@ -189,7 +189,7 @@
     const toastTimers = new Map()
 
     return {
-      template: document.querySelector('#teams-view'),
+      source: document.querySelector('#teams-view'),
       present: data => {
         const selectedMember = data.members.find(
           member => member.id === data.selectedMemberId,

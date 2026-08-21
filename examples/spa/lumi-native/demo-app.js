@@ -96,7 +96,7 @@ export {emailValidation, emailValidationMessage} from './email-validation.js'
 /**
  * @template [Data=any]
  * @typedef {{
- *   template: HTMLTemplateElement | null,
+ *   source: import('../../../dist/lumi.js').ComponentSource | null,
  *   bindings?: ReadonlyArray<import('../../../dist/lumi.js').Binding<any>>,
  *   present: (data: Data) => any,
  * }} DefinitionOptions
@@ -129,7 +129,7 @@ export {emailValidation, emailValidationMessage} from './email-validation.js'
 const definitions = new Map()
 
 /**
- * Registers one component's template, behavior, and presentation function.
+ * Registers one component's source, behavior, and presentation function.
  *
  * @param {string} name
  * @param {DefinitionOptions | (() => DefinitionOptions)} declaration
@@ -143,8 +143,8 @@ export function define(name, declaration) {
     ? declaration()
     : declaration
   const renderer = component(options.bindings === undefined
-    ? {template: options.template}
-    : {template: options.template, bindings: options.bindings})
+    ? {source: options.source}
+    : {source: options.source, bindings: options.bindings})
 
   definitions.set(name, {
     mount: renderer.mount,

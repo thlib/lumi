@@ -117,7 +117,7 @@ function scalarScenario({bindings: bindingCount, changing}) {
     return text(`.value-${index}`, ({data}) => /** @type {string} */ (data))
   })
   const mounted = component({
-    template: createTemplate(document, `<section>${markup}</section>`),
+    source: createTemplate(document, `<section>${markup}</section>`),
     bindings,
   }).mount(document.createElement('div'))
 
@@ -148,7 +148,7 @@ function multiMatchScenario(changing) {
   const {document, close} = createDocument()
   const markup = '<output class="value"></output>'.repeat(32)
   const mounted = component({
-    template: createTemplate(document, `<section>${markup}</section>`),
+    source: createTemplate(document, `<section>${markup}</section>`),
     bindings: [text('.value', ({data}) => /** @type {string} */ (data))],
   }).mount(document.createElement('div'))
 
@@ -177,7 +177,7 @@ function multiMatchScenario(changing) {
 function listScenario(resize) {
   const {document, close} = createDocument()
   const mounted = component({
-    template: createTemplate(
+    source: createTemplate(
       document,
       '<ul><li class="item">default</li></ul>',
     ),
@@ -224,7 +224,7 @@ function routedEventScenario() {
   const {document, close} = createDocument()
   const inertNodes = '<button type="button">Action</button>'.repeat(100)
   const mounted = component({
-    template: createTemplate(
+    source: createTemplate(
       document,
       `<section><output class="value"></output>${inertNodes}</section>`,
     ),

@@ -525,28 +525,62 @@ function pairChildren(sources, targets, pair) {
 /**
  * Clones the single element that defines a component boundary.
  *
- * @param {HTMLTemplateElement | null} template
+ * A template contributes its inert content. A fragment contributes its
+ * children. An element contributes itself. The source is never consumed or
+ * inserted into the mounted document.
+ *
+ * @param {import('./types.js').ComponentSource | null} source
  * @returns {Element}
- * @throws {TypeError} When the template does not contain exactly one root
- * element.
+ * @throws {TypeError} When the source is not parsed DOM or does not provide
+ * exactly one root element.
  */
-export function cloneTemplateRoot(template) {
-  if (
-    template === null
-    || typeof template !== 'object'
-    || template.localName !== 'template'
-    || !('content' in template)
-  ) {
-    throw new TypeError('Lumi component template must be a <template> element')
+export function cloneSourceRoot(source) {
+  if (source === null || typeof source !== 'object') {
+    throw new TypeError(
+      'Lumi component source must be a <template>, DocumentFragment, or Element',
+    )
   }
 
-  const fragment = /** @type {DocumentFragment} */ (
-    template.content.cloneNode(true)
+  if (source.nodeType === 1) {
+    const el = /** @type {Element} */ (source)
+
+    if (el.localName === 'template' && 'content' in el) {
+      const template = /** @type {HTMLTemplateElement} */ (
+        /** @type {unknown} */ (el)
+      )
+      return cloneFragmentRoot(template.content)
+    }
+
+    return /** @type {Element} */ (el.cloneNode(true))
+  }
+
+  if (source.nodeType === 11) {
+    return cloneFragmentRoot(/** @type {DocumentFragment} */ (source))
+  }
+
+  throw new TypeError(
+    'Lumi component source must be a <template>, DocumentFragment, or Element',
   )
+}
+
+/**
+ * @param {DocumentFragment} source
+ * @returns {Element}
+ */
+function cloneFragmentRoot(source) {
+  const fragment = 'host' in source
+    ? source.ownerDocument.createDocumentFragment()
+    : /** @type {DocumentFragment} */ (source.cloneNode(true))
+
+  if ('host' in source) {
+    for (const child of source.childNodes) {
+      fragment.append(child.cloneNode(true))
+    }
+  }
 
   if (fragment.childElementCount !== 1) {
     throw new TypeError(
-      'Lumi component template must contain exactly one root element',
+      'Lumi component source must provide exactly one root element',
     )
   }
 

@@ -10,7 +10,7 @@ import {component} from '../../../../dist/lumi.js'
 /**
  * @template [Data=any]
  * @typedef {{
- *   template: HTMLTemplateElement | null,
+ *   source: import('../../../../dist/lumi.js').ComponentSource | null,
  *   bindings?: ReadonlyArray<import('../../../../dist/lumi.js').Binding<any>>,
  *   present: (data: Data) => any,
  * }} DefinitionOptions
@@ -44,8 +44,8 @@ export function installDefinitions(declarations) {
       ? declaration()
       : declaration
     const renderer = component(options.bindings === undefined
-      ? {template: options.template}
-      : {template: options.template, bindings: options.bindings})
+      ? {source: options.source}
+      : {source: options.source, bindings: options.bindings})
 
     definitions.set(name, {
       mount: renderer.mount,

@@ -42,7 +42,7 @@
   } from '../app.js'
 
   export default {
-    template: document.querySelector('#records-view'),
+    source: document.querySelector('#records-view'),
     present: data => {
       const records = orderLargeRecords(
         filterLargeRecords(data.recordFilter),

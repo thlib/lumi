@@ -18,7 +18,7 @@ The supported module is `@thlibjs/lumi`. It exports:
 - `classToggle`
 - `style`
 - `child`
-- The `Component`, `ComponentOptions`, `MountedComponent`, and
+- The `Component`, `ComponentOptions`, `ComponentSource`, `MountedComponent`, and
   `ProjectionContext` TypeScript types, plus `EventBindingOptions`,
   `EventBindingLocation`, and `EventBindingFrequency`
 
@@ -54,7 +54,7 @@ function presentCounter(data) {
 const slot = document.querySelector('#counter-slot')
 
 const counter = component({
-  template: document.querySelector('template'),
+  source: document.querySelector('template'),
   bindings: [
     text('output span', ({data}) => data.count),
     prop(
@@ -120,14 +120,21 @@ are not part of the public API.
 ## `component(options)`
 
 `component` creates a reusable definition. It does not clone or modify the
-template until an instance is mounted.
+source until an instance is mounted.
 
-The template must contain exactly one root element. That root is the component
-boundary used for scoped selectors and nested rendering.
+The `source` option accepts parsed DOM in one of these forms:
+
+- An `HTMLTemplateElement`. Its inert `content` is cloned.
+- A `DocumentFragment`. Its children are cloned.
+- An `Element`. The element itself is cloned.
+
+A source must provide exactly one root element. That root is the component
+boundary used for scoped selectors and nested rendering. Lumi never consumes,
+moves, or inserts the source itself.
 
 ```js
 const definition = component({
-  template,
+  source: template,
   bindings: [],
 })
 ```
@@ -136,15 +143,16 @@ The bindings array is optional.
 
 ### `definition.mount(target)`
 
-`mount` deep-clones the template, replaces the target's existing contents with
+`mount` deep-clones the source, replaces the target's existing contents with
 its single root element, resolves the bindings, and returns a mounted
 component. The mounted component owns the target contents for its lifetime. If
 connecting a binding fails, Lumi removes the clone and restores the preceding
 target contents.
 
-The target and template may be direct `querySelector` results. A clear error is
-thrown if either is missing or the template does not contain exactly one root
-element.
+The target and an element or template source may be direct `querySelector`
+results. A clear error is thrown if either is missing or the source does not
+provide exactly one root element. A connected and a detached element have the
+same source semantics: `mount` clones them and does not adopt them.
 
 ### `mounted.update(data)`
 
@@ -529,7 +537,7 @@ object identity.
 
 Array cardinality cannot replace the mounted component root, whose public
 boundary is one persistent `Element`. It applies to descendants of that root.
-The repeatable target must exist in the component template to provide a
+The repeatable target must exist in the component source to provide a
 pristine element to clone. Projection and coordinate validation complete
 before the live DOM changes.
 
@@ -601,7 +609,7 @@ function bindDataPaths() {
 }
 
 const definition = component({
-  template,
+  source: template,
   bindings: [
     ...bindDataPaths(),
   ],
@@ -669,7 +677,7 @@ should not write a property or subtree already owned by a binding.
 
 An error is thrown when:
 
-- A template has zero or multiple root elements.
+- A component source has zero or multiple root elements.
 - A `child` container selector does not match within the component root.
   Unmatched scalar selectors are no-ops.
 - A child container already contains an element.

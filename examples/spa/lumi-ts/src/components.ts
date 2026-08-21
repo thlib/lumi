@@ -2,7 +2,11 @@
 
 import {component} from '../../../../dist/lumi.js'
 
-import type {Binding, MountedComponent} from '../../../../dist/lumi.js'
+import type {
+  Binding,
+  ComponentSource,
+  MountedComponent,
+} from '../../../../dist/lumi.js'
 
 /**
  * Demo-owned registry populated by the view-document build. Page
@@ -10,7 +14,7 @@ import type {Binding, MountedComponent} from '../../../../dist/lumi.js'
  */
 
 export interface DefinitionOptions<Data, Presentation = Data> {
-  template: HTMLTemplateElement | null
+  source: ComponentSource | null
   bindings?: readonly Binding<Presentation>[]
   present(data: Data): Presentation
 }
@@ -42,8 +46,8 @@ export function installDefinitions(
       ? declaration()
       : declaration
     const renderer = component(options.bindings === undefined
-      ? {template: options.template}
-      : {template: options.template, bindings: options.bindings})
+      ? {source: options.source}
+      : {source: options.source, bindings: options.bindings})
 
     definitions.set(name, {
       mount: renderer.mount,

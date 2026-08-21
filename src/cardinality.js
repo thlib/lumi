@@ -209,7 +209,7 @@ function compileScope(root, runtimes, runtimesByDescriptor, ownedSubtrees) {
     if (targets.length === 0) {
       throw new TypeError(
         `Lumi repeat selector "${runtime.descriptor.selector}" must match `
-        + 'the component template',
+        + 'the component source',
       )
     }
 
@@ -260,7 +260,7 @@ function compileScope(root, runtimes, runtimesByDescriptor, ownedSubtrees) {
     region.path = elementPath(
       parentTarget,
       region.target,
-      'Lumi binding targets do not share a component template',
+      'Lumi binding targets do not share a component source',
     )
 
     if (parent === null) {
@@ -308,7 +308,7 @@ function compileScope(root, runtimes, runtimesByDescriptor, ownedSubtrees) {
         path: elementPath(
           parentTarget,
           target,
-          'Lumi binding targets do not share a component template',
+          'Lumi binding targets do not share a component source',
         ),
       }
 
@@ -972,7 +972,7 @@ function prepareDynamicValue(
   ) {
     throw new TypeError(
       'Lumi outerHTML binding targets created during array planning '
-      + 'must exist in the component template',
+      + 'must exist in the component source',
     )
   }
 

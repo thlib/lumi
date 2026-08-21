@@ -40,7 +40,7 @@ test('text and TrustedHTML properties work with Trusted Types enforced', async (
       document.querySelector('#trusted-types')
     )
     const mounted = component({
-      template,
+      source: template,
       bindings: [
         text('output', ({data}) => /** @type {{text: string}} */ (data).text),
         prop('.markup', ({data}) => /** @type {{markup: unknown}} */ (data).markup, 'innerHTML'),
@@ -99,7 +99,7 @@ test('an unrelated update preserves an unbound input value and focus', async ({
     `
     /** @type {import('../../src/index.js').ComponentOptions<{ count: number }>} */
     const options = {
-      template,
+      source: template,
       bindings: [text('output', ({data}) => data.count)],
     }
     const mounted = component(options)
@@ -129,7 +129,7 @@ test('a bound input value is restored from authoritative data', async ({
     template.innerHTML = '<input name="title">'
     /** @type {import('../../src/index.js').ComponentOptions<{ title: string }>} */
     const options = {
-      template,
+      source: template,
       bindings: [prop('input', ({data}) => data.title, 'value')],
     }
     const mounted = component(options)
@@ -165,7 +165,7 @@ test('class and standard style bindings use token-specific paths', async ({
      *   background: string,
      * }>} */
     const options = {
-      template,
+      source: template,
       bindings: [
         classToggle('.control', 'active', ({data}) => data.active),
         style('.control', 'background-color', ({data}) => data.background),
@@ -241,7 +241,7 @@ test('array append and truncation preserve surviving rows and form state', async
      *   items: Array<{ name: string }>
      * }>} */
     const options = {
-      template,
+      source: template,
       bindings: [
         repeat('.row', ({data}) => /** @type {{items: Array<{name: string}>}} */ (data).items),
         text('.name', ({item}) => item.name),
@@ -318,7 +318,7 @@ test('keyed rows preserve identity and form state when their order changes', asy
      *   items: Array<{id: string, name: string}>
      * }>} */
     const options = {
-      template,
+      source: template,
       bindings: [
         repeat(
           '.row',
@@ -425,7 +425,7 @@ test('a custom element receives only necessary writes and one lifecycle', async 
      *   status: string
      * }>} */
     const options = {
-      template,
+      source: template,
       bindings: [
         prop('contract-probe', ({data}) => data.value, 'value'),
         attr('contract-probe', 'status', ({data}) => data.status),
@@ -471,7 +471,7 @@ test('a preparation failure leaves the live form and focus unchanged', async ({
      *   fail: boolean
      * }>} */
     const options = {
-      template,
+      source: template,
       bindings: [
         text('.first', ({data}) => data.first),
         text('.second', ({data}) => {
@@ -536,7 +536,7 @@ test('element bindings observe native non-bubbling events', async ({ page }) => 
     /** @type {boolean | null} */
     let passiveCancelled = null
     const mounted = component({
-      template,
+      source: template,
       bindings: [
         on('input', 'focus', event => {
           focused.push(/** @type {Element} */ (event.currentTarget).className)
@@ -590,7 +590,7 @@ test('binding-level once consumes one declaration for the mounted component', as
     /** @type {string[]} */
     const order = []
     const mounted = component({
-      template,
+      source: template,
       bindings: [
         repeat('.row', ({data}) => /** @type {{rows: object[]}} */ (data).rows),
         on('button', 'click', () => order.push('once'), { freq: 'once' }),

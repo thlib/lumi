@@ -10,6 +10,7 @@ import {
   text,
   type Component,
   type ComponentOptions,
+  type ComponentSource,
   type EventBindingOptions,
   type MountedComponent,
   type ProjectionContext,
@@ -24,13 +25,21 @@ type CounterData = {
 const template = document.createElement('template')
 template.innerHTML = '<output></output>'
 
+const elementSource: ComponentSource = document.createElement('output')
+const fragmentSource: ComponentSource = template.content
+void elementSource
+void fragmentSource
+
+// @ts-expect-error component sources must already be parsed DOM.
+component({source: '<output></output>'})
+
 const mediaOptions: EventBindingOptions = {
   at: 'elements',
   freq: 'once',
 }
 
 const options: ComponentOptions<CounterData> = {
-  template,
+  source: template,
   bindings: [
     text<CounterData, CounterData, 'output'>('output', ({data}, element) => {
       const output: HTMLOutputElement = element
@@ -86,7 +95,7 @@ type PageData = { profile: ChildData }
 declare const childComponent: Component<ChildData>
 
 const pageOptions: ComponentOptions<PageData> = {
-  template,
+  source: template,
   bindings: [
     child('.profile', childComponent, page => page.profile),
   ],
@@ -98,7 +107,7 @@ type Person = {name: string}
 type PeoplePage = {people: Person[], heading: string}
 
 const peopleOptions: ComponentOptions<PeoplePage> = {
-  template,
+  source: template,
   bindings: [
     repeat<Person, PeoplePage>('li', ({data}, el) => {
       const item: Element = el

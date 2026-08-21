@@ -13,7 +13,6 @@
 - `data-form-kind="create-team"` is wrong.
 - `data-toast="create"` with what msg?
 - remove the actual `data-path` attr from the final html
-- lumi should accept a DomFragment instead of a template too, and another element as the template too.
 - Mounting should hydrate - not destroy
 - Can we make the lumi source smaller without losing functionality or performance?
 - Consider assigning clear ownership to a component subtree because it's simpler and more reliable... but mixed ownership can be valuable.

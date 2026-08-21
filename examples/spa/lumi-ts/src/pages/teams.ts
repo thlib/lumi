@@ -17,7 +17,7 @@ export default function teams(): DefinitionOptions<PageData, TeamsData> {
   const toastTimers = new Map<string, number>()
 
   return {
-    template: document.querySelector('#teams-view'),
+    source: document.querySelector('#teams-view'),
     present: data => {
       const selectedMember = data.members.find(
         member => member.id === data.selectedMemberId,

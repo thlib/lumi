@@ -7,7 +7,7 @@ import type {PageData} from '../page.js'
 import type {RecordsData} from '../view-data.js'
 
 export default {
-  template: document.querySelector('#records-view'),
+  source: document.querySelector('#records-view'),
   present: data => {
     const records = orderLargeRecords(
       filterLargeRecords(data.recordFilter),

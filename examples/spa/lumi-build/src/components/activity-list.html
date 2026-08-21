@@ -18,7 +18,7 @@
   import {attr, repeat, text} from '../app.js'
 
   export default {
-    template: document.querySelector('#activity-list'),
+    source: document.querySelector('#activity-list'),
     present: activities => ({activities}),
     bindings: [
       repeat('.activity-item', ({data}) => data.activities, [

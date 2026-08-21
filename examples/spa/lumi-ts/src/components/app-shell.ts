@@ -7,7 +7,7 @@ import type {PageData} from '../page.js'
 import type {AppShellData} from '../view-data.js'
 
 export default {
-  template: document.querySelector('#app-shell'),
+  source: document.querySelector('#app-shell'),
   present: data => ({navOpen: data.navOpen}),
   bindings: [
     ...emailValidation,

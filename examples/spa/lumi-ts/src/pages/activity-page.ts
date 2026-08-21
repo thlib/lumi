@@ -5,7 +5,7 @@ import type {PageData} from '../page.js'
 import type {ActivityPageData} from '../view-data.js'
 
 export default {
-  template: document.querySelector('#activity-page'),
+  source: document.querySelector('#activity-page'),
   present: data => ({count: `${data.activities.length} updates`}),
   bindings: [
     text<ActivityPageData, ActivityPageData>(

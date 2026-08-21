@@ -6,6 +6,10 @@
  */
 
 /**
+ * @typedef {import('./types.js').ComponentSource} ComponentSource
+ */
+
+/**
  * @template Data
  * @typedef {import('./types.js').ComponentOptions<Data>} ComponentOptions
  */

@@ -26,7 +26,7 @@ template.innerHTML = '<output></output>'
 
 /** @type {import('../src/index.js').ComponentOptions<CounterData>} */
 const options = {
-  template,
+  source: template,
   bindings: [
     text('output', (/** @type {CounterContext} */ {data}) => data.count),
     prop('output', (/** @type {CounterContext} */ {data}) => data.count, 'value'),

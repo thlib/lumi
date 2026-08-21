@@ -98,9 +98,18 @@
  */
 
 /**
+ * Parsed DOM that a component clones to create each instance.
+ *
+ * A template contributes its content, a fragment contributes its children,
+ * and an element contributes itself.
+ *
+ * @typedef {HTMLTemplateElement | DocumentFragment | Element} ComponentSource
+ */
+
+/**
  * @template Data
  * @typedef {object} ComponentOptions
- * @property {HTMLTemplateElement | null} template
+ * @property {ComponentSource | null} source
  * @property {ReadonlyArray<Binding<Data>>} [bindings]
  */
 

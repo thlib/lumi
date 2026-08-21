@@ -17,7 +17,7 @@ export function mountApplication(
   target: Element | null,
 ): MountedComponent<Presentation> {
   return component<Presentation>({
-    template: composeTemplate('app-shell'),
+    source: composeTemplate('app-shell'),
     bindings: [
       repeatBehavior,
       pathBehavior,

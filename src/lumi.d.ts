@@ -50,8 +50,10 @@ export type EventBindingOptions = Readonly<{
   freq?: EventBindingFrequency
 }>
 
+export type ComponentSource = HTMLTemplateElement | DocumentFragment | Element
+
 export type ComponentOptions<Data> = {
-  template: HTMLTemplateElement | null
+  source: ComponentSource | null
   bindings?: ReadonlyArray<Binding<Data>>
 }
 

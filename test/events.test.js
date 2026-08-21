@@ -151,7 +151,7 @@ test('routes a component event to the closest matching element', () => {
   /** @type {Array<[Event, Element]>} */
   const handled = []
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       on('.save', 'click', (event, element) => {
         handled.push([event, element])
@@ -186,7 +186,7 @@ test('exposes the routing boundary as currentTarget during dispatch', () => {
   /** @type {Array<EventTarget | null>} */
   const currentTargets = []
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       on('.save', 'click', event => {
         currentTargets.push(event.currentTarget)
@@ -208,7 +208,7 @@ test('matches the mounted component root', () => {
   /** @type {Element[]} */
   const handled = []
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       on('.counter', 'click', (_event, element) => {
         handled.push(element)
@@ -235,7 +235,7 @@ test('invokes one binding once per native event and both matching bindings', () 
   /** @type {string[]} */
   const order = []
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       on('.box', 'click', (_event, element) => {
         order.push(`box:${element.getAttribute('data-track')}`)
@@ -264,7 +264,7 @@ test('shares one native listener across compatible component bindings', () => {
   `)
   const { added } = recordListeners(window, () => {
     return component({
-      template,
+      source: template,
       bindings: [
         on('.save', 'click', () => {}),
         on('.delete', 'click', () => {}),
@@ -292,7 +292,7 @@ test('keeps routing elements created by later updates', () => {
   /** @type {Element[]} */
   const handled = []
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       repeat('.item', ({data}) => /** @type {{items: object[]}} */ (data).items),
       on('.item button', 'click', (_event, element) => {
@@ -319,7 +319,7 @@ test('reports a routed handler error without stopping other bindings', () => {
   /** @type {string[]} */
   const order = []
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       on('.save', 'click', () => {
         order.push('first')
@@ -347,7 +347,7 @@ test('stops remaining component bindings when a handler unmounts', () => {
   /** @type {string[]} */
   const order = []
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       on('.save', 'click', () => {
         order.push('first')
@@ -378,7 +378,7 @@ test('does not invoke a binding twice when a handler updates the component', () 
   /** @type {number[]} */
   const handled = []
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       repeat('.item', ({data}) => /** @type {{items: object[]}} */ (data).items),
       on('button', 'click', () => {
@@ -400,7 +400,7 @@ test('does not invoke a binding twice when a handler updates the component', () 
 test('does not match DOM owned by a nested component', () => {
   const { document, window } = createDocument()
   const childComponent = component({
-    template: createTemplate(document, `
+    source: createTemplate(document, `
       <article class="profile"><button type="button">Child</button></article>
     `),
     bindings: [],
@@ -414,7 +414,7 @@ test('does not match DOM owned by a nested component', () => {
   /** @type {string[]} */
   const handled = []
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       child('.slot', childComponent, () => ({})),
       on('button', 'click', (_event, element) => {
@@ -447,7 +447,7 @@ test('routes events inside open shadow roots exactly once', () => {
   /** @type {string[]} */
   const handled = []
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       on('.action', 'click', (_event, element) => {
         handled.push(element.localName)
@@ -491,7 +491,7 @@ test('shares current DOM topology with routed event reconciliation', () => {
   /** @type {string[]} */
   const handled = []
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       text('.value', ({data}) => /** @type {string} */ (data)),
       on('.action', 'click', () => {
@@ -528,7 +528,7 @@ test('maintains element listeners on every matching element', () => {
   /** @type {Array<EventTarget | null>} */
   const handled = []
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       repeat('.item', ({data}) => /** @type {{items: object[]}} */ (data).items),
       on('video', 'ended', event => {
@@ -572,7 +572,7 @@ test('keeps element listener membership when preparation fails', () => {
   /** @type {number} */
   let handledCount = 0
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       repeat(
         '.item',
@@ -609,7 +609,7 @@ test('applies element attachment semantics to nested matching elements', () => {
   /** @type {Array<EventTarget | null>} */
   const handled = []
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       on('.panel', 'click', event => {
         handled.push(event.currentTarget)
@@ -636,7 +636,7 @@ test('consumes a once binding for the mounted component lifetime', () => {
   /** @type {string[]} */
   const order = []
   const definition = component({
-    template,
+    source: template,
     bindings: [
       repeat('.item', ({data}) => /** @type {{items: object[]}} */ (data).items),
       on('button', 'click', () => {
@@ -682,7 +682,7 @@ test('consumes a once binding before invoking a throwing handler', () => {
   const failure = new Error('handler failed')
   let calls = 0
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       on('button', 'click', () => {
         calls += 1
@@ -708,7 +708,7 @@ test('cannot reenter a consumed once binding during dispatch', () => {
   `)
   let calls = 0
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       on('button', 'click', event => {
         calls += 1
@@ -737,7 +737,7 @@ test('a consumed once binding leaves sibling routes installed', () => {
   /** @type {string[]} */
   const order = []
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       on('button', 'click', () => order.push('once'), { freq: 'once' }),
       on('button', 'click', () => order.push('always')),
@@ -760,7 +760,7 @@ test('removes element listeners when a once binding is consumed', () => {
   `)
   let calls = 0
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       repeat('.item', ({data}) => /** @type {{items: object[]}} */ (data).items),
       on('video', 'ended', () => {
@@ -792,7 +792,7 @@ test('applies capture and passive to the native listener', () => {
   /** @type {string[]} */
   const order = []
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       on('button', 'click', () => order.push('bubble'), { at: 'elements' }),
       on('.viewport', 'click', () => order.push('capture'), {
@@ -819,7 +819,7 @@ test('preserves native cancellation for active listeners', () => {
   const { document, window } = createDocument()
   const template = createTemplate(document, '<form><button type="submit">Go</button></form>')
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       on('form', 'submit', event => {
         event.preventDefault()
@@ -840,7 +840,7 @@ test('does not translate one native event type into another', () => {
   const handled = []
   const { result: mounted, warnings } = recordWarnings(() => {
     return component({
-      template,
+      source: template,
       bindings: [
         on('input', 'focus', () => handled.push('focus')),
         on('.card', 'mouseenter', () => handled.push('mouseenter')),
@@ -881,7 +881,7 @@ test('routes custom events according to their native initialization', () => {
   /** @type {unknown[]} */
   const handled = []
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       on('.editor', 'record-saved', event => {
         handled.push(/** @type {CustomEvent} */ (event).detail)
@@ -957,7 +957,7 @@ test('rejects invalid event declarations', () => {
   target.append(document.createElement('p'))
 
   assert.throws(() => component({
-    template,
+    source: template,
     bindings: [on('((', 'click', () => {})],
   }).mount(target))
 
@@ -969,7 +969,7 @@ test('accepts a valid selector that currently has no matches', () => {
   const template = createTemplate(document, '<section></section>')
   let calls = 0
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       on('.later', 'click', () => {
         calls += 1
@@ -991,7 +991,7 @@ test('releases managed listeners when the component unmounts', () => {
     <section><video></video><button type="button">Go</button></section>
   `)
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       on('button', 'click', () => {}),
       on('video', 'ended', () => {}, { at: 'elements' }),

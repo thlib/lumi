@@ -114,7 +114,7 @@ function createTemplate(document, markup) {
  * @param {Data} data
  * @param {{
  *   target: Element | null,
- *   template: HTMLTemplateElement | null,
+ *   source: import('../src/types.js').ComponentSource | null,
  *   bindings?: ReadonlyArray<import('../src/types.js').Binding<Data>>
  * }} options
  */
@@ -218,7 +218,7 @@ test('delegates native events and removes handlers on unmount', () => {
   const handled = []
   const target = document.createElement('div')
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       on('.action', 'click', (nativeEvent, element) => {
         handled.push([nativeEvent, element])
@@ -256,7 +256,7 @@ test('event handlers follow elements repeated by repeat', () => {
   const handled = []
   const target = document.createElement('div')
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       repeat('.item', ({data}) => /** @type {{items: object[]}} */ (data).items),
       on('.item button', 'click', (_nativeEvent, element) => {
@@ -296,7 +296,7 @@ test('renders scalar bindings into persistent native DOM', () => {
 
   /** @type {import('../src/index.js').ComponentOptions<CounterData>} */
   const options = {
-    template,
+    source: template,
     bindings: [
       textData('.value', data => data.count),
       prop(
@@ -367,7 +367,7 @@ test('renders scalar bindings through open shadow roots', () => {
   window.customElements.define('shadow-counter', ShadowCounter)
   const template = createTemplate(document, '<shadow-counter></shadow-counter>')
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       prop(
         '.counter',
@@ -422,7 +422,7 @@ test('classToggle updates one token without repeated DOMTokenList work', () => {
     '<button class="control  base\tstate[1] state[1] tail "></button>',
   )
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       classToggle('.control', 'state[1]', data => data.active),
     ],
@@ -461,7 +461,7 @@ test('style updates a standard property and keeps other styles', () => {
     '<button class="control" style="color: blue"></button>',
   )
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       style('.control', 'background-color', data => data.background),
     ],
@@ -483,7 +483,7 @@ test('style uses CSSOM methods for custom properties', () => {
   const { document } = createDocument()
   const template = createTemplate(document, '<button class="control"></button>')
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       style('.control', '--tone', data => data.tone),
     ],
@@ -515,7 +515,7 @@ test('repeats targets inside open shadow roots', () => {
     /** @type {{ items: string[] }} */ ({ items: [] }),
     {
       target: document.body,
-      template: createTemplate(document, '<shadow-list></shadow-list>'),
+      source: createTemplate(document, '<shadow-list></shadow-list>'),
       bindings: [
         repeat('.item', ({data}) => data.items),
         text('.item', ({item}) => item),
@@ -566,11 +566,11 @@ test('mounts child components into open shadow roots', () => {
   window.customElements.define('shadow-host', ShadowHost)
   window.customElements.define('shadow-child', ShadowChild)
   const childComponent = component({
-    template: createTemplate(document, '<shadow-child></shadow-child>'),
+    source: createTemplate(document, '<shadow-child></shadow-child>'),
     bindings: [textData('.child-value', data => data)],
   })
   const mounted = component({
-    template: createTemplate(document, '<shadow-host></shadow-host>'),
+    source: createTemplate(document, '<shadow-host></shadow-host>'),
     bindings: [
       child('.child-slot', childComponent, data => data.child),
       textData('.parent-value', data => data.parent),
@@ -597,7 +597,7 @@ test('mounts child components into open shadow roots', () => {
 test('discovers an open shadow root attached between updates', () => {
   const { document } = createDocument()
   const mounted = component({
-    template: createTemplate(
+    source: createTemplate(
       document,
       '<section><div class="host"></div></section>',
     ),
@@ -634,7 +634,7 @@ test('rechecks shadow topology after a live setter changes it', () => {
 
   window.customElements.define('shadow-maker', ShadowMaker)
   const mounted = component({
-    template: createTemplate(document, `
+    source: createTemplate(document, `
       <section>
         <shadow-maker></shadow-maker>
         <output class="value">Default</output>
@@ -655,7 +655,7 @@ test('rechecks shadow topology after a live setter changes it', () => {
 test('checks light DOM shadow topology once per update phase', () => {
   const { document } = createDocument()
   const mounted = component({
-    template: createTemplate(document, `
+    source: createTemplate(document, `
       <section>
         <output class="first">Default</output>
         <output class="second">Default</output>
@@ -700,7 +700,7 @@ test('passes the planned matching element to scalar projections', () => {
   )
   const mounted = render({ count: 2 }, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       textData('output', (data, element) => {
         return `${element.getAttribute('data-field')}: ${data.count}`
@@ -722,7 +722,7 @@ test('repeats targets for array projection values', () => {
     /** @type {{ items: string[] }} */ ({ items: [] }),
     {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       repeat('.item', ({data}) => {
         projectionCount += 1
@@ -791,7 +791,7 @@ test('moves keyed repeat occurrences without exposing keys in the DOM', () => {
     ],
   }, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       repeat(
         '.item',
@@ -852,7 +852,7 @@ test('rejects duplicate repeat keys before changing the live DOM', () => {
     ],
   }, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       text('.status', ({data}) => data.status),
       repeat(
@@ -906,7 +906,7 @@ test('keeps repeat key projection failures recoverable', () => {
   )
   const mounted = render({items: [{id: 'ready'}]}, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       repeat(
         '.item',
@@ -949,7 +949,7 @@ test('evaluates each projection once with explicit repeat planning', () => {
     after: 0,
   }
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       textData('.before', data => {
         calls.before += 1
@@ -1019,7 +1019,7 @@ test('keeps failed repeat preparation recoverable', () => {
   let itemProjectionCount = 0
   let titleProjectionCount = 0
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       repeat('.item', ({data}) => {
         itemProjectionCount += 1
@@ -1067,7 +1067,7 @@ test('keeps repeat updates on the static cardinality path', () => {
     '<ul><li class="item">Default</li></ul>',
   )
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       repeat('.item', ({data}) => /** @type {{items: string[]}} */ (data).items),
       text('.item', ({item}) => item),
@@ -1113,7 +1113,7 @@ test('expands nested arrays through nested repeat targets', () => {
     }),
     {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       repeat('.group', ({data}) => /** @type {{groups: string[][]}} */ (data).groups),
       repeat('.name', ({item}) => /** @type {string[]} */ (/** @type {unknown} */ (item))),
@@ -1207,7 +1207,7 @@ test('validates complete array coordinates before changing live DOM', () => {
     hidden: [[false], [true]],
   }, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       repeat('.group', ({data}) => /** @type {{groups: string[][]}} */ (data).groups),
       repeat('.name', ({item}) => /** @type {string[]} */ (/** @type {unknown} */ (item))),
@@ -1241,7 +1241,7 @@ test('rejects repeat at the mounted component root', () => {
   )
   assert.throws(
     () => component({
-      template,
+      source: template,
       bindings: [repeat('output', ({data}) => /** @type {unknown[]} */ ((/** @type {{value: unknown[]}} */ (data)).value))],
     }).mount(document.createElement('div')),
     /cannot repeat a mounted component root/,
@@ -1312,7 +1312,7 @@ test('applies scalar bindings to every initial selector match', () => {
     },
   }, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       textData('.copy', (data, element) => dataFor(data, element).text),
       prop(
@@ -1371,7 +1371,7 @@ test('resolves descendant bindings after parent structure regardless of declarat
     name: 'Ada Lovelace',
   }, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       textData('.person .name', (data, element) => {
         projectedElement = element
@@ -1427,7 +1427,7 @@ test('resolves structurally created bindings inside repeat occurrences', () => {
     fail: false,
   }, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       repeat('.item', ({data}) => data.items, [
         text('.late', ({data, item}) => {
@@ -1522,7 +1522,7 @@ test('treats descendants removed by parent text as zero selector matches', () =>
   let descendantProjectionCount = 0
   const mounted = render({}, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       textData('.person .name', () => {
         descendantProjectionCount += 1
@@ -1551,7 +1551,7 @@ test('uses the last declaration for duplicate and overlapping scalar sinks', () 
     title: 'Initial title',
   }, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       textData('.shared', data => data.first),
       textData('.value', data => data.last),
@@ -1598,7 +1598,7 @@ test('orders structural properties before descendant selectors', () => {
     name: 'Katherine Johnson',
   }, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       textData('.person .name', (data, element) => {
         return `${element.getAttribute('data-prefix')}: ${data.name}`
@@ -1628,7 +1628,7 @@ test('keeps live parent structure unchanged when a planned descendant fails', ()
     fail: false,
   }, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       textData('.person .name', data => {
         if (data.fail) {
@@ -1687,7 +1687,7 @@ test('provides flat bindings with nested positional contexts', () => {
     shared: 'Global',
   }, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       text('.root', context => {
         contexts.push(context)
@@ -1749,7 +1749,7 @@ test('groups repeat bindings without changing occurrence contexts', () => {
     ],
   }, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       repeat('.group', ({data}) => data.groups, [
         repeat('.person', ({item}) => {
@@ -1783,7 +1783,7 @@ test('matches the repeated element as :scope in its binding list', () => {
   `)
   const mounted = render({items: ['First', 'Second']}, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       repeat('.item', ({data}) => data.items, [
         text(':scope', ({item}) => item),
@@ -1818,7 +1818,7 @@ test('warns once and preserves DOM for invalid repeat and text values', () => {
       label: 'Ready',
     }), {
       target: document.createElement('div'),
-      template,
+      source: template,
       bindings: [
         repeat('.item', ({data}) => /** @type {any} */ (data.items)),
         text('.item', ({item}) => /** @type {any} */ (item)),
@@ -1855,17 +1855,17 @@ test('rejects invalid repeat structure while mounting', () => {
 
   assert.throws(
     () => component({
-      template,
+      source: template,
       bindings: [repeat('output', () => [])],
     }).mount(document.createElement('div')),
     /cannot repeat a mounted component root/,
   )
   assert.throws(
     () => component({
-      template,
+      source: template,
       bindings: [repeat('.missing', () => [])],
     }).mount(document.createElement('div')),
-    /must match the component template/,
+    /must match the component source/,
   )
 })
 
@@ -1889,7 +1889,7 @@ test('allows application code to inject standard JSONPath nodelists', () => {
     ],
   }, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       repeat(
         '[data-repeat]',
@@ -1931,7 +1931,7 @@ test('does not repeat normalized innerHTML property writes', () => {
   const { document } = createDocument()
   const template = createTemplate(document, '<div></div>')
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       prop(
         'div',
@@ -1980,7 +1980,7 @@ test('allows independently attached native event handlers', () => {
 
   const mounted = render(data, {
     target,
-    template,
+    source: template,
     bindings: [
       textData('.value', data => data.count),
     ],
@@ -2008,7 +2008,7 @@ test('does not write an unchanged projected property', () => {
   )
   /** @type {import('../src/index.js').ComponentOptions<{ value: number }>} */
   const options = {
-    template,
+    source: template,
     bindings: [
       prop('button', data => data.value, 'lumiProbe'),
     ],
@@ -2042,7 +2042,7 @@ test('restores a bound property after the browser changes it', () => {
   const template = createTemplate(document, '<input type="text">')
   /** @type {import('../src/index.js').ComponentOptions<{ value: string }>} */
   const options = {
-    template,
+    source: template,
     bindings: [prop('input', data => data.value, 'value')],
   }
   const target = document.createElement('div')
@@ -2073,7 +2073,7 @@ test('does not construct custom elements merely to prepare scalar updates', () =
     '<planning-probe><span class="copy"></span></planning-probe>',
   )
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       textData('.copy', data => data.copy),
       prop(
@@ -2103,7 +2103,7 @@ test('projects parent data into a persistent child component', () => {
 
   /** @type {import('../src/index.js').ComponentOptions<{ name: string }>} */
   const childOptions = {
-    template: childTemplate,
+    source: childTemplate,
     bindings: [textData('.name', data => data.name)],
   }
   const childComponent = component(childOptions)
@@ -2118,7 +2118,7 @@ test('projects parent data into a persistent child component', () => {
 
   /** @type {import('../src/index.js').ComponentOptions<ParentData>} */
   const parentOptions = {
-    template: parentTemplate,
+    source: parentTemplate,
     bindings: [
       child('.child', childComponent, data => data.profile),
     ],
@@ -2142,7 +2142,7 @@ test('keeps parent scalar selectors outside child-owned subtrees', () => {
     '<strong class="name">Unknown</strong>',
   )
   const childComponent = component({
-    template: childTemplate,
+    source: childTemplate,
     bindings: [textData('.name', data => data.name)],
   })
   const parentTemplate = createTemplate(
@@ -2152,7 +2152,7 @@ test('keeps parent scalar selectors outside child-owned subtrees', () => {
   let parentProjectionCount = 0
   const mounted = render({ profile: { name: 'Ada' } }, {
     target: document.createElement('div'),
-    template: parentTemplate,
+    source: parentTemplate,
     bindings: [
       textData('.profile-slot .name', () => {
         parentProjectionCount += 1
@@ -2184,7 +2184,7 @@ test('rejects parent content writes that would replace a child subtree', () => {
     '<section class="shell"><div class="profile-slot"></div></section>',
   )
   const mounted = component({
-    template: parentTemplate,
+    source: parentTemplate,
     bindings: [
       prop(
         '.shell',
@@ -2193,7 +2193,7 @@ test('rejects parent content writes that would replace a child subtree', () => {
       ),
       child(
         '.profile-slot',
-        component({ template: childTemplate }),
+        component({ source: childTemplate }),
         data => data,
       ),
     ],
@@ -2211,7 +2211,7 @@ test('accepts genuine TrustedHTML for innerHTML property bindings', () => {
   const { document } = createDocument()
   const template = createTemplate(document, '<div></div>')
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       prop(
         'div',
@@ -2233,7 +2233,7 @@ test('rejects strings and forged objects for TrustedHTML properties', () => {
     '<section><div class="markup">Initial</div></section>',
   )
   const mounted = component({
-    template,
+    source: template,
     bindings: [prop('.markup', data => data.markup, 'innerHTML')],
   }).mount(document.createElement('div'))
 
@@ -2277,7 +2277,7 @@ test('accepts genuine TrustedHTML for a non-root outerHTML binding', () => {
     '<section><p class="replace">Initial</p></section>',
   )
   const mounted = component({
-    template,
+    source: template,
     bindings: [prop(
       '.replace',
       data => data.markup,
@@ -2307,7 +2307,7 @@ test('repeat works without the Trusted Types API or an HTML property sink', () =
   )
   Reflect.deleteProperty(window, 'trustedTypes')
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       repeat('.item', ({data}) => /** @type {{items: string[]}} */ (data).items),
       text('.item', ({item}) => item),
@@ -2340,7 +2340,7 @@ test('does not inspect Trusted Types for bindings without HTML sinks', () => {
   })
 
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       textData('output', data => data.text),
       prop('button', data => data.disabled, 'disabled'),
@@ -2374,7 +2374,7 @@ test('resolves Trusted Types once for a component with HTML sinks', () => {
   })
 
   const mounted = component({
-    template,
+    source: template,
     bindings: [prop('div', () => markup, 'innerHTML')],
   }).mount(document.createElement('div'))
 
@@ -2393,7 +2393,7 @@ test('fails closed when TrustedHTML cannot be authenticated', () => {
   const template = createTemplate(document, '<div></div>')
   Reflect.deleteProperty(window, 'trustedTypes')
   const mounted = component({
-    template,
+    source: template,
     bindings: [prop('div', () => markup, 'innerHTML')],
   }).mount(document.createElement('div'))
 
@@ -2433,7 +2433,7 @@ test('does not commit scalar writes when preparation fails', () => {
     fail: false,
   }, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       textData('.first', data => data.first),
       textData('.second', data => {
@@ -2478,7 +2478,7 @@ test('adds binding context when a projection throws', () => {
   `)
   const failure = new TypeError('Value is unavailable')
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       textData('.value', (_data, element) => {
         if (element.previousElementSibling !== null) {
@@ -2548,7 +2548,7 @@ test('rejects incompatible values and treats nullish projections as no-ops', () 
   }
   const mounted = render(valid, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [
       textData('.copy', data => unchecked(data.text)),
       prop(
@@ -2624,6 +2624,39 @@ test('rejects incompatible values and treats nullish projections as no-ops', () 
   assert.equal(control.style.color, 'blue')
 })
 
+test('mount clones parsed DOM sources without consuming them', () => {
+  const { document } = createDocument()
+  const element = document.createElement('section')
+  element.textContent = 'Element source'
+  document.body.append(element)
+  const fragment = document.createDocumentFragment()
+  const fragmentRoot = document.createElement('article')
+  fragmentRoot.textContent = 'Fragment source'
+  fragment.append(fragmentRoot)
+
+  /** @type {Array<[
+   *   import('../src/types.js').ComponentSource,
+   *   Element,
+   *   string,
+   * ]>} */
+  const cases = [
+    [element, element, 'Element source'],
+    [fragment, fragmentRoot, 'Fragment source'],
+  ]
+
+  for (const [source, original, text] of cases) {
+    const target = document.createElement('div')
+    const mounted = component({source}).mount(target)
+
+    assert.notStrictEqual(mounted.root, original)
+    assert.equal(mounted.root.textContent, text)
+    assert.strictEqual(original.parentNode, source === element
+      ? document.body
+      : fragment)
+    mounted.unmount()
+  }
+})
+
 test('mount replaces existing target contents', () => {
   const { document } = createDocument()
   const target = document.createElement('div')
@@ -2631,7 +2664,7 @@ test('mount replaces existing target contents', () => {
   fallback.textContent = 'Server fallback'
   target.append(fallback)
   const template = createTemplate(document, '<section>Mounted</section>')
-  const mounted = component({ template }).mount(target)
+  const mounted = component({ source: template }).mount(target)
 
   assert.equal(target.childNodes.length, 1)
   assert.strictEqual(target.firstElementChild, mounted.root)
@@ -2654,7 +2687,7 @@ test('mount restores target contents when binding connection fails', () => {
 
   assert.throws(
     () => component({
-      template,
+      source: template,
       bindings: [failingBinding],
     }).mount(target),
     /Connection failed/,
@@ -2669,7 +2702,7 @@ test('preserves arbitrary values for property bindings', () => {
   const config = { mode: 'compact' }
   const mounted = render({ config }, {
     target: document.createElement('div'),
-    template,
+    source: template,
     bindings: [prop('div', data => data.config, 'lumiConfig')],
   })
 
@@ -2704,7 +2737,7 @@ test('discards custom binding work when later preparation fails', () => {
     },
   }
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       probe,
       textData('output', data => {
@@ -2740,7 +2773,7 @@ test('faults a component when an arbitrary DOM setter fails during commit', () =
   `)
   const target = document.createElement('div')
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       textData('output', data => data.text),
       prop('button', data => data.value, 'lumiProbe'),
@@ -2808,7 +2841,7 @@ test('finishes unmount cleanup when a binding destroy throws', () => {
   }
 
   const mounted = component({
-    template,
+    source: template,
     bindings: [
       cleanupProbe('first'),
       cleanupProbe('throwing', true),
@@ -2828,7 +2861,7 @@ test('finishes unmount cleanup when a binding destroy throws', () => {
   assert.deepEqual(destroyed, ['last', 'throwing', 'first'])
 })
 
-test('rejects invalid templates and stale renders', () => {
+test('rejects invalid component sources and stale renders', () => {
   const { document } = createDocument()
   const invalidTemplate = createTemplate(
     document,
@@ -2837,14 +2870,19 @@ test('rejects invalid templates and stale renders', () => {
   const target = document.createElement('div')
 
   assert.throws(
-    () => component({ template: invalidTemplate }).mount(target),
+    () => component({source: null}).mount(target),
+    /component source/,
+  )
+
+  assert.throws(
+    () => component({ source: invalidTemplate }).mount(target),
     /exactly one root element/,
   )
 
   const missingTargetTemplate = createTemplate(document, '<p>Text</p>')
   const unmatched = render({}, {
     target,
-    template: missingTargetTemplate,
+    source: missingTargetTemplate,
     bindings: [textData('.missing', () => 'value')],
   })
   assert.equal(unmatched.root.textContent, 'Text')
@@ -2855,7 +2893,7 @@ test('rejects invalid templates and stale renders', () => {
   )
 
   const outerHtml = component({
-    template: missingTargetTemplate,
+    source: missingTargetTemplate,
     bindings: [
       prop(
         'p',
@@ -2876,7 +2914,7 @@ test('rejects invalid templates and stale renders', () => {
   assert.throws(
     () => render({}, {
       target: null,
-      template: missingTargetTemplate,
+      source: missingTargetTemplate,
     }),
     /mount target/,
   )
@@ -2884,7 +2922,7 @@ test('rejects invalid templates and stale renders', () => {
   assert.throws(
     () => render({ value: 'first' }, {
       target,
-      template: missingTargetTemplate,
+      source: missingTargetTemplate,
       bindings: [
         textData('p', () => {
           throw new Error('Projection failed')

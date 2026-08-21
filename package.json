@@ -1,5 +1,5 @@
 {
-  "name": "@thlib/lumi",
+  "name": "@thlibjs/lumi",
   "version": "0.1.0",
   "packageManager": "pnpm@9.15.0",
   "description": "Declarative DOM rendering with native HTML and plain JavaScript",

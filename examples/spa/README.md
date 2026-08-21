@@ -17,7 +17,7 @@ All eight use the static JSON payloads in this directory and the
 shared visual design in [`spa.css`](./spa.css). The data-attribute DSL, React,
 Vue, Lit, and Angular also share the typed helpers in [`data.ts`](./data.ts)
 and [`data-20k.ts`](./data-20k.ts). None of the four framework implementations
-imports Lumi, `@thlib/lumi`, or anything from the repository’s `src` directory.
+imports Lumi, `@thlibjs/lumi`, or anything from the repository’s `src` directory.
 The Lumi applications import the repository's built
 [`dist/lumi.js`](../../dist/lumi.js) bundle.
 

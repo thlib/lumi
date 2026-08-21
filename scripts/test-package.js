@@ -83,7 +83,7 @@ try {
 
   writeFileSync(join(temporary, 'runtime.mjs'), `
     import assert from 'node:assert/strict'
-    import * as lumi from '@thlib/lumi'
+    import * as lumi from '@thlibjs/lumi'
 
     assert.deepEqual(Object.keys(lumi).sort(), [
       'attr',
@@ -97,7 +97,7 @@ try {
       'text',
     ])
 
-    const bundle = await import('@thlib/lumi/dist/lumi.js')
+    const bundle = await import('@thlibjs/lumi/dist/lumi.js')
     assert.deepEqual(
       Object.keys(bundle).sort(),
       Object.keys(lumi).sort(),
@@ -105,7 +105,7 @@ try {
     )
 
     await assert.rejects(
-      import('@thlib/lumi/types'),
+      import('@thlibjs/lumi/types'),
       error => error?.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED',
     )
   `)

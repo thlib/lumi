@@ -13,7 +13,7 @@ import {
   type EventBindingOptions,
   type MountedComponent,
   type ProjectionContext,
-} from '@thlib/lumi'
+} from '@thlibjs/lumi'
 
 type CounterData = {
   count: number

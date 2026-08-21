@@ -21,7 +21,7 @@ await build({
   sourcemap: true,
   legalComments: 'none',
   banner: {
-    js: '/*! @thlib/lumi | Apache-2.0 | https://github.com/thlib/lumi */',
+    js: '/*! @thlibjs/lumi | Apache-2.0 | https://github.com/thlib/lumi */',
   },
   outfile: join(output, 'lumi.js'),
   logLevel: 'info',

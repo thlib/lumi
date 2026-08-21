@@ -7,7 +7,7 @@ The API is experimental and may change while the design is validated.
 
 ## Public API boundary
 
-The supported module is `@thlib/lumi`. It exports:
+The supported module is `@thlibjs/lumi`. It exports:
 
 - `component`
 - `repeat`
@@ -37,7 +37,7 @@ import {
   component,
   on,
   prop,
-} from '@thlib/lumi'
+} from '@thlibjs/lumi'
 
 let actualData = {
   count: 0,
@@ -563,7 +563,7 @@ The smallest convention can map application-owned metadata directly to
 presentation object properties:
 
 ```js
-import {text} from '@thlib/lumi'
+import {text} from '@thlibjs/lumi'
 
 function bindFields() {
   return text(
@@ -586,7 +586,7 @@ RFC 9535 implementation in `examples/data-path.js`. The projection receives
 the matched element and injects the application's path behavior:
 
 ```js
-import {repeat, text} from '@thlib/lumi'
+import {repeat, text} from '@thlibjs/lumi'
 import {jsonPath} from './examples/data-path.js'
 
 function bindDataPaths() {

@@ -35,7 +35,7 @@ It intentionally does not:
 Install Lumi from npm when the application uses a build step:
 
 ```sh
-npm install @thlib/lumi
+npm install @thlibjs/lumi
 ```
 
 The package entry is unbundled ES module source. Bundlers can tree-shake and
@@ -46,7 +46,7 @@ Without a build step, load the browser bundle from a CDN:
 
 ```html
 <script type="module">
-  import {component, on, prop, text} from 'https://cdn.jsdelivr.net/npm/@thlib/lumi@0.1.0/dist/lumi.js'
+  import {component, on, prop, text} from 'https://cdn.jsdelivr.net/npm/@thlibjs/lumi@0.1.0/dist/lumi.js'
 </script>
 ```
 
@@ -163,7 +163,7 @@ bindings project one value into the current occurrence.
 that mechanism.
 
 The supported package surface is the functions and types exported from
-`@thlib/lumi`. Its public functions and lifecycle are documented in
+`@thlibjs/lumi`. Its public functions and lifecycle are documented in
 [API.md](./API.md). Other package modules and lifecycle shapes are renderer
 internals and may change independently.
 
@@ -176,7 +176,7 @@ import {
   component,
   text,
   type ComponentOptions,
-} from '@thlib/lumi'
+} from '@thlibjs/lumi'
 
 type CounterData = {
   count: number
@@ -256,7 +256,7 @@ that return Lumi bindings. For example, an application may give `data-field`
 attributes direct-property semantics:
 
 ```js
-import {component, text} from '@thlib/lumi'
+import {component, text} from '@thlibjs/lumi'
 
 function bindFields() {
   return text(

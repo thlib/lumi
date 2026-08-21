@@ -153,7 +153,7 @@ try {
    *   publishConfig?: {access?: string}
    * }} */
   const manifest = JSON.parse(readFileSync(
-    join(temporary, 'node_modules', '@thlib', 'lumi', 'package.json'),
+    join(temporary, 'node_modules', '@thlibjs', 'lumi', 'package.json'),
     'utf8',
   ))
   assert.equal(manifest.license, 'Apache-2.0')

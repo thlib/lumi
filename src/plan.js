@@ -19,7 +19,6 @@ import {warn} from './internal/diagnostics.js'
 import { isNoValue, noValue } from './internal/no-value.js'
 import { projectionError } from './internal/projection-error.js'
 import {rootContext} from './internal/projection-context.js'
-import {plainOf} from './tracked.js'
 import {
   isStructuralBinding,
   isStructuralProperty,
@@ -235,8 +234,6 @@ export function getOwnedDomSubtrees(connected) {
  * @param {ReadonlyArray<DomBindingDescriptor<Data>>} descriptors
  * @param {ReadonlyArray<Element>} [ownedSubtrees]
  * @param {(roots: ReadonlySet<ShadowRoot>) => void} [publishShadowRoots]
- * @param {() => void} [schedule] Requests a flush for the component after a
- * write to tracked data.
  * @returns {import('./types.js').ConnectedBinding<Data>}
  */
 export function connectDomBindings(
@@ -244,7 +241,6 @@ export function connectDomBindings(
   descriptors,
   ownedSubtrees = [],
   publishShadowRoots,
-  schedule = noOperation,
 ) {
   /** @type {Array<DomBindingRuntime<Data>>} */
   const runtimes = descriptors.map((descriptor, index) => {
@@ -295,7 +291,6 @@ export function connectDomBindings(
         value,
       )
     },
-    schedule,
   )
 }
 
@@ -368,9 +363,7 @@ function createRuntimeNormalizer(runtime) {
       }
     case 'property': {
       if (!runtime.requiresTrustedHTML) {
-        // An element receives the plain object, not the tracked view. Native
-        // operations, for example structuredClone, do not accept a Proxy.
-        return (/** @type {unknown} */ projected) => plainOf(projected)
+        return (/** @type {unknown} */ projected) => projected
       }
 
       const name = /** @type {string} */ (descriptor.name)

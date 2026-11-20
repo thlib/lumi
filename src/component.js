@@ -8,14 +8,6 @@ import {
   getDomBindingDescriptor,
   getOwnedDomSubtrees,
 } from './plan.js'
-import {
-  SubscriberQueue,
-  createHost,
-  releaseSubscriber,
-  scheduleHost,
-  syncSubscriber,
-  tracking,
-} from './tracked.js'
 
 /**
  * Internal preparation entry points for mounted components. Keeping these in
@@ -100,39 +92,6 @@ function connectComponent(root, bindings) {
   const prepared = []
   let isSettled = true
 
-  // Tracked data. Each connected binding is one part that Lumi can prepare
-  // again by itself. The DOM planner of a component with a repeat binding
-  // also tracks smaller parts, and prepares those through `prepareChanged`.
-  const host = createHost(refresh)
-  const queue = new SubscriberQueue(() => scheduleHost(host))
-  /** @type {Array<import('./tracked.js').Subscriber | null>} */
-  const subscribers = []
-  /**
-   * For each prepared update, the index of its connected binding and the
-   * tracked data that the preparation read. The index is -1 for a
-   * preparation of changed parts, which records its own reads.
-   *
-   * @type {number[]}
-   */
-  const preparedBindings = []
-  /** @type {Array<ReadonlyArray<import('./tracked.js').Dependency>>} */
-  const preparedReads = []
-  let hasData = false
-  /** The data of the last committed update. */
-  let currentData = /** @type {Data} */ (undefined)
-  let preparedData = /** @type {Data} */ (undefined)
-  let isCompleteUpdate = false
-  let eventsIndex = -1
-  let hasElementListeners = false
-
-  function settle() {
-    prepared.length = 0
-    preparedBindings.length = 0
-    preparedReads.length = 0
-    isSettled = true
-    isRendering = false
-  }
-
   /** @type {import('./types.js').PreparedUpdate} */
   const preparedUpdate = {
     commit() {
@@ -145,33 +104,15 @@ function connectComponent(root, bindings) {
       try {
         for (; commitIndex < prepared.length; commitIndex += 1) {
           prepared[commitIndex]?.commit()
-
-          const index = preparedBindings[commitIndex] ?? -1
-          const reads = preparedReads[commitIndex]
-
-          if (index !== -1 && reads !== undefined) {
-            subscribers[index] = syncSubscriber(
-              subscribers[index] ?? null,
-              reads,
-              0,
-              reads.length,
-              queue,
-              index,
-              0,
-            )
-          }
-        }
-
-        if (isCompleteUpdate) {
-          currentData = preparedData
-          hasData = true
         }
       } catch (error) {
         isFaulted = true
         discardPrepared(prepared, commitIndex)
         throw error
       } finally {
-        settle()
+        prepared.length = 0
+        isSettled = true
+        isRendering = false
       }
     },
 
@@ -183,36 +124,11 @@ function connectComponent(root, bindings) {
       try {
         discardPrepared(prepared)
       } finally {
-        settle()
+        prepared.length = 0
+        isSettled = true
+        isRendering = false
       }
     },
-  }
-
-  /**
-   * Prepares one connected binding and records the tracked data that its
-   * projections read.
-   *
-   * @param {number} index
-   * @param {Data} data
-   */
-  function prepareBinding(index, data) {
-    const binding = /** @type {import('./types.js').ConnectedBinding<Data>} */ (
-      connected[index]
-    )
-    const outerReads = tracking.reads
-    /** @type {Array<import('./tracked.js').Dependency>} */
-    const reads = []
-
-    tracking.reads = reads
-
-    try {
-      prepared.push(binding.prepare(data))
-    } finally {
-      tracking.reads = outerReads
-    }
-
-    preparedBindings.push(index)
-    preparedReads.push(reads)
   }
 
   /**
@@ -236,84 +152,21 @@ function connectComponent(root, bindings) {
 
     isRendering = true
     isSettled = false
-    isCompleteUpdate = true
-    preparedData = data
+    prepared.length = 0
 
     try {
-      for (let index = 0; index < connected.length; index += 1) {
-        prepareBinding(index, data)
+      for (const binding of connected) {
+        prepared.push(binding.prepare(data))
       }
     } catch (error) {
       discardPrepared(prepared)
-      settle()
+      prepared.length = 0
+      isSettled = true
+      isRendering = false
       throw error
     }
 
     return preparedUpdate
-  }
-
-  /**
-   * Applies the writes to tracked data since the last update. Only the parts
-   * that read the written data are prepared and committed.
-   *
-   * @returns {boolean} False when the component cannot apply changes now.
-   */
-  function refresh() {
-    if (!isMounted || isFaulted || !hasData) {
-      return true
-    }
-
-    if (isRendering) {
-      return false
-    }
-
-    isRendering = true
-    isSettled = false
-    isCompleteUpdate = false
-
-    try {
-      let needsEvents = hasElementListeners
-
-      for (let index = 0; index < connected.length; index += 1) {
-        if (index === eventsIndex) {
-          continue
-        }
-
-        if (subscribers[index]?.isChanged === true) {
-          prepareBinding(index, currentData)
-          needsEvents = true
-          continue
-        }
-
-        const change = connected[index]?.prepareChanged?.() ?? null
-
-        if (change !== null) {
-          prepared.push(change)
-          preparedBindings.push(-1)
-          preparedReads.push([])
-          needsEvents ||= change.isStructural === true
-        }
-      }
-
-      // Managed listeners follow the committed DOM. A change of text or of
-      // one attribute cannot change the event boundaries. An element
-      // listener can match a different set of elements after each change.
-      if (prepared.length > 0 && eventsIndex !== -1 && needsEvents) {
-        prepareBinding(eventsIndex, currentData)
-      }
-    } catch (error) {
-      discardPrepared(prepared)
-      settle()
-      throw error
-    }
-
-    if (prepared.length === 0) {
-      settle()
-      return true
-    }
-
-    preparedUpdate.commit()
-    return true
   }
 
   /** @param {Data} data */
@@ -364,7 +217,6 @@ function connectComponent(root, bindings) {
             : roots => {
               sharedShadowTopology.roots = roots
             },
-          queue.schedule,
         ),
       )
     }
@@ -372,10 +224,6 @@ function connectComponent(root, bindings) {
     if (eventBindings.length > 0) {
       // Managed listeners follow the committed DOM, so the event manager
       // commits last and releases its listeners first on unmount.
-      eventsIndex = connected.length
-      hasElementListeners = eventBindings.some(descriptor => {
-        return descriptor.at === 'elements'
-      })
       connected.push(connectEventBindings(
         root,
         eventBindings,
@@ -408,10 +256,6 @@ function connectComponent(root, bindings) {
       }
 
       const cleanupError = destroyConnected(connected)
-
-      for (const subscriber of subscribers) {
-        releaseSubscriber(subscriber ?? null)
-      }
 
       try {
         root.remove()

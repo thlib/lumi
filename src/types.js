@@ -5,8 +5,6 @@
  * @typedef {object} PreparedUpdate
  * @property {() => void} commit
  * @property {() => void} [discard]
- * @property {boolean} [isStructural] True when a preparation of changed
- * tracked data can add, remove, or move elements.
  */
 
 /**
@@ -32,8 +30,6 @@
  * @template Data
  * @typedef {object} ConnectedBinding
  * @property {(data: Data) => PreparedUpdate} prepare
- * @property {() => PreparedUpdate | null} [prepareChanged] Prepares only the
- * parts whose tracked data changed. Returns null when no part changed.
  * @property {() => void} destroy
  */
 

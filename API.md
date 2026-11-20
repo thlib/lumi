@@ -18,8 +18,6 @@ The supported module is `@thlibjs/lumi`. It exports:
 - `classToggle`
 - `style`
 - `child`
-- `tracked`
-- `flush`
 - The `Component`, `ComponentOptions`, `ComponentSource`, `MountedComponent`, and
   `ProjectionContext` TypeScript types, plus `EventBindingOptions`,
   `EventBindingLocation`, and `EventBindingFrequency`
@@ -185,9 +183,8 @@ throw. That work cannot be safely rolled back. If commit fails, the mounted
 component is marked faulted: it may be unmounted, but it cannot be updated
 again. The application must mount a fresh component boundary.
 
-`update` is synchronous. With plain data, Lumi keeps no subscription to the
-data object, and the DOM changes only when the application calls `update`.
-With [tracked data](#tracked-data), Lumi also applies each later write.
+Rendering remains synchronous and explicit, with no retained subscriptions
+to the data object.
 
 ### `mounted.unmount()`
 
@@ -652,108 +649,6 @@ child('.profile-slot', profileComponent, page => page.profile)
 
 The child root is mounted once and persists across parent renders. The
 container must not initially contain another element.
-
-## Tracked data
-
-`update(data)` reads all data again. This is correct for all data, but the
-work increases with the size of the data. For one changed row in 10,000 rows,
-Lumi calls the projections of 10,000 rows.
-
-`tracked(data)` lets Lumi do only the necessary work. It returns a tracked
-view of plain data. The view is a native `Proxy`. It reads and writes the
-object that you give, so the data stays in plain objects.
-
-```js
-import {component, flush, repeat, text, tracked} from '@thlibjs/lumi'
-
-const data = tracked({
-  title: 'Tasks',
-  items: [
-    {id: 1, name: 'Write'},
-    {id: 2, name: 'Test'},
-  ],
-})
-
-const mounted = component({
-  source: template,
-  bindings: [
-    text('h1', ({data}) => data.title),
-    repeat(
-      '.item',
-      ({data}) => data.items,
-      ({item}) => item.id,
-      [text('.name', ({item}) => item.name)],
-    ),
-  ],
-}).mount(target)
-
-mounted.update(data)
-
-data.items[1].name = 'Test again'              // Lumi updates one text node.
-data.items.push({id: 3, name: 'Release'})      // Lumi adds one row.
-```
-
-When a component renders a tracked view, Lumi records the data that each part
-of the DOM reads. A write through the view prepares only the parts that read
-the written data. No call to `update` is necessary.
-
-The parts are:
-
-- Each row of a `repeat` binding. A row contains its bindings and its key.
-- The item list of each `repeat` binding.
-- The bindings of the component that are not in a `repeat` binding.
-- Each `child` binding.
-
-A component that has no `repeat` binding is one part. A component that has an
-`innerHTML` binding and a `repeat` binding is also one part.
-
-When the item list changes, Lumi keeps each row whose item is the same tracked
-object. It does not call the projections of that row. It calls them when the
-data of the row changed, or when the row reads `index` or `path` and its
-position changed.
-
-### Time of the DOM update
-
-Lumi collects the writes and applies them together in a microtask. Thus many
-writes in one task cause one DOM update.
-
-```js
-data.items[0].name = 'A'
-data.items[1].name = 'B'
-// The DOM has the old text here.
-await Promise.resolve()
-// The DOM has the two new texts here.
-```
-
-Call `flush()` when code must read the updated DOM immediately after a write.
-`flush()` applies the collected writes synchronously. It has no effect when
-there are no writes.
-
-`update(data)` continues to operate. It reads all data again and applies all
-writes that are not yet applied.
-
-### Rules
-
-- Make each change through the view. Lumi does not see a write to the plain
-  object. The subsequent `update(data)` renders such a write.
-- A projection must not change tracked data. Such a write throws a
-  `TypeError`.
-- Lumi tracks plain objects and arrays. It gives other objects, for example
-  `Date`, `Map`, and class instances, to projections as they are, and does
-  not see changes inside them. Replace such an object to show a change.
-- `tracked` throws a `TypeError` when its argument is not a plain object or
-  an array.
-- A property binding gives the plain object to the element, not the view.
-- An object from new data, for example from a server response, is a new
-  object. Lumi prepares its row. To keep rows, change the current objects.
-
-### Errors
-
-The preparation of the changed parts has the same rule as `update`: when a
-projection or a validation fails, the DOM does not change. `flush()` throws
-the error. Without `flush()`, the error is an uncaught error of the
-microtask, which the browser reports to `window.onerror`. The failed parts
-stay changed, and the subsequent write to tracked data prepares them again.
 
 ## DOM ownership
 

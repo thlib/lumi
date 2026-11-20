@@ -3,13 +3,11 @@ import {
   child,
   classToggle,
   component,
-  flush,
   on,
   prop,
   repeat,
   style,
   text,
-  tracked,
   type Binding,
   type Component,
   type ComponentOptions,
@@ -209,15 +207,3 @@ declare const dynamicName: string
 attr('output', dynamicName, () => true)
 // Explicit type arguments without the name fall back to a string name.
 attr<CounterData, CounterData>('output', 'aria-busy', ({data}) => data.disabled)
-
-// Tracked data has the type of the plain data.
-const trackedData: {count: number, items: string[]} = tracked({
-  count: 1,
-  items: ['a'],
-})
-trackedData.count += 1
-trackedData.items.push('b')
-const flushed: void = flush()
-void flushed
-// @ts-expect-error tracked data is an object or an array.
-tracked(1)

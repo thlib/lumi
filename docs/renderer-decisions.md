@@ -100,9 +100,10 @@ Source:
 
 Solid 2 keeps a row when its item did not change, and it finds an unchanged
 start of a list with one comparison for each position. Solid can skip the
-row because its store reports each write. An application can change a plain
-object in place, so for plain data Lumi must run the projections of each row
-on each update. The result must depend only on the content of the data.
+row because its store reports each write. Lumi accepts plain data, and an
+application can change a plain object in place, so Lumi must run the
+projections of each row on each update. The result must depend only on the
+content of the data.
 
 Lumi applies the part of the idea that keeps this result. It makes the work
 for each row small:
@@ -121,52 +122,6 @@ Source:
 
 - `mapArray` in [`@solidjs/signals`](https://www.npmjs.com/package/@solidjs/signals)
   2.0.3
-
-### Tracked data updates only the parts that read a write
-
-Solid 2 does not go through the rows when one value changes. Its store is a
-`Proxy`. A read through the store records which computation uses a property,
-and a write through the store runs only those computations. Solid 2 collects
-the writes and applies them in a microtask, and `flush()` applies them
-immediately.
-
-Lumi does the same for data from `tracked(data)`. The decisions are:
-
-- **Tracking is the choice of the application for each data object.** Plain
-  data has no Proxy and no record, so `update(data)` has the same cost and the
-  same result as before.
-- **The view wraps the object of the application.** Writes go to that object,
-  and the object holds plain values only. Lumi keeps the view and the records
-  in `WeakMap` objects and adds no property to the data.
-- **A row is one part.** Solid 2 keeps one record for each binding. Lumi keeps
-  one record for each row, each item list, the component scope, and each
-  `child` binding. One write to a row calls the projections of that row. This
-  fits the planner, which prepares and commits a row as one unit.
-- **A list keeps a row when its item is the same tracked object.** This is the
-  comparison that `mapArray` makes. It is safe for tracked data only, because
-  Lumi sees each change of a tracked object. For an item that is not tracked,
-  Lumi calls the projections again.
-- **The key belongs to the row.** A row records the reads of its key
-  projection. When a write changes the key, Lumi prepares the list.
-- **A native method that changes a list runs on the plain list.** Through a
-  Proxy, `splice` reads and writes each element with one trap call. Lumi calls
-  the method on the plain list and notifies the readers one time.
-- **Preparation and commit stay separate.** Lumi prepares all changed parts of
-  a component before it writes to the DOM. A failure changes no DOM.
-- **Managed listeners are reconciled only when necessary.** A change inside
-  rows cannot add an event boundary. Lumi reconciles the listeners after a
-  list change, after a change outside the lists, and when the component has
-  a listener with `{at: 'elements'}`.
-
-Measured in Chrome with 10,000 keyed rows of four bindings: one changed row
-needs 3.8 ms with `update(data)` and 0.005 ms with a tracked write. The first
-render of tracked data is approximately 25% slower, because Lumi makes one
-view and one record for each row.
-
-Source:
-
-- `createStore` and `mapArray` in
-  [`@solidjs/signals`](https://www.npmjs.com/package/@solidjs/signals) 2.0.3
 
 ### Executable sinks stay explicit
 

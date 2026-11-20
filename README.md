@@ -26,10 +26,6 @@ Native HTML + plain JavaScript + a data snapshot
 Call `update(data)` to render a snapshot, then call it again when the snapshot
 changes.
 
-For large data, wrap the data with `tracked(data)`. A write to tracked data
-then updates only the DOM that reads the written data, with no call to
-`update`. Refer to [Tracked data](./API.md#tracked-data).
-
 Lumi does not fetch data. That is a different problem.
 
 ## Install
@@ -52,7 +48,7 @@ Without a build step, load the browser bundle from a CDN:
 </script>
 ```
 
-`dist/lumi.js` is one minified ES module of approximately 16 kB when compressed
+`dist/lumi.js` is one minified ES module of approximately 12 kB when compressed
 with gzip. One request replaces the module graph. Its source map resolves to
 the published source, so developer tools show the original code. Use a fixed
 version because an unpinned CDN URL follows the latest release.

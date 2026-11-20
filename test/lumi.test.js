@@ -199,11 +199,13 @@ test('exposes only the APIs used by Lumi applications', () => {
     'child',
     'classToggle',
     'component',
+    'flush',
     'on',
     'prop',
     'repeat',
     'style',
     'text',
+    'tracked',
   ])
 })
 

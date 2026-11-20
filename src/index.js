@@ -48,3 +48,4 @@ export {
 } from './bindings.js'
 export { component } from './component.js'
 export { on } from './events.js'
+export { flush, tracked } from './tracked.js'

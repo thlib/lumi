@@ -343,10 +343,15 @@ write: the foreign text stays until the projection changes. When the
 projection changes, Lumi sets the data of the existing text node, so the node
 persists.
 
-This is not reactive dependency tracking. No properties are observed or
-subscribed to, and update timing is never inferred from what a function reads.
-Declared projections are evaluated when the application calls `update`, then
-unnecessary DOM writes are avoided.
+With plain data, Lumi does no dependency tracking. It observes no property.
+It evaluates the declared projections when the application calls `update`,
+and then it prevents unnecessary DOM writes.
+
+With data from `tracked(data)`, Lumi records the data that each part of a
+component reads. A write through the tracked view prepares only the parts
+that read the written data. The tracked view is a native `Proxy` around the
+plain object of the application, so the data stays in plain objects.
+[API.md](./API.md#tracked-data) gives the rules.
 
 JavaScript comparisons are cheap and predictable. DOM mutations can trigger
 browser work and can destroy browser-managed state. Optimization therefore

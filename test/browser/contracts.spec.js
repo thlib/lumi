@@ -612,3 +612,78 @@ test('binding-level once consumes one declaration for the mounted component', as
 
   expect(result).toEqual(['once', 'always', 'always', 'always'])
 })
+
+test('writes to tracked data update only their rows and keep form state', async ({
+  page,
+}) => {
+  await page.evaluate(async () => {
+    const {component, repeat, text, tracked} = /** @type {typeof import('../../src/index.js')} */ (
+      await import(String('/src/index.js'))
+    )
+    const template = document.createElement('template')
+    template.innerHTML = `
+      <ol>
+        <li class="row">
+          <label class="name"></label>
+          <input>
+        </li>
+      </ol>
+    `
+    /** @type {import('../../src/index.js').ComponentOptions<{
+     *   items: Array<{id: string, name: string}>
+     * }>} */
+    const options = {
+      source: template,
+      bindings: [
+        repeat(
+          '.row',
+          ({data}) => data.items,
+          ({item}) => item.id,
+          [text('.name', ({item}) => item.name)],
+        ),
+      ],
+    }
+    const mounted = component(options)
+      .mount(document.querySelector('#test-root'))
+    const data = tracked({
+      items: [
+        {id: 'ada', name: 'Ada'},
+        {id: 'grace', name: 'Grace'},
+      ],
+    })
+
+    mounted.update(data)
+    Reflect.set(window, 'data', data)
+    Reflect.set(window, 'originalRows', Array.from(
+      mounted.root.querySelectorAll('.row'),
+    ))
+  })
+
+  const inputs = page.locator('input')
+  await inputs.nth(1).fill('second draft')
+
+  // No update() and no flush(): Lumi applies the writes in a microtask.
+  const textBeforeMicrotask = await page.evaluate(() => {
+    const data = Reflect.get(window, 'data')
+
+    data.items[1].name = 'Grace Hopper'
+    data.items.reverse()
+    data.items.push({id: 'alan', name: 'Alan'})
+    return document.querySelector('.name')?.textContent
+  })
+
+  expect(textBeforeMicrotask).toBe('Ada')
+  await expect(page.locator('.name')).toHaveText([
+    'Grace Hopper',
+    'Ada',
+    'Alan',
+  ])
+  expect(await inputs.evaluateAll(elements => {
+    return elements.map(element => Reflect.get(element, 'value'))
+  })).toEqual(['second draft', '', ''])
+  expect(await page.evaluate(() => {
+    const rows = document.querySelectorAll('.row')
+    const originals = Reflect.get(window, 'originalRows')
+    return rows[0] === originals[1] && rows[1] === originals[0]
+  })).toBe(true)
+})

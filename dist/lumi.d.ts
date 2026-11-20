@@ -216,3 +216,15 @@ export function on<
   ) => void,
   options?: EventBindingOptions,
 ): Binding<Data>
+
+/**
+ * Returns a tracked view of plain data.
+ *
+ * The view reads and writes the given object. When a component renders the
+ * view, a later write through the view updates only the DOM that read the
+ * written data. Lumi collects the writes and applies them in a microtask.
+ */
+export function tracked<Data extends object>(data: Data): Data
+
+/** Applies the collected writes to tracked data now. */
+export function flush(): void

@@ -13,3 +13,4 @@ examples/spa/lumi-ts/dist/
 test-results/
 .angular/
 *.tsbuildinfo
+.claude/worktrees

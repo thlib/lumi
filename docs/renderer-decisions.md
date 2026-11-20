@@ -1,7 +1,7 @@
 # Renderer decisions from framework research
 
 This note records implementation choices made after reviewing the Vue, React,
-and Angular renderers. The selected mechanisms strengthen declarative DOM
+Angular, and Solid renderers. The selected mechanisms strengthen declarative DOM
 rendering without adopting framework-owned state, scheduling, or authoring
 models.
 
@@ -60,6 +60,41 @@ Sources:
 
 - [Vue DOM property patching](https://github.com/vuejs/core/blob/main/packages/runtime-dom/src/modules/props.ts)
 - [React input value tracking](https://github.com/react/react/blob/main/packages/react-dom-bindings/src/client/inputValueTracking.js)
+
+### Text compares with the last written value
+
+Solid 2 does not read the DOM to find if a text write is necessary. Its
+`insertExpression` function compares the new value with the value that it last
+inserted. When the value is different, it sets the `data` of the existing text
+node. For text nodes in an array, Solid keeps the last value in a property on
+the node.
+
+A `text` binding follows the same rule. Lumi keeps the last written text in a
+symbol property on the element. An update with the same projection does not
+touch the DOM. An update with a different projection sets the `data` of the
+text node when that node is the only child, so the node persists. An empty
+value removes the child nodes, as `textContent` does.
+
+In a profile of a large keyed `repeat`, the `textContent` read was the largest
+single cost of an update. A `WeakMap` removed the read but made the first
+render slower. A symbol property is faster in both cases.
+
+Two parts are different from Solid:
+
+- On the first update of an element, Lumi reads `textContent` one time. The
+  update then writes nothing when the source content is already correct.
+  Solid writes without a read and has a separate hydration mode.
+- Before Lumi sets `data`, it makes sure that the only child is a text node.
+  Solid assumes that its text node is still there.
+
+The cost is that Lumi does not repair a foreign write to a text sink. Text has
+one writer, so a foreign write breaks the ownership rule. It is not user
+input. Properties keep the live comparison for that reason.
+
+Source:
+
+- `insertExpression` in [`@solidjs/web`](https://www.npmjs.com/package/@solidjs/web)
+  2.0.3, file `dist/web.js`
 
 ### Executable sinks stay explicit
 

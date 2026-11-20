@@ -684,6 +684,11 @@ nested component, so the update is rejected during preparation.
 Unbound state remains under browser or application ownership. Imperative code
 should not write a property or subtree already owned by a binding.
 
+Lumi does not repair such a write to a `text` sink. A `text` binding compares
+its projection with the text that it last wrote, not with the live DOM. The
+foreign text stays until the projection changes. A property binding is
+different: it compares with the live property on each update.
+
 ## Errors
 
 An error is thrown when:

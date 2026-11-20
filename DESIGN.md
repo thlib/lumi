@@ -351,6 +351,13 @@ data snapshot owns that property, the next update restores the supplied value.
 The binding also remembers native coercion, so projecting the number `1` into a
 string-valued property does not cause a write on every update.
 
+Text bindings do not read the live DOM. A text binding compares its projection
+with the text that Lumi last wrote to that element. Text has one writer, so a
+different value in the DOM is a foreign write. Lumi does not repair a foreign
+write: the foreign text stays until the projection changes. When the
+projection changes, Lumi sets the data of the existing text node, so the node
+persists.
+
 This is not reactive dependency tracking. No properties are observed or
 subscribed to, and update timing is never inferred from what a function reads.
 Declared projections are evaluated when the application calls `update`, then

@@ -424,11 +424,23 @@ function createRuntimeApply(runtime) {
       return () => false
     case 'text':
       return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
-        if (element.textContent === value) {
+        const text = /** @type {string} */ (value)
+        const sink = /** @type {TextSink} */ (element)
+        const written = sink[writtenText]
+
+        if (written === text) {
           return false
         }
 
-        element.textContent = /** @type {string} */ (value)
+        sink[writtenText] = text
+
+        // Without a remembered value, the element has its source content.
+        // One read keeps the first update free of a redundant write.
+        if (written === undefined && element.textContent === text) {
+          return false
+        }
+
+        writeText(element, text)
         return true
       }
     case 'property': {
@@ -444,6 +456,10 @@ function createRuntimeApply(runtime) {
 
         if (shouldWrite) {
           setProperty(element, name, value)
+
+          if (isStructuralProperty(name)) {
+            /** @type {TextSink} */ (element)[writtenText] = undefined
+          }
         }
 
         runtime.values.set(element, {
@@ -554,6 +570,10 @@ function createRuntimeChange(runtime) {
       return () => false
     case 'text':
       return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
+        if (/** @type {TextSink} */ (element)[writtenText] === value) {
+          return false
+        }
+
         const first = element.firstChild
 
         if (
@@ -1643,6 +1663,15 @@ function applyPlannedValue(
     case 'text': {
       assertDoesNotReplaceOwnedSubtree(element, ownedSubtrees)
 
+      // The commit does not write a remembered value again, so the plan
+      // must keep the same content.
+      if (
+        liveElement !== undefined
+        && /** @type {TextSink} */ (liveElement)[writtenText] === value
+      ) {
+        return
+      }
+
       if (element.textContent !== value) {
         element.textContent = /** @type {string} */ (value)
       }
@@ -1713,6 +1742,41 @@ function applyPlannedValue(
     case 'repeat':
       return
   }
+}
+
+/**
+ * The key of the text that a `text` binding last gave to an element. A `text`
+ * binding compares its projection with this value and does not read the live
+ * DOM. The element holds the value, not the binding, so overlapping
+ * declarations for one element see the writes of each other and the last
+ * declaration wins. A symbol property on the element is faster than a
+ * `WeakMap`, most of all when an update creates many elements.
+ */
+const writtenText = Symbol('lumi.text')
+
+/** @typedef {Element & {[writtenText]?: string | undefined}} TextSink */
+
+/**
+ * Writes text and keeps the text node when the element has only that node.
+ * An empty value removes all child nodes, as `textContent` does.
+ *
+ * @param {Element} element
+ * @param {string} text
+ */
+function writeText(element, text) {
+  const first = element.firstChild
+
+  if (
+    text !== ''
+    && first !== null
+    && first.nodeType === 3
+    && first.nextSibling === null
+  ) {
+    /** @type {Text} */ (first).data = text
+    return
+  }
+
+  element.textContent = text
 }
 
 /**

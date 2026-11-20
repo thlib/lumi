@@ -61,23 +61,22 @@ const noKey = Symbol('Lumi unkeyed occurrence')
  * @property {number[]} path
  * @property {SinkSpec[]} ownSinks
  * @property {ScopeSpec} scope
+ * @property {ReadonlyArray<unknown> | null} acceptedKeys The keys of the
+ * last item list that passed the duplicate check.
  */
 
 /**
- * @typedef {object} SinkPlan
- * @property {SinkSpec} spec
- * @property {unknown} value
- */
-
-/**
+ * A plan holds one prepared value for each sink spec, at the same index. It
+ * holds no object for each sink, so an update creates fewer objects.
+ *
  * @typedef {object} ScopePlan
- * @property {SinkPlan[]} sinks
- * @property {RegionPlan[]} regions
+ * @property {ReadonlyArray<unknown>} sinks
+ * @property {ReadonlyArray<RegionPlan>} regions
  */
 
 /**
  * @typedef {object} OccurrencePlan
- * @property {SinkPlan[]} ownSinks
+ * @property {ReadonlyArray<unknown>} ownSinks
  * @property {ScopePlan} scope
  * @property {import('./types.js').ProjectionContext<unknown, unknown>} context
  * @property {unknown} key
@@ -239,6 +238,7 @@ function compileScope(root, runtimes, runtimesByDescriptor, ownedSubtrees) {
         path: [],
         ownSinks: [],
         scope: { sinks: [], regions: [] },
+        acceptedKeys: null,
       })
     }
   }
@@ -426,32 +426,58 @@ function canCreateTargets(descriptor) {
  */
 function prepareScope(scope, normalize, context) {
   return {
-    sinks: scope.sinks.map(spec => {
-      return prepareSink(spec, normalize, context)
-    }),
-    regions: scope.regions.map(spec => {
-      return prepareRegion(spec, normalize, context)
-    }),
+    sinks: prepareSinks(scope.sinks, normalize, context),
+    regions: scope.regions.length === 0
+      ? noRegionPlans
+      : scope.regions.map(spec => {
+        return prepareRegion(spec, normalize, context)
+      }),
   }
 }
 
+/** @type {ReadonlyArray<unknown>} */
+const noValues = Object.freeze([])
+
+/** @type {ReadonlyArray<RegionPlan>} */
+const noRegionPlans = Object.freeze([])
+
 /**
- * @param {SinkSpec} spec
+ * Prepares one value for each sink spec, at the same index.
+ *
+ * @param {ReadonlyArray<SinkSpec>} specs
  * @param {(runtime: Runtime, projected: unknown) => unknown} normalize
  * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
- * @returns {SinkPlan}
+ * @returns {ReadonlyArray<unknown>}
  */
-function prepareSink(spec, normalize, context) {
-  const projected = projectValue(
-    spec.runtime,
-    spec.target,
-    spec.matchIndex,
-    context,
-  )
-  return {
-    spec,
-    value: normalize(spec.runtime, projected),
+function prepareSinks(specs, normalize, context) {
+  const length = specs.length
+
+  if (length === 0) {
+    return noValues
   }
+
+  /** @type {unknown[]} */
+  const values = new Array(length)
+
+  for (let index = 0; index < length; index += 1) {
+    const spec = /** @type {SinkSpec} */ (specs[index])
+    values[index] = normalize(
+      spec.runtime,
+      projectValue(spec.runtime, spec.target, spec.matchIndex, context),
+    )
+  }
+
+  return values
+}
+
+/**
+ * Compares two repeat keys with the equality rules of a `Map`.
+ *
+ * @param {unknown} left
+ * @param {unknown} right
+ */
+function sameKey(left, right) {
+  return left === right || (left !== left && right !== right)
 }
 
 /**
@@ -478,40 +504,76 @@ function prepareRegion(spec, normalize, context) {
   }
 
   const entries = /** @type {unknown[]} */ (resolved)
+  const length = entries.length
   /** @type {OccurrencePlan[]} */
-  const occurrences = new Array(entries.length)
+  const occurrences = new Array(length)
+  const keyed = spec.runtime.descriptor.key !== undefined
+  // Keys that are equal to the accepted keys, position for position, are
+  // unique. The explicit check starts at the first key that is different, so
+  // an update with the same keys builds no lookup.
+  const acceptedKeys = spec.acceptedKeys
+  /** @type {unknown[] | null} */
+  let keys = null
   /** @type {Map<unknown, number> | null} */
-  const indexesByKey = spec.runtime.descriptor.key === undefined
-    ? null
-    : new Map()
+  let indexesByKey = null
 
-  for (let index = 0; index < entries.length; index += 1) {
+  for (let index = 0; index < length; index += 1) {
     const entry = entries[index]
 
     const occurrenceContext = itemContext(context, entry, index)
     const key = projectKey(spec, occurrenceContext, index)
 
-    if (indexesByKey !== null) {
-      if (indexesByKey.has(key)) {
-        const firstIndex = /** @type {number} */ (indexesByKey.get(key))
-        throw new TypeError(
-          `Lumi repeat key for "${spec.runtime.descriptor.selector}" `
-          + `is duplicated at item positions ${firstIndex + 1} `
-          + `and ${index + 1}`,
+    if (keyed) {
+      if (
+        indexesByKey === null
+        && (
+          acceptedKeys === null
+          || index >= acceptedKeys.length
+          || !sameKey(acceptedKeys[index], key)
         )
+      ) {
+        indexesByKey = new Map()
+        keys = new Array(length)
+
+        for (let earlier = 0; earlier < index; earlier += 1) {
+          const acceptedKey = /** @type {ReadonlyArray<unknown>} */ (
+            acceptedKeys
+          )[earlier]
+          keys[earlier] = acceptedKey
+          indexesByKey.set(acceptedKey, earlier)
+        }
       }
-      indexesByKey.set(key, index)
+
+      if (indexesByKey !== null && keys !== null) {
+        const firstIndex = indexesByKey.get(key)
+
+        if (firstIndex !== undefined) {
+          throw new TypeError(
+            `Lumi repeat key for "${spec.runtime.descriptor.selector}" `
+            + `is duplicated at item positions ${firstIndex + 1} `
+            + `and ${index + 1}`,
+          )
+        }
+        indexesByKey.set(key, index)
+        keys[index] = key
+      }
     }
-    const ownSinks = spec.ownSinks.map(sink => {
-      return prepareSink(sink, normalize, occurrenceContext)
-    })
 
     occurrences[index] = {
-      ownSinks,
+      ownSinks: prepareSinks(spec.ownSinks, normalize, occurrenceContext),
       context: occurrenceContext,
       key,
       scope: prepareScope(spec.scope, normalize, occurrenceContext),
     }
+  }
+
+  if (keyed) {
+    spec.acceptedKeys = keys
+      ?? (
+        acceptedKeys === null || acceptedKeys.length === length
+          ? acceptedKeys ?? []
+          : acceptedKeys.slice(0, length)
+      )
   }
 
   return {
@@ -1025,12 +1087,12 @@ function trackPlannedScope(
 ) {
   const context = findContext(state.root, contextByElement)
 
-  for (let index = 0; index < plan.sinks.length; index += 1) {
-    const sink = plan.sinks[index]
+  for (let index = 0; index < state.sinkSpecs.length; index += 1) {
+    const sink = state.sinkSpecs[index]
     const element = state.sinkElements[index]
 
     if (sink !== undefined && element !== undefined) {
-      handledByRuntime.get(sink.spec.runtime)?.add(element)
+      handledByRuntime.get(sink.runtime)?.add(element)
       contextByElement.set(element, context)
     }
   }
@@ -1062,8 +1124,8 @@ function trackPlannedScope(
         occurrencePlan.context,
       )
 
-      for (const sink of occurrencePlan.ownSinks) {
-        handledByRuntime.get(sink.spec.runtime)?.add(occurrenceState.element)
+      for (const sink of regionPlan.spec.ownSinks) {
+        handledByRuntime.get(sink.runtime)?.add(occurrenceState.element)
       }
 
       if (occurrenceState.scope !== null) {
@@ -1153,6 +1215,7 @@ class ScopeState {
   constructor(root, spec, apply) {
     this.root = root
     this.applyValue = apply
+    this.sinkSpecs = spec.sinks
     this.sinkElements = spec.sinks.map(sink => {
       return elementAtBindingPath(root, sink.path)
     })
@@ -1167,12 +1230,14 @@ class ScopeState {
 
   /** @param {ScopePlan} plan */
   apply(plan) {
-    for (let index = 0; index < plan.sinks.length; index += 1) {
-      const sink = plan.sinks[index]
+    const specs = this.sinkSpecs
+
+    for (let index = 0; index < specs.length; index += 1) {
+      const sink = specs[index]
       const element = this.sinkElements[index]
 
       if (sink !== undefined && element !== undefined) {
-        this.applyValue(sink.spec.runtime, element, sink.value)
+        this.applyValue(sink.runtime, element, plan.sinks[index])
       }
     }
 
@@ -1254,6 +1319,14 @@ class RegionState {
    */
   applyKeyed(plans) {
     const previous = this.occurrences
+
+    // With the same keys in the same order, no occurrence is new, removed,
+    // or reordered. Only the check against the live DOM order remains.
+    if (hasSameKeys(previous, plans)) {
+      this.placeInOrder(previous, null)
+      return
+    }
+
     /** @type {Map<unknown, number>} */
     const available = new Map()
     let pristineIndex = -1
@@ -1311,13 +1384,27 @@ class RegionState {
       previous[source]?.destroy()
     }
 
+    this.placeInOrder(
+      next,
+      ordered ? null : stableOccurrences(previous, next),
+    )
+    this.occurrences = next
+  }
+
+  /**
+   * Makes the live DOM order match the order of the occurrences.
+   *
+   * @param {ReadonlyArray<OccurrenceState>} next
+   * @param {Uint8Array | null} stable 1 at each index that must not move in
+   * the first walk, or null when no occurrence changed its relative order.
+   */
+  placeInOrder(next, stable) {
     const parent = this.anchor.parentNode
 
     if (parent === null) {
       throw new Error('Lumi array binding anchor lost its parent')
     }
 
-    const stable = ordered ? null : stableOccurrences(previous, next)
     let reference = /** @type {Node} */ (this.anchor)
 
     // Without a reorder, every element is checked against the live DOM here,
@@ -1352,8 +1439,6 @@ class RegionState {
         reference = element
       }
     }
-
-    this.occurrences = next
   }
 
   /** @returns {OccurrenceState} */
@@ -1384,8 +1469,11 @@ class RegionState {
       )
     }
 
-    for (const sink of plan.ownSinks) {
-      this.applyValue(sink.spec.runtime, occurrence.element, sink.value)
+    const ownSinks = this.spec.ownSinks
+
+    for (let index = 0; index < ownSinks.length; index += 1) {
+      const sink = /** @type {SinkSpec} */ (ownSinks[index])
+      this.applyValue(sink.runtime, occurrence.element, plan.ownSinks[index])
     }
 
     occurrence.scope.apply(plan.scope)
@@ -1398,6 +1486,34 @@ class RegionState {
     this.occurrences = []
     this.anchor.remove()
   }
+}
+
+/**
+ * Tells whether the plans have the keys of the current occurrences, in the
+ * same order.
+ *
+ * @param {ReadonlyArray<OccurrenceState>} occurrences
+ * @param {ReadonlyArray<OccurrencePlan>} plans
+ */
+function hasSameKeys(occurrences, plans) {
+  const length = plans.length
+
+  if (occurrences.length !== length) {
+    return false
+  }
+
+  for (let index = 0; index < length; index += 1) {
+    if (
+      !sameKey(
+        /** @type {OccurrenceState} */ (occurrences[index]).key,
+        /** @type {OccurrencePlan} */ (plans[index]).key,
+      )
+    ) {
+      return false
+    }
+  }
+
+  return true
 }
 
 /**

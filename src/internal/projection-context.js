@@ -18,6 +18,33 @@ export function rootContext(data) {
 }
 
 /**
+ * One occurrence below a repeat binding. Projections seldom read `path`, so
+ * a getter builds it on demand. An update then does not create one array for
+ * each occurrence.
+ *
+ * @template Item
+ * @template Data
+ */
+class ItemContext {
+  /**
+   * @param {import('../types.js').ProjectionContext<unknown, Data>} parent
+   * @param {Item} item
+   * @param {number} index
+   */
+  constructor(parent, item, index) {
+    this.data = parent.data
+    this.item = item
+    this.index = index
+    this.parent = parent
+  }
+
+  /** @returns {ReadonlyArray<number>} */
+  get path() {
+    return [...this.parent.path, this.index]
+  }
+}
+
+/**
  * Creates one occurrence below a repeat binding.
  *
  * @template Data
@@ -28,11 +55,5 @@ export function rootContext(data) {
  * @returns {import('../types.js').ProjectionContext<Item, Data>}
  */
 export function itemContext(parent, item, index) {
-  return {
-    data: parent.data,
-    item,
-    index,
-    path: [...parent.path, index],
-    parent,
-  }
+  return new ItemContext(parent, item, index)
 }

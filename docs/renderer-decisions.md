@@ -96,6 +96,33 @@ Source:
 - `insertExpression` in [`@solidjs/web`](https://www.npmjs.com/package/@solidjs/web)
   2.0.3, file `dist/web.js`
 
+### An update with the same keys does little work for each row
+
+Solid 2 keeps a row when its item did not change, and it finds an unchanged
+start of a list with one comparison for each position. Solid can skip the
+row because its store reports each write. Lumi accepts plain data, and an
+application can change a plain object in place, so Lumi must run the
+projections of each row on each update. The result must depend only on the
+content of the data.
+
+Lumi applies the part of the idea that keeps this result. It makes the work
+for each row small:
+
+- When the keys are equal to the keys of the last update, position for
+  position, the duplicate check and the reconciliation build no lookup. The
+  lookup starts at the first key that is different.
+- A plan holds one value for each sink. It holds no object for each sink.
+- The positional `path` of a context is built only when a projection reads
+  it.
+
+The check of the live DOM order stays, so an update still repairs a reorder
+that other code made.
+
+Source:
+
+- `mapArray` in [`@solidjs/signals`](https://www.npmjs.com/package/@solidjs/signals)
+  2.0.3
+
 ### Executable sinks stay explicit
 
 Angular rejects event-property bindings and applies security contexts to HTML,
@@ -120,13 +147,11 @@ Sources:
 
 ## Kept out
 
-### Reactivity, scheduling, and tree descriptions
+### Tree descriptions
 
-Dependency tracking, queued rendering, concurrent work, compiler-generated
-virtual nodes, and whole-tree reconciliation solve framework responsibilities
-left to the application here. They do not improve the explicit
-data-to-known-DOM-location operation enough to justify their runtime and
-authoring models.
+Compiler-generated virtual nodes and whole-tree reconciliation put a second
+model of the document beside the native DOM. Bindings already identify the
+DOM locations to update, so Lumi works on the native DOM directly.
 
 ### Synthetic or delegated event systems
 

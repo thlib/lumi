@@ -4,7 +4,8 @@
 
 Lumi is a small browser-first rendering layer.
 
-It solves one problem: **Declarative DOM rendering**.
+It solves one problem: **Declarative DOM rendering** using as much native
+tooling as possible while respecting native encoding of data.
 
 It brings declarative updates to native HTML without relocating HTML into
 JavaScript or imposing a state-management model.
@@ -24,11 +25,7 @@ Native HTML + plain JavaScript + a data snapshot
 Call `update(data)` to render a snapshot, then call it again when the snapshot
 changes.
 
-It intentionally does not:
-
-- Fetch data
-- Watch for changes
-- Decide when rendering should happen
+Lumi does not fetch data. That is a different problem.
 
 ## Install
 
@@ -80,12 +77,8 @@ The model separates concerns that tend to become entangled in frontend code:
 - HTML describes native semantic structure.
 - CSS controls presentation and layout.
 - Plain JavaScript functions project data into declared DOM state.
-- The application owns data, business decisions, and update timing.
-- Native events carry user intent back to the application, which may produce new data and explicitly update again.
-
-At the application boundary, one page has one update operation.
-Nested components participate in that update rather than becoming
-independently scheduled applications.
+- The application owns data and business decisions.
+- Native events carry user intent back to the application, which may produce new data and update again.
 
 ## What broader approaches get wrong
 
@@ -105,14 +98,8 @@ commonly add unnecessary machinery:
   techniques from being used directly.
 - Requiring specialized compilers and parsers to produce browser-readable code
   makes a build pipeline necessary for a capability the browser already has.
-- Coupling DOM rendering to renderer-owned reactive state or change detection
-  makes the application adopt a state model merely to synchronize the DOM.
-- Hiding update timing behind automatic observation, dependency tracking, or
-  scheduling makes rendering work indirect and harder to reason about, test,
-  and measure.
-- Coupling component boundaries to independently scheduled state and
-  lifecycles turns one page update into coordination between separate runtime
-  boundaries.
+- Coupling DOM rendering to renderer-owned state makes the application adopt
+  a state model merely to synchronize the DOM.
 - Maintaining a parallel model of browser properties and attributes to infer
   the intended DOM operation duplicates an evolving browser contract and can
   make the resulting operation ambiguous.
@@ -130,15 +117,12 @@ in control of the surrounding responsibilities.
 - Do not impose a template language. Templates are HTML, styles are CSS, and
   rendering rules are ordinary JavaScript or TypeScript. Independent tools may
   add their own binding conventions without changing the core API.
-- Ship standards-bases JavaScript that works directly in modern browsers and ordinary bundlers.
-- Keep rendering explicit. There are no signals, proxies, watchers, dependency
-  tracking, or automatic rerendering.
-- Keep application data separate from presentation and DOM manipulation.
+- Ship standards-based JavaScript that works directly in modern browsers and ordinary bundlers.
+- Accept plain data. Data contains values, not DOM nodes, markup, or
+  callbacks.
 - Preserve real DOM nodes and the browser-managed state attached to them.
 - Use native events, bubbling, forms, focus behavior, layout, Shadow DOM, and
   slots rather than imitating the browser.
-- Use one component model regardless of complexity.
-- Keep compatibility shims below the component API.
 
 ## Implementation
 

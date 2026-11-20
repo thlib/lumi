@@ -2,7 +2,8 @@
 
 Lumi is a small browser-first rendering layer.
 
-Its one responsibility is declarative DOM rendering. Application code
+It solves one problem: **Declarative DOM rendering** using as much native
+tooling as possible while respecting native encoding of data. Application code
 describes what the DOM should show. Rendering finds, creates, moves, and
 updates the necessary nodes.
 
@@ -15,8 +16,7 @@ native HTML + ordinary JavaScript or TypeScript rules + a data snapshot
 ```
 
 Call `update(data)` to render a snapshot, then call it again when the snapshot
-changes. Data fetching, change detection, and update timing remain application
-concerns.
+changes. Data fetching remains an application concern.
 
 This is not a framework around the browser. It is the missing mechanical step
 between plain data and persistent native DOM.
@@ -92,7 +92,7 @@ independent tools
     data paths, schemas, forms, localization, component conventions
                        |
 application
-    state, behavior, routing, scheduling
+    state, behavior, routing
 ```
 
 Each layer remains independently replaceable. DOM reconciliation can improve
@@ -152,12 +152,12 @@ DOM update
 The narrower scope does not replace the complete role of these projects. It
 removes the need to adopt their authoring and runtime models when an
 application only needs declarative DOM rendering. The application keeps
-authority over data and update timing, HTML remains native HTML, events remain
-native events, while only mechanical DOM synchronization is handled here.
+authority over data, HTML remains native HTML, events remain native events,
+while only mechanical DOM synchronization is handled here.
 
 This is a scope boundary rather than a claim that less machinery is always
-better. A project that wants a framework-managed component lifecycle,
-reactivity, scheduling, and ecosystem is outside the intended use case.
+better. A project that wants a framework-managed component lifecycle and
+ecosystem is outside the intended use case.
 
 ## One concrete component
 
@@ -188,8 +188,8 @@ returns JSONPath nodelists unchanged. The browser can parse the template
 without knowing about either the rendering mechanism or the convention, and
 the template retains real default content.
 
-The component owns a presentation function that derives the exact snapshot
-required by its template and rendering rules:
+The example derives the snapshot that its template and rendering rules
+require:
 
 ```js
 let actualData = {
@@ -211,16 +211,6 @@ function presentCounter(data) {
   }
 }
 ```
-
-The presentation snapshot is allowed to contain derived, presentation-specific
-values such as `counterDisabled`. They are computed from actual application
-data rather than maintained as a second source of truth. Each component owns
-the shape and derivation of its own presentation data. A page presentation
-function composes those component presentation functions into the snapshot
-passed to the root component.
-
-Presentation functions run before rendering. Only their resulting snapshot is
-passed through, with no reference to the actual data that produced it.
 
 The rendering rules explicitly connect that snapshot to the application-side
 adapter:
@@ -277,16 +267,11 @@ That separation is the core of the design.
 
 Actual data and presentation data may have any ordinary JavaScript shapes the
 application needs. No store, schema, proxy, base class, or special object type
-is required. The constraint is about ownership: the application owns actual
-data, each component owns its presentation data, and neither smuggles rendering
-instructions or DOM objects into the snapshot.
+is required. The data does not contain rendering instructions or DOM objects.
 
-At the application boundary, one page has one update operation. Calling
-`update(pageData)` updates the active component tree. Nested components
-receive their relevant data through that update rather than becoming
-independently scheduled mini-applications. A document may deliberately mount
-multiple independent roots, but a separate update call for every component is
-not required.
+Calling `update(pageData)` updates the active component tree. Nested
+components receive their relevant data through that update. A document may
+mount multiple independent roots.
 
 ## What an update actually does
 
@@ -363,13 +348,6 @@ subscribed to, and update timing is never inferred from what a function reads.
 Declared projections are evaluated when the application calls `update`, then
 unnecessary DOM writes are avoided.
 
-The distinction matters:
-
-```text
-deciding whether new application data exists  -> application
-making the DOM match explicitly supplied data -> renderer
-```
-
 JavaScript comparisons are cheap and predictable. DOM mutations can trigger
 browser work and can destroy browser-managed state. Optimization therefore
 targets DOM mutation without taking control of application data.
@@ -419,10 +397,10 @@ Each piece has one job and one kind of authority.
 
 | Part | Receives | Owns | Must not decide |
 | --- | --- | --- | --- |
-| Application | Events, server results, stored state | Data, business rules, routing, state transitions, update timing | DOM mechanics |
+| Application | Events, server results, stored state | Data, business rules, routing, state transitions | DOM mechanics |
 | HTML template | Browser parsing | Semantic structure and useful default content | Application behavior |
 | Component rules | A data snapshot | Data-to-DOM projections | Authoritative state, behavior, or network activity |
-| Renderer | Rules, mounted DOM, explicit data | Stable bindings, comparisons, minimal writes, reconciliation, cleanup | When data changed or what the business should do |
+| Renderer | Rules, mounted DOM, explicit data | Stable bindings, comparisons, minimal writes, reconciliation, cleanup | What the business should do |
 | Browser | HTML, CSS, DOM operations | Parsing, elements, events, forms, focus, layout, accessibility, ephemeral UI state | Application state |
 
 ### The application owns data and decisions
@@ -434,7 +412,6 @@ The application owns:
 - Business logic and state transitions.
 - Routing and choosing the active page or layout.
 - Handling native UI events.
-- Deciding when to call `update(nextData)`.
 
 The application may attach native behavior listeners to persistent elements
 or delegate them from a component root. It should not patch rendered text and
@@ -482,11 +459,9 @@ Responsibilities include:
 - Reconciling structural regions without discarding stable nodes and with the
   fewest practical physical moves.
 - Preserving component instances across page and layout composition.
-- Hiding compatibility shims behind the same component contract.
 - Reporting useful binding and component failures during development.
 
-Writes produced by one update call may be collected and batched, but update
-timing must not be hidden behind a scheduler.
+Writes produced by one update call may be collected and batched.
 
 ### The browser owns browser state
 
@@ -648,18 +623,11 @@ Recreating the component is the last resort because recreation can discard
 focus, selection, input state, media playback, internal widget state, and
 other information the browser is already maintaining.
 
-All components obey the same contract. There is no easy component, advanced
-component, reactive component, or escape-hatch component.
-
 ## HTML, scripts, and styles
 
 HTML should remain HTML. It may live in an ordinary document or HTML fragment
 and be parsed by the browser. It should not primarily live in JavaScript
 strings.
-
-Controller modules should be loaded or registered explicitly. Scripts inside
-cloned template markup are not the lifecycle model. Repeatedly activating a
-template must not accumulate script elements, listeners, or abandoned nodes.
 
 Styles may be kept near a component template, but proximity alone does not
 scope CSS. Isolation must come from an actual browser mechanism such as
@@ -667,8 +635,7 @@ Shadow DOM, supported CSS scoping, or an explicit compatibility strategy.
 
 A component may be packaged as ordinary `.html`, `.js` or `.ts`, and `.css`
 files. An ordinary document may also link a module and stylesheet using native
-elements. Packaging must not create a new runtime language or depend on cloned
-scripts executing as a side effect of inserting markup.
+elements. Packaging must not create a new runtime language.
 
 Text data uses `textContent` semantics by default. A string is data even if it
 contains characters that resemble markup or placeholders.
@@ -740,13 +707,7 @@ Use existing platform primitives when they satisfy the contract:
 - Custom elements when their lifecycle and interoperability are useful.
 - `hidden`, dialogs, popovers, and other semantic platform state.
 
-Newer primitives may be used behind capability checks. Compatibility code
-belongs below the component contract, so old and new browsers do not require
-different component definitions.
-
-A shim must not promise behavior it cannot preserve. If a browser cannot
-retain some ephemeral state during a physical move, the support boundary
-should be documented rather than introducing another authoring model.
+Newer primitives may be used behind capability checks.
 
 ## Intentional exclusions
 
@@ -758,14 +719,10 @@ The design must not:
   directives, string handler names, built-in string property paths, runtime
   evaluation, or a parser for application expressions.
 - Make JavaScript strings the primary home of HTML.
-- Add signals, proxies, watchers, subscriptions, dependency tracking,
-  computed graphs, or automatic rerendering.
 - Infer keyed identity for array repetition. Positional identity is the
   default, and keyed identity requires an explicit key projection.
 - Become a state manager, store, router, data cache, network client, GraphQL
   layer, server protocol, or business-logic runtime.
-- Decide whether application data changed. It only makes the DOM match data
-  that was explicitly supplied.
 - Introduce a synthetic event system or hide native event behavior.
 - Mutate application data in response to an event.
 - Require data to contain DOM nodes, markup, callbacks, or special mutable
@@ -777,16 +734,11 @@ The design must not:
 - Overwrite browser-owned or imperative state that no rendering rule owns.
 - Let a binding and an imperative or opaque custom writer control the same DOM
   property or subtree.
-- Create separate simple and advanced component systems.
 - Require a build step for runtime meaning. TypeScript and builds may provide
   checks, packaging, and optimization, but the model remains HTML, CSS, and
   JavaScript.
-- Execute controller scripts merely because template markup was inserted.
 - Claim that adjacent styles are scoped when the browser treats them as
   global.
-- Depend on experimental browser behavior without a fallback or explicit
-  support boundary.
-- Hide application update timing behind an automatic scheduler.
 
 ## Design acceptance tests
 
@@ -797,23 +749,10 @@ The design remains intact only if all of these stay true:
 - Computed component rules are valid ordinary JavaScript or TypeScript.
 - No parser or syntax transform is needed to understand component
   behavior.
-- One explicit page update updates its active component tree.
 - The data snapshot contains values, not presentation or behavior.
 - Useful default content can exist before rendering begins.
 - Calling `update` twice with identical projected values performs no
   meaningful DOM writes.
-- A projection or structural-validation failure performs no live DOM writes
-  and does not prevent a later valid update.
-- A parent content rule may create or remove a descendant binding target in
-  the same update; the descendant selector sees the prepared result.
-- An unmatched scalar selector is a no-op.
-- Overlapping built-in selector sets are deterministic, and the last
-  declaration wins when they reach the same sink.
-- Scalar bindings reject projection results outside their declared value
-  types instead of relying on implicit DOM string or boolean coercion.
-- Empty repeat arrays produce zero elements, nested repeats preserve their
-  dimensions, positional repeats retain identity by position, and keyed
-  repeats retain identity by key.
 - Changing one scalar projection changes only its bound DOM state.
 - An unbound DOM property remains untouched.
 - An opaque imperative subtree survives renders unchanged.
@@ -821,8 +760,7 @@ The design remains intact only if all of these stay true:
 - Native application listeners remain attached because their elements persist
   across renders.
 - A click or submit stays native. The application decides the next data and
-  explicitly renders it.
-- A compatibility implementation does not change how components are written.
+  renders it.
 
 These tests protect the architecture better than a feature checklist. A
 feature that fails one of them must be redesigned or kept outside the API.

@@ -23,8 +23,7 @@ Native HTML + plain JavaScript + a data snapshot
         minimal writes to the DOM
 ```
 
-Call `update(data)` to render a snapshot, then call it again when the snapshot
-changes.
+Call `update(data)` to render a snapshot, then call it again when the snapshot changes.
 
 Lumi does not fetch data. That is a different problem.
 

@@ -33,6 +33,8 @@ const root = resolve(import.meta.dirname, '..')
  *   filterCycles: number,
  *   recordFilterCycles: number,
  *   recordSamples: number,
+ *   browserChannel: string | null,
+ *   browserExecutable: string | null,
  *   build: boolean,
  *   output: string,
  *   jsonOutput: string,
@@ -42,6 +44,7 @@ const root = resolve(import.meta.dirname, '..')
  * @typedef {{
  *   domContentLoadedMs: number,
  *   firstContentfulPaintMs: number | null,
+ *   firstRenderMs: number,
  *   loadMs: number,
  * }} StartupResult
  *
@@ -90,6 +93,7 @@ const root = resolve(import.meta.dirname, '..')
  *   domContentLoadedMs: Statistics,
  *   filterMsPerUpdate: Statistics,
  *   firstContentfulPaintMs: Statistics,
+ *   firstRenderMs: Statistics,
  *   heapDeltaBytes: Statistics,
  *   initialNodes: Statistics,
  *   loadMs: Statistics,
@@ -187,6 +191,8 @@ const defaultOptions = Object.freeze({
   filterCycles: 100,
   recordFilterCycles: 1,
   recordSamples: 2,
+  browserChannel: null,
+  browserExecutable: null,
   build: true,
   output: resolve(root, 'benchmark/results/spa-performance.md'),
   jsonOutput: resolve(root, 'benchmark/results/spa-performance.json'),
@@ -273,7 +279,7 @@ async function runBenchmarks(origin, options) {
         `  sample ${sampleIndex + 1}/${options.samples}: `
         + `${framework.label.padEnd(13)} ... `,
       )
-      const browser = await launchBenchmarkBrowser()
+      const browser = await launchBenchmarkBrowser(options)
       let result
 
       try {
@@ -292,7 +298,7 @@ async function runBenchmarks(origin, options) {
         recordValue(resourceUrls, framework.id).add(url)
       }
       console.log(
-        `${result.startup.loadMs.toFixed(1)} ms load, `
+        `${result.startup.firstRenderMs.toFixed(1)} ms first render, `
         + `${result.stress.routeMsPerUpdate.toFixed(3)} ms/route, `
         + `${result.stress.filterMsPerUpdate.toFixed(3)} ms/filter, `
         + (result.stress.recordFilterMsPerUpdate === null
@@ -305,13 +311,59 @@ async function runBenchmarks(origin, options) {
   return {samples, resourceUrls, browserVersion}
 }
 
-function launchBenchmarkBrowser() {
+/** @param {Options} options */
+function launchBenchmarkBrowser(options) {
   return chromium.launch({
     headless: true,
     args: [
       '--enable-precise-memory-info',
       '--js-flags=--expose-gc',
     ],
+    // Without these options, Playwright uses its own Chromium build.
+    ...options.browserChannel === null
+      ? {}
+      : {channel: options.browserChannel},
+    ...options.browserExecutable === null
+      ? {}
+      : {executablePath: options.browserExecutable},
+  })
+}
+
+/**
+ * Records when the application first puts its visible page heading into the
+ * document. Playwright runs this function in each new document before any
+ * page script, so it measures every loading strategy in the same way.
+ */
+function installFirstRenderProbe() {
+  if (window !== window.top) {
+    return
+  }
+
+  const hasRenderedHeading = () => {
+    for (const heading of document.querySelectorAll('main h1')) {
+      if (
+        heading.closest('[hidden]') === null
+        && (heading.textContent ?? '').trim() !== ''
+      ) {
+        return true
+      }
+    }
+    return false
+  }
+  const observer = new MutationObserver(() => {
+    if (!hasRenderedHeading()) {
+      return
+    }
+
+    observer.disconnect()
+    Reflect.set(globalThis, '__benchmarkFirstRenderMs', performance.now())
+  })
+
+  observer.observe(document, {
+    attributes: true,
+    characterData: true,
+    childList: true,
+    subtree: true,
   })
 }
 
@@ -339,6 +391,7 @@ async function runSample(browser, url, options, measureRecordFilter) {
   await page.exposeFunction('__stopBenchmarkTaskTrace', () => {
     return taskTrace.stop()
   })
+  await page.addInitScript(installFirstRenderProbe)
 
   /** @type {Error[]} */
   const pageErrors = []
@@ -347,6 +400,12 @@ async function runSample(browser, url, options, measureRecordFilter) {
   try {
     await page.goto(url, {waitUntil: 'load'})
     await page.waitForSelector('main h1', {state: 'visible'})
+    await page.waitForFunction(
+      () => typeof Reflect.get(globalThis, '__benchmarkFirstRenderMs')
+        === 'number',
+      undefined,
+      {timeout: 30_000},
+    )
     await page.evaluate(() => new Promise(resolvePaint => {
       requestAnimationFrame(() => requestAnimationFrame(resolvePaint))
     }))
@@ -367,13 +426,19 @@ async function runSample(browser, url, options, measureRecordFilter) {
         entry => entry.name === 'first-contentful-paint',
       )
 
+      const firstRenderMs = Reflect.get(globalThis, '__benchmarkFirstRenderMs')
+
       if (!(navigation instanceof PerformanceNavigationTiming)) {
         throw new Error('Navigation timing is unavailable')
+      }
+      if (typeof firstRenderMs !== 'number') {
+        throw new Error('The first render time was not recorded')
       }
 
       return {
         domContentLoadedMs: navigation.domContentLoadedEventEnd,
         firstContentfulPaintMs: firstContentfulPaint?.startTime ?? null,
+        firstRenderMs,
         loadMs: navigation.loadEventEnd,
       }
     })
@@ -737,6 +802,9 @@ async function createReport(result, options, browserVersion) {
       firstContentfulPaintMs: summarize(frameworkSamples
         .map(sample => sample.startup.firstContentfulPaintMs)
         .filter(value => value !== null)),
+      firstRenderMs: summarize(frameworkSamples.map(
+        sample => sample.startup.firstRenderMs,
+      )),
       heapDeltaBytes: summarize(frameworkSamples
         .map(sample => sample.stress.heapDeltaBytes)
         .filter(value => value !== null)),
@@ -768,6 +836,13 @@ async function createReport(result, options, browserVersion) {
   })))
 
   const generatedAt = new Date().toISOString()
+  const browserDescription = `Chromium ${browserVersion}`
+    + (options.browserChannel === null
+      ? ''
+      : ` (browser channel \`${options.browserChannel}\`)`)
+    + (options.browserExecutable === null
+      ? ''
+      : ` (browser executable \`${options.browserExecutable}\`)`)
   /** @param {keyof MetricSummary} metric */
   const winner = metric => {
     const ranked = [...frameworks].sort((left, right) => {
@@ -780,7 +855,7 @@ async function createReport(result, options, browserVersion) {
     }
     return first
   }
-  const fastestLoad = winner('loadMs')
+  const fastestFirstRender = winner('firstRenderMs')
   const fastestRoute = winner('routeMsPerUpdate')
   const fastestFilter = winner('filterMsPerUpdate')
   const fastestRecordFilter = winner('recordFilterMsPerUpdate')
@@ -796,7 +871,7 @@ async function createReport(result, options, browserVersion) {
   const resultRows = frameworks.map(framework => {
     const values = recordValue(summary, framework.id)
     return `| ${framework.label} ${recordValue(versions, framework.id)} `
-      + `| ${formatTiming(values.loadMs)} `
+      + `| ${formatTiming(values.firstRenderMs)} `
       + `| ${formatTiming(values.firstContentfulPaintMs)} `
       + `| ${formatTiming(values.routeMsPerUpdate, 3)} `
       + `| ${formatTiming(values.filterMsPerUpdate, 3)} `
@@ -830,7 +905,10 @@ async function createReport(result, options, browserVersion) {
     const frameworkAssets = recordValue(assets, framework.id)
     const lumiAssets = recordValue(assets, LUMI_BASELINE)
     return `| ${framework.label} `
-      + `| ${formatRatio(values.loadMs.median, lumi.loadMs.median)} `
+      + `| ${formatRatio(
+        values.firstRenderMs.median,
+        lumi.firstRenderMs.median,
+      )} `
       + `| ${formatRatio(
         values.routeMsPerUpdate.median,
         lumi.routeMsPerUpdate.median,
@@ -858,14 +936,14 @@ async function createReport(result, options, browserVersion) {
   const markdown = `# SPA performance comparison
 
 Generated ${generatedAt} on ${platform()} ${release()}, Node ${process.version},
-Chromium ${browserVersion}. Lower timing and size values are better.
+${browserDescription}. Lower timing and size values are better.
 
 ## Results
 
-Load, FCP, and update timing cells show the median, with p95 in parentheses,
-across ${options.samples} cache-disabled samples.
+First render, FCP, and update timing cells show the median, with p95 in
+parentheses, across ${options.samples} cache-disabled samples.
 
-| Framework | Cold load ms | FCP ms | Route ms/update | Filter ms/update | Tasks >${TASK_THRESHOLD_MS} ms count / total ms | Initial DOM nodes | DOM node delta |
+| Framework | First render ms | FCP ms | Route ms/update | Filter ms/update | Tasks >${TASK_THRESHOLD_MS} ms count / total ms | Initial DOM nodes | DOM node delta |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 ${resultRows}
 
@@ -894,7 +972,7 @@ ${assetRows}
 
 Values below 1.00× are lower than Lumi build; values above 1.00× are higher.
 
-| Framework | Cold load | Route update | Filter update | Gzip assets |
+| Framework | First render | Route update | Filter update | Gzip assets |
 | --- | ---: | ---: | ---: | ---: |
 ${relativeRows}
 
@@ -910,8 +988,10 @@ ${validationRows}
 
 ## Reading the result
 
-- ${fastestLoad.label} recorded the lowest median cold-load time
-  (${formatNumber(recordValue(summary, fastestLoad.id).loadMs.median)} ms).
+- ${fastestFirstRender.label} recorded the lowest median first-render time
+  (${formatNumber(
+    recordValue(summary, fastestFirstRender.id).firstRenderMs.median,
+  )} ms).
 - ${fastestRoute.label} recorded the lowest median route-update time
   (${formatNumber(
     recordValue(summary, fastestRoute.id).routeMsPerUpdate.median,
@@ -956,8 +1036,23 @@ application code splitting.
   heap stability measurements.
 - CSS transitions and animations are disabled; the viewport is 1440 × 1000
   with reduced motion enabled.
-- Cold load is \`PerformanceNavigationTiming.loadEventEnd\`. Update timings are
-  measured inside the page with \`performance.now()\`.
+- First render is the time from navigation start until the application puts
+  its first visible page heading into the document. A visible page heading is
+  a \`main h1\` element that has text and is not inside a \`[hidden]\`
+  element. Before the page scripts run, the harness installs a
+  \`MutationObserver\`. The observer records \`performance.now()\` when its
+  callback finds the first visible page heading. For each loading strategy,
+  the value includes the download, parsing, and execution of the application
+  code and the first render. The value does not include the paint. FCP shows
+  the first paint.
+- The report does not compare \`DOMContentLoaded\` or load event times. An
+  application that starts from a dynamic \`import()\` can render after the
+  load event. An application that starts in a \`DOMContentLoaded\` listener
+  renders before the load event. Because of this, these event times include
+  the first render for some applications and not for others. The JSON report
+  keeps \`PerformanceNavigationTiming.domContentLoadedEventEnd\` and
+  \`loadEventEnd\` as the raw \`domContentLoadedMs\` and \`loadMs\` values.
+- Update timings are measured inside the page with \`performance.now()\`.
 - Tasks >${TASK_THRESHOLD_MS} ms are complete Chromium renderer \`RunTask\`
   intervals captured through the DevTools timeline. Zero means that no
   individual main-thread task crossed the threshold, not that the run was
@@ -971,6 +1066,12 @@ application code splitting.
     generatedAt,
     environment: {
       browser: `Chromium ${browserVersion}`,
+      ...options.browserChannel === null
+        ? {}
+        : {browserChannel: options.browserChannel},
+      ...options.browserExecutable === null
+        ? {}
+        : {browserExecutable: options.browserExecutable},
       node: process.version,
       os: `${platform()} ${release()}`,
       viewport: {height: 1000, width: 1440},
@@ -999,7 +1100,9 @@ application code splitting.
       const value = recordValue(summary, framework.id)
       const frameworkAssets = recordValue(assets, framework.id)
       return `  ${framework.label.padEnd(13)} `
-        + `load ${formatNumber(value.loadMs.median).padStart(7)} ms | `
+        + `first render ${formatNumber(
+          value.firstRenderMs.median,
+        ).padStart(7)} ms | `
         + `route ${formatNumber(
           value.routeMsPerUpdate.median,
           3,
@@ -1304,12 +1407,33 @@ function parseArguments(arguments_) {
       options.output = resolve(process.cwd(), value)
     } else if (name === '--json-output') {
       options.jsonOutput = resolve(process.cwd(), value)
+    } else if (name === '--browser-channel') {
+      options.browserChannel = parseNonEmptyString(name, value)
+    } else if (name === '--browser-executable') {
+      options.browserExecutable = resolve(
+        process.cwd(),
+        parseNonEmptyString(name, value),
+      )
     } else {
       throw new Error(`Unknown option "${name}"`)
     }
   }
 
+  if (options.browserChannel !== null && options.browserExecutable !== null) {
+    throw new Error(
+      'Use --browser-channel or --browser-executable, not both',
+    )
+  }
+
   return options
+}
+
+/** @param {string} name @param {string} value */
+function parseNonEmptyString(name, value) {
+  if (value === '') {
+    throw new Error(`${name} must not be empty`)
+  }
+  return value
 }
 
 /** @param {string} name @param {string} value */
@@ -1334,6 +1458,12 @@ Options:
   --skip-build         Use existing framework production bundles
   --output=PATH        Markdown report path
   --json-output=PATH   Raw JSON report path
+  --browser-channel=NAME
+                       Playwright browser channel, for example "chrome"
+                       (default: Playwright's own Chromium)
+  --browser-executable=PATH
+                       Chromium-based browser executable to launch
+                       (default: Playwright's own Chromium)
   --help               Show this help`)
 }
 

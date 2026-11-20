@@ -8,6 +8,7 @@ import {
   repeat,
   style,
   text,
+  type Binding,
   type Component,
   type ComponentOptions,
   type ComponentSource,
@@ -166,3 +167,43 @@ text<CounterData, CounterData, '.result'>('.result', (_context, element) => {
 
   return matchedElement.tagName
 })
+
+// ARIA states are string tokens: a literal aria-* name rejects a projection
+// that can return true. Every other attribute name keeps TextValue.
+type CounterContext = ProjectionContext<CounterData, CounterData>
+
+// @ts-expect-error true writes an empty aria-* attribute; project 'true' or 'false'.
+attr('button', 'aria-expanded', ({data}: CounterContext) => data.disabled)
+// @ts-expect-error a literal true is rejected for ARIA names too.
+attr('button', 'aria-pressed', () => true)
+// @ts-expect-error ARIA name matching ignores case.
+attr('button', 'ARIA-Pressed', ({data}: CounterContext) => data.disabled)
+// @ts-expect-error explicit type arguments that name the attribute keep the check.
+attr<CounterData, CounterData, 'button', 'aria-checked'>('button', 'aria-checked', ({data}) => data.disabled)
+
+const ariaExpanded: Binding<CounterData> = attr(
+  'button',
+  'aria-expanded',
+  ({data}: CounterContext, button) => {
+    const control: HTMLButtonElement = button
+    void control
+    return String(data.disabled)
+  },
+)
+void ariaExpanded
+attr('a', 'aria-current', ({data}: CounterContext) => data.disabled ? 'page' : false)
+attr('output', 'aria-valuenow', ({data}: CounterContext) => data.count)
+attr('output', 'aria-hidden', () => null)
+
+const disabledAttribute: Binding<CounterData> = attr(
+  'button',
+  'disabled',
+  ({data}: CounterContext) => data.disabled,
+)
+void disabledAttribute
+attr('output', 'hidden', () => true)
+attr('output', 'data-aria-state', () => true)
+declare const dynamicName: string
+attr('output', dynamicName, () => true)
+// Explicit type arguments without the name fall back to a string name.
+attr<CounterData, CounterData>('output', 'aria-busy', ({data}) => data.disabled)

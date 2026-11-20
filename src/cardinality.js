@@ -1243,38 +1243,72 @@ class RegionState {
     }
   }
 
-  /** @param {OccurrencePlan[]} plans */
+  /**
+   * Reconciles keyed occurrences with the fewest DOM operations: one removal
+   * for each removed key, one insertion at the final position for each new
+   * key, and moves only for surviving occurrences outside the longest run
+   * that is already in the new relative order. The data is authoritative:
+   * if other code reordered the elements, this restores the projected order.
+   *
+   * @param {OccurrencePlan[]} plans
+   */
   applyKeyed(plans) {
-    /** @type {Map<unknown, OccurrenceState>} */
+    const previous = this.occurrences
+    /** @type {Map<unknown, number>} */
     const available = new Map()
-    /** @type {OccurrenceState | null} */
-    let pristine = null
+    let pristineIndex = -1
 
-    for (const occurrence of this.occurrences) {
+    for (let index = 0; index < previous.length; index += 1) {
+      const occurrence = /** @type {OccurrenceState} */ (previous[index])
+
       if (occurrence.key === noKey) {
-        pristine = occurrence
+        pristineIndex = index
       } else {
-        available.set(occurrence.key, occurrence)
+        available.set(occurrence.key, index)
       }
     }
 
-    const next = plans.map(plan => {
-      const existing = available.get(plan.key)
-      const occurrence = existing ?? pristine ?? this.createOccurrence()
+    /** @type {OccurrenceState[]} */
+    const next = new Array(plans.length)
+    // Old indexes of survivors, in new order, are increasing until the first
+    // reorder. Only a reorder needs the longest-run computation.
+    let lastSource = -1
+    let ordered = true
 
-      if (existing !== undefined) {
+    for (let index = 0; index < plans.length; index += 1) {
+      const plan = /** @type {OccurrencePlan} */ (plans[index])
+      let source = available.get(plan.key)
+
+      if (source !== undefined) {
         available.delete(plan.key)
-      } else if (pristine !== null) {
-        pristine = null
+      } else if (pristineIndex !== -1) {
+        source = pristineIndex
+        pristineIndex = -1
+      }
+
+      /** @type {OccurrenceState} */
+      let occurrence
+
+      if (source === undefined) {
+        occurrence = this.detachedOccurrence()
+      } else {
+        occurrence = /** @type {OccurrenceState} */ (previous[source])
+
+        if (source < lastSource) {
+          ordered = false
+        }
+        lastSource = source
       }
 
       occurrence.key = plan.key
-      return occurrence
-    })
+      next[index] = occurrence
+    }
 
-    pristine?.destroy()
-    for (const occurrence of available.values()) {
-      occurrence.destroy()
+    if (pristineIndex !== -1) {
+      previous[pristineIndex]?.destroy()
+    }
+    for (const source of available.values()) {
+      previous[source]?.destroy()
     }
 
     const parent = this.anchor.parentNode
@@ -1283,19 +1317,40 @@ class RegionState {
       throw new Error('Lumi array binding anchor lost its parent')
     }
 
+    const stable = ordered ? null : stableOccurrences(previous, next)
     let reference = /** @type {Node} */ (this.anchor)
 
+    // Without a reorder, every element is checked against the live DOM here,
+    // so this one walk also repairs changes that other code made. A new
+    // occurrence is detached, so its next sibling never matches: it gets one
+    // insertion at its final position.
     for (let index = next.length - 1; index >= 0; index -= 1) {
-      const occurrence = next[index]
+      const element = /** @type {OccurrenceState} */ (next[index]).element
 
-      if (occurrence === undefined) {
-        continue
+      if (
+        (stable === null || stable[index] === 0)
+        && element.nextSibling !== reference
+      ) {
+        placeBefore(parent, element, reference)
       }
+      reference = element
+    }
 
-      if (occurrence.element.nextSibling !== reference) {
-        moveBefore(parent, occurrence.element, reference)
+    if (stable !== null) {
+      // The longest run comes from the remembered order. Other code can
+      // reorder the elements, so this pass reads the live DOM and moves only
+      // on a mismatch; without outside changes it moves nothing. The main
+      // walk cannot do this check for a stable element, because its next
+      // sibling can correctly be a lower-index element that has not moved yet.
+      reference = this.anchor
+      for (let index = next.length - 1; index >= 0; index -= 1) {
+        const element = /** @type {OccurrenceState} */ (next[index]).element
+
+        if (element.nextSibling !== reference) {
+          placeBefore(parent, element, reference)
+        }
+        reference = element
       }
-      reference = occurrence.element
     }
 
     this.occurrences = next
@@ -1303,10 +1358,16 @@ class RegionState {
 
   /** @returns {OccurrenceState} */
   createOccurrence() {
+    const occurrence = this.detachedOccurrence()
+    this.anchor.parentNode?.insertBefore(occurrence.element, this.anchor)
+    return occurrence
+  }
+
+  /** @returns {OccurrenceState} */
+  detachedOccurrence() {
     const element = /** @type {Element} */ (
       importElementTree(this.anchor.ownerDocument, this.spec.target)
     )
-    this.anchor.parentNode?.insertBefore(element, this.anchor)
     return new OccurrenceState(element)
   }
 
@@ -1336,6 +1397,96 @@ class RegionState {
     }
     this.occurrences = []
     this.anchor.remove()
+  }
+}
+
+/**
+ * Marks the surviving occurrences that stay in place during a keyed reorder:
+ * the longest run of survivors whose previous DOM order is already the new
+ * relative order. Every other survivor moves once. The computation is
+ * O(n log n) and does not recurse.
+ *
+ * @param {ReadonlyArray<OccurrenceState>} previous
+ * @param {ReadonlyArray<OccurrenceState>} next
+ * @returns {Uint8Array} 1 at each index of `next` that must not move
+ */
+function stableOccurrences(previous, next) {
+  /** @type {Map<OccurrenceState, number>} */
+  const sourceByOccurrence = new Map()
+
+  for (let index = 0; index < previous.length; index += 1) {
+    sourceByOccurrence.set(
+      /** @type {OccurrenceState} */ (previous[index]),
+      index,
+    )
+  }
+
+  const length = next.length
+  const sources = new Int32Array(length)
+  // tails[k] is the index in `next` that ends the best run of length k + 1.
+  const tails = new Int32Array(length)
+  const predecessors = new Int32Array(length)
+  let longest = 0
+
+  for (let index = 0; index < length; index += 1) {
+    const source = sourceByOccurrence.get(
+      /** @type {OccurrenceState} */ (next[index]),
+    ) ?? -1
+    sources[index] = source
+
+    if (source === -1) {
+      continue
+    }
+
+    let low = 0
+    let high = longest
+
+    while (low < high) {
+      const middle = (low + high) >>> 1
+      const tail = /** @type {number} */ (tails[middle])
+
+      if (/** @type {number} */ (sources[tail]) < source) {
+        low = middle + 1
+      } else {
+        high = middle
+      }
+    }
+
+    predecessors[index] = low > 0
+      ? /** @type {number} */ (tails[low - 1])
+      : -1
+    tails[low] = index
+
+    if (low === longest) {
+      longest += 1
+    }
+  }
+
+  const stable = new Uint8Array(length)
+  let index = longest > 0 ? /** @type {number} */ (tails[longest - 1]) : -1
+
+  while (index !== -1) {
+    stable[index] = 1
+    index = /** @type {number} */ (predecessors[index])
+  }
+
+  return stable
+}
+
+/**
+ * Puts a keyed occurrence element before the reference node. An element that
+ * is already in the parent moves with moveBefore when possible. A new element,
+ * or one that other code took out of the parent, is inserted.
+ *
+ * @param {Node} parent
+ * @param {Node} node
+ * @param {Node} reference
+ */
+function placeBefore(parent, node, reference) {
+  if (node.parentNode === parent) {
+    moveBefore(parent, node, reference)
+  } else {
+    parent.insertBefore(node, reference)
   }
 }
 

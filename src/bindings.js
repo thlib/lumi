@@ -188,14 +188,19 @@ export function prop(selector, project, name) {
  * strings or numbers to their text representation. A nullish projection
  * performs no DOM operation.
  *
+ * ARIA states are string tokens. For a literal `aria-*` name, the projection
+ * cannot return `true`, because `true` writes an empty attribute. Project
+ * `'true'` or `'false'` instead.
+ *
  * Native event handlers and srcdoc are not supported by generic bindings.
  *
  * @template Item
  * @template [Data=unknown]
  * @template {string} [Selector=string]
+ * @template {string} [Name=string]
  * @param {Selector} selector
- * @param {string} name
- * @param {ContextProjection<Item, Data, TextValue | null | undefined, SelectorElement<Selector>>} project
+ * @param {Name} name
+ * @param {ContextProjection<Item, Data, (Lowercase<Name> extends `aria-${string}` ? string | number | false : TextValue) | null | undefined, SelectorElement<Selector>>} project
  * @returns {import('./types.js').Binding<Data>}
  * @throws {TypeError} When name is an event handler or srcdoc.
  */

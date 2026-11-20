@@ -50,7 +50,7 @@ Without a build step, load the browser bundle from a CDN:
 </script>
 ```
 
-`dist/lumi.js` is one minified ES module of approximately 11 kB when compressed
+`dist/lumi.js` is one minified ES module of approximately 12 kB when compressed
 with gzip. One request replaces the module graph. Its source map resolves to
 the published source, so developer tools show the original code. Use a fixed
 version because an unpinned CDN URL follows the latest release.
@@ -163,6 +163,8 @@ snapshot and the current occurrence. `repeat` changes cardinality; other
 bindings project one value into the current occurrence.
 [How array cardinality works](./docs/cardinality-explained.md) walks through
 that mechanism.
+[Component sources in separate HTML files](./docs/html-sources.md) shows how
+to keep a source in its own `.html` file with no added Lumi code.
 
 The supported package surface is the functions and types exported from
 `@thlibjs/lumi`. Its public functions and lifecycle are documented in

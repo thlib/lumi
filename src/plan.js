@@ -28,6 +28,8 @@ const domBindingDescriptor = Symbol('Lumi DOM binding descriptor')
 const ownedDomSubtrees = Symbol('Lumi owned DOM subtrees')
 const noOperation = () => {}
 const classWhitespace = '[\\t\\n\\f\\r ]'
+// Marks a batch match that an earlier hoisted content operation planned.
+const unplannedMatch = Symbol('Lumi unplanned match')
 
 /**
  * @typedef {string | number | boolean} TextValue
@@ -77,6 +79,7 @@ const classWhitespace = '[\\t\\n\\f\\r ]'
  * @property {Window | null} view
  * @property {(projected: unknown, trustedTypes: TrustedHTMLCheck | null) => unknown} normalize
  * @property {(element: Element, value: unknown) => boolean} apply
+ * @property {(element: Element, value: unknown) => boolean} changes
  */
 
 /**
@@ -99,6 +102,18 @@ const classWhitespace = '[\\t\\n\\f\\r ]'
 /**
  * @template Data
  * @typedef {SingleOperation<Data> | BatchOperation<Data>} DomOperation
+ */
+
+/**
+ * Operations that the direct planner prepared. When `complete` is false, the
+ * staged planner continues with hoisted content tasks (`nextRuntime` is -1)
+ * or with the declaration at `nextRuntime`.
+ *
+ * @template Data
+ * @typedef {object} DirectProgress
+ * @property {boolean} complete
+ * @property {Array<DomOperation<Data>>} operations
+ * @property {number} nextRuntime
  */
 
 /**
@@ -302,10 +317,12 @@ function createDomBindingRuntime(descriptor, index, root) {
     view: root.ownerDocument.defaultView,
     normalize: () => noValue,
     apply: () => false,
+    changes: () => false,
   }
 
   runtime.normalize = createRuntimeNormalizer(runtime)
   runtime.apply = createRuntimeApply(runtime)
+  runtime.changes = createRuntimeChange(runtime)
   return runtime
 }
 
@@ -358,11 +375,16 @@ function createRuntimeNormalizer(runtime) {
         return projected
       }
     }
-    case 'attribute':
+    case 'attribute': {
+      // Decided once per declaration so the update path pays one boolean test.
+      const isAria = /^aria-/i.test(/** @type {string} */ (descriptor.name))
       return (/** @type {unknown} */ projected) => {
         if (!isTextValue(projected)) {
           warnIgnored(runtime, projected, 'a string, number, or boolean')
           return noValue
+        }
+        if (isAria && projected === true) {
+          warnAriaBoolean(runtime)
         }
         return projected === false
           ? false
@@ -370,6 +392,7 @@ function createRuntimeNormalizer(runtime) {
             ? ''
             : String(projected)
       }
+    }
     case 'class':
       return (/** @type {unknown} */ projected) => {
         if (typeof projected !== 'boolean') {
@@ -413,15 +436,10 @@ function createRuntimeApply(runtime) {
       return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
         const current = Reflect.get(element, name)
         const projectedValue = projectedCacheValue(runtime, value)
-        const previous = runtime.values.get(element)
-
-        const shouldWrite = (
-          !Object.is(current, projectedValue)
-          && !(
-            previous !== undefined
-            && Object.is(previous.projectedValue, projectedValue)
-            && Object.is(previous.domValue, current)
-          )
+        const shouldWrite = !isPropertyCurrent(
+          current,
+          projectedValue,
+          runtime.values.get(element),
         )
 
         if (shouldWrite) {
@@ -443,12 +461,8 @@ function createRuntimeApply(runtime) {
     }
     case 'class': {
       const name = /** @type {string} */ (descriptor.name)
-      const valid = name !== '' && !/[\t\n\f\r ]/.test(name)
-      const occurrence = new RegExp(
-        `(^|${classWhitespace})${escapeRegularExpression(name)}`
-        + `(?=$|${classWhitespace})`,
-        'g',
-      )
+      const valid = isValidClassToken(name)
+      const occurrence = classTokenOccurrence(name)
 
       return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
         const next = /** @type {boolean} */ (value)
@@ -521,6 +535,86 @@ function createRuntimeApply(runtime) {
 }
 
 /**
+ * Compiles a read-only check that tells whether applying one value to the
+ * current DOM can change the result of a later selector resolution. Any
+ * attribute, class token, property, or inline style write can do that. A
+ * text write changes only text when the element keeps one non-empty text
+ * node, so only a write that changes the element's child nodes otherwise
+ * (for example the result of `:empty`) is a change.
+ *
+ * @template Data
+ * @param {DomBindingRuntime<Data>} runtime
+ * @returns {(element: Element, value: unknown) => boolean}
+ */
+function createRuntimeChange(runtime) {
+  const descriptor = runtime.descriptor
+
+  switch (descriptor.kind) {
+    case 'repeat':
+      return () => false
+    case 'text':
+      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
+        const first = element.firstChild
+
+        if (
+          value !== ''
+          && first !== null
+          && first.nodeType === 3
+          && first.nextSibling === null
+          && /** @type {Text} */ (first).data !== ''
+        ) {
+          return false
+        }
+
+        return element.textContent !== value
+      }
+    case 'property': {
+      const name = /** @type {string} */ (descriptor.name)
+      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
+        return !isPropertyCurrent(
+          Reflect.get(element, name),
+          projectedCacheValue(runtime, value),
+          runtime.values.get(element),
+        )
+      }
+    }
+    case 'attribute': {
+      const name = /** @type {string} */ (descriptor.name)
+      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
+        return attributeValue(element, name) !== value
+      }
+    }
+    case 'class': {
+      const name = /** @type {string} */ (descriptor.name)
+      const valid = isValidClassToken(name)
+      const occurrence = classTokenOccurrence(name)
+
+      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
+        const present = valid
+          ? (element.getAttribute('class') ?? '').search(occurrence) >= 0
+          : element.classList.contains(name)
+        return present !== value
+      }
+    }
+    case 'style': {
+      const name = /** @type {string} */ (descriptor.name)
+      const property = styleProperty(name)
+
+      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
+        const declaration = asStyledElement(element).style
+        const current = (
+          property !== null
+          && typeof Reflect.get(declaration, property) === 'string'
+        )
+          ? Reflect.get(declaration, property)
+          : declaration.getPropertyValue(name)
+        return current !== value
+      }
+    }
+  }
+}
+
+/**
  * Connects the existing one-value-per-match planner.
  *
  * @template Data
@@ -538,6 +632,8 @@ function connectScalarDomBindings(
   trustedTypes,
   publishShadowRoots,
 ) {
+  /** @type {Document | null} */
+  let planningDocument = null
 
   return {
     prepare(data) {
@@ -548,15 +644,23 @@ function connectScalarDomBindings(
         ownedSubtrees,
         liveQuery,
       )
-
-      if (!staging.required) {
-        return prepareDirectUpdate(
+      /** @type {DirectProgress<Data> | null} */
+      const progress = staging.required
+        ? null
+        : prepareDirectUpdate(
           root,
           runtimes,
           ownedSubtrees,
           staging.elementsByRuntime,
           data,
           trustedTypes,
+        )
+
+      if (progress !== null && progress.complete) {
+        return preparedDomUpdate(
+          root,
+          progress.operations,
+          ownedSubtrees,
           liveQuery,
           publishShadowRoots,
         )
@@ -564,128 +668,20 @@ function connectScalarDomBindings(
 
       // Import into a document without a browsing context or custom-element
       // registry. Unlike cloneNode() in the live document, this cannot invoke
-      // custom-element constructors merely to prepare an update.
-      const planningDocument = root.ownerDocument.implementation
+      // custom-element constructors merely to prepare an update. Each update
+      // imports a new detached copy, so one document serves all updates.
+      planningDocument ??= root.ownerDocument.implementation
         .createHTMLDocument()
-      const planningRoot = importElementTree(planningDocument, root)
-      /** @type {WeakMap<Element, Element>} */
-      const liveByPlanned = new WeakMap()
-      /** @type {WeakMap<Element, Element>} */
-      const plannedByLive = new WeakMap()
-      pairElementTrees(root, planningRoot, liveByPlanned, plannedByLive)
-      const plannedOwnedSubtrees = ownedSubtrees.map(subtree => {
-        const planned = plannedByLive.get(subtree)
-
-        if (planned === undefined) {
-          throw new Error('Lumi lost an owned DOM subtree while planning')
-        }
-
-        return planned
-      })
-
-      /** @type {Map<DomBindingRuntime<Data>, WeakSet<Element>>} */
-      const processedByRuntime = new Map()
-      /** @type {WeakMap<Element, ReadonlySet<number>>} */
-      const createdBy = new WeakMap()
-      /** @type {Array<DomOperation<Data>>} */
-      const operations = []
-
-      for (const runtime of runtimes) {
-        if (isStructuralBinding(runtime.descriptor)) {
-          processedByRuntime.set(runtime, new WeakSet())
-        }
-      }
-
-      while (true) {
-        const task = nextStructuralTask(
-          planningRoot,
-          runtimes,
-          processedByRuntime,
-          createdBy,
-          plannedOwnedSubtrees,
-        )
-
-        if (task === null) {
-          break
-        }
-
-        processedByRuntime.get(task.runtime)?.add(task.element)
-
-        const value = projectValue(
-          task.runtime,
-          data,
-          task.element,
-          task.matchIndex,
-          trustedTypes,
-        )
-        const creationHistory = new Set(
-          createdBy.get(task.element) ?? [],
-        )
-        creationHistory.add(task.runtime.index)
-
-        applyPlannedValue(
-          task.runtime,
-          task.element,
-          value,
-          planningRoot,
-          liveByPlanned.get(task.element),
-          createdBy,
-          creationHistory,
-          plannedOwnedSubtrees,
-        )
-        operations.push({
-          type: 'single',
-          runtime: task.runtime,
-          matchIndex: task.matchIndex,
-          value,
-        })
-      }
-
-      for (const runtime of runtimes) {
-        if (isStructuralBinding(runtime.descriptor)) {
-          continue
-        }
-
-        const elements = queryOwnedElements(
-          planningRoot,
-          runtime.descriptor.selector,
-          plannedOwnedSubtrees,
-        )
-        const values = elements.map((element, matchIndex) => {
-          return projectValue(
-            runtime,
-            data,
-            element,
-            matchIndex,
-            trustedTypes,
-          )
-        })
-
-        for (let index = 0; index < elements.length; index += 1) {
-          const element = elements[index]
-
-          if (element !== undefined) {
-            applyPlannedValue(
-              runtime,
-              element,
-              values[index],
-              planningRoot,
-              liveByPlanned.get(element),
-              createdBy,
-              new Set(),
-              plannedOwnedSubtrees,
-            )
-          }
-        }
-
-        if (values.length > 0) {
-          operations.push({
-            type: 'batch',
-            runtime,
-            values,
-          })
-        }
-      }
+      const operations = prepareStagedUpdate(
+        planningDocument,
+        root,
+        runtimes,
+        ownedSubtrees,
+        staging.elementsByRuntime,
+        data,
+        trustedTypes,
+        progress,
+      )
 
       return preparedDomUpdate(
         root,
@@ -696,13 +692,19 @@ function connectScalarDomBindings(
       )
     },
 
-    destroy: noOperation,
+    destroy() {
+      planningDocument = null
+    },
   }
 }
 
 /**
- * Uses the live tree as a read-only preparation view when no structural rule
- * can invalidate another rule's targets.
+ * Uses the live tree as a read-only preparation view. The operations and the
+ * projection calls occur in the same order as in the staged planner. The live
+ * view stays correct only while no prepared write can change the result of a
+ * later selector resolution. When a write can do that, the direct planner
+ * stops and returns its progress, and the staged planner continues from it.
+ * Thus no projection runs two times in one update.
  *
  * @template Data
  * @param {Element} root
@@ -711,9 +713,7 @@ function connectScalarDomBindings(
  * @param {ReadonlyArray<ReadonlyArray<Element>>} elementsByRuntime
  * @param {Data} data
  * @param {TrustedHTMLCheck | null} trustedTypes
- * @param {ElementQuery} liveQuery
- * @param {(roots: ReadonlySet<ShadowRoot>) => void} [publishShadowRoots]
- * @returns {import('./types.js').PreparedUpdate}
+ * @returns {DirectProgress<Data>}
  */
 function prepareDirectUpdate(
   root,
@@ -722,13 +722,41 @@ function prepareDirectUpdate(
   elementsByRuntime,
   data,
   trustedTypes,
-  liveQuery,
-  publishShadowRoots,
 ) {
   /** @type {Array<DomOperation<Data>>} */
   const operations = []
+  const hoisted = directHoistedTasks(root, runtimes, elementsByRuntime)
 
-  for (let runtimeIndex = 0; runtimeIndex < runtimes.length; runtimeIndex += 1) {
+  for (const task of hoisted) {
+    const value = projectValue(
+      task.runtime,
+      data,
+      task.element,
+      task.matchIndex,
+      trustedTypes,
+    )
+
+    validateDirectStructuralTarget(
+      task.runtime,
+      task.element,
+      root,
+      ownedSubtrees,
+    )
+    operations.push({
+      type: 'single',
+      runtime: task.runtime,
+      matchIndex: task.matchIndex,
+      value,
+    })
+
+    if (!isNoValue(value) && task.runtime.changes(task.element, value)) {
+      return { complete: false, operations, nextRuntime: -1 }
+    }
+  }
+
+  const lastRuntime = runtimes.length - 1
+
+  for (let runtimeIndex = 0; runtimeIndex <= lastRuntime; runtimeIndex += 1) {
     const runtime = runtimes[runtimeIndex]
 
     if (runtime === undefined) {
@@ -736,7 +764,18 @@ function prepareDirectUpdate(
     }
 
     const elements = elementsByRuntime[runtimeIndex] ?? []
+    const structural = isStructuralBinding(runtime.descriptor)
+    let planned = false
     const values = elements.map((element, matchIndex) => {
+      if (
+        structural
+        && hoisted.length > 0
+        && isHoistedContent(runtime, element)
+      ) {
+        return unplannedMatch
+      }
+
+      planned = true
       return projectValue(
         runtime,
         data,
@@ -746,11 +785,15 @@ function prepareDirectUpdate(
       )
     })
 
-    if (isStructuralBinding(runtime.descriptor)) {
+    if (!planned) {
+      continue
+    }
+
+    if (structural) {
       for (let index = 0; index < elements.length; index += 1) {
         const element = elements[index]
 
-        if (element !== undefined) {
+        if (element !== undefined && values[index] !== unplannedMatch) {
           validateDirectStructuralTarget(
             runtime,
             element,
@@ -761,27 +804,369 @@ function prepareDirectUpdate(
       }
     }
 
-    if (values.length > 0) {
+    operations.push({
+      type: 'batch',
+      runtime,
+      values,
+    })
+
+    // The last declaration is resolved before its own writes, and no other
+    // declaration is resolved after it.
+    if (
+      runtimeIndex < lastRuntime
+      && batchChangesDom(runtime, elements, values)
+    ) {
+      return { complete: false, operations, nextRuntime: runtimeIndex + 1 }
+    }
+  }
+
+  return { complete: true, operations, nextRuntime: runtimes.length }
+}
+
+/**
+ * Lists the hoisted content tasks of the unchanged live view in the order in
+ * which the staged planner selects them.
+ *
+ * @template Data
+ * @param {Element} root
+ * @param {ReadonlyArray<DomBindingRuntime<Data>>} runtimes
+ * @param {ReadonlyArray<ReadonlyArray<Element>>} elementsByRuntime
+ * @returns {Array<{
+ *   runtime: DomBindingRuntime<Data>,
+ *   element: Element,
+ *   matchIndex: number,
+ *   depth: number
+ * }>}
+ */
+function directHoistedTasks(root, runtimes, elementsByRuntime) {
+  /** @type {Array<{
+   *   runtime: DomBindingRuntime<Data>,
+   *   element: Element,
+   *   matchIndex: number,
+   *   depth: number
+   * }>} */
+  const tasks = []
+
+  for (let runtimeIndex = 0; runtimeIndex < runtimes.length; runtimeIndex += 1) {
+    const runtime = runtimes[runtimeIndex]
+
+    if (runtime === undefined || !isStructuralBinding(runtime.descriptor)) {
+      continue
+    }
+
+    const elements = elementsByRuntime[runtimeIndex] ?? []
+
+    for (let matchIndex = 0; matchIndex < elements.length; matchIndex += 1) {
+      const element = elements[matchIndex]
+
+      if (element !== undefined && isHoistedContent(runtime, element)) {
+        tasks.push({
+          runtime,
+          element,
+          matchIndex,
+          depth: elementDepth(root, element),
+        })
+      }
+    }
+  }
+
+  if (tasks.length > 1) {
+    tasks.sort((left, right) => {
+      return left.depth - right.depth
+        || left.runtime.index - right.runtime.index
+        || left.matchIndex - right.matchIndex
+    })
+  }
+
+  return tasks
+}
+
+/**
+ * @template Data
+ * @param {DomBindingRuntime<Data>} runtime
+ * @param {ReadonlyArray<Element>} elements
+ * @param {ReadonlyArray<unknown>} values
+ * @returns {boolean}
+ */
+function batchChangesDom(runtime, elements, values) {
+  for (let index = 0; index < elements.length; index += 1) {
+    const element = elements[index]
+    const value = values[index]
+
+    if (
+      element !== undefined
+      && value !== unplannedMatch
+      && !isNoValue(value)
+      && runtime.changes(element, value)
+    ) {
+      return true
+    }
+  }
+
+  return false
+}
+
+/**
+ * Plans an update in an inert copy of the component. Content writes that can
+ * remove or create elements are planned first, in DOM ancestor order, so the
+ * selectors for their descendants see the planned result. All other writes
+ * are planned in declaration order: each declaration resolves its selector
+ * after the earlier planned writes. When the direct planner has prepared part
+ * of the update, this function replays those operations in the copy and
+ * continues after them.
+ *
+ * @template Data
+ * @param {Document} planningDocument
+ * @param {Element} root
+ * @param {ReadonlyArray<DomBindingRuntime<Data>>} runtimes
+ * @param {ReadonlyArray<Element>} ownedSubtrees
+ * @param {ReadonlyArray<ReadonlyArray<Element>>} elementsByRuntime
+ * @param {Data} data
+ * @param {TrustedHTMLCheck | null} trustedTypes
+ * @param {DirectProgress<Data> | null} progress
+ * @returns {Array<DomOperation<Data>>}
+ */
+function prepareStagedUpdate(
+  planningDocument,
+  root,
+  runtimes,
+  ownedSubtrees,
+  elementsByRuntime,
+  data,
+  trustedTypes,
+  progress,
+) {
+  const planningRoot = importElementTree(planningDocument, root)
+  /** @type {WeakMap<Element, Element>} */
+  const liveByPlanned = new WeakMap()
+  /** @type {WeakMap<Element, Element>} */
+  const plannedByLive = new WeakMap()
+  pairElementTrees(root, planningRoot, liveByPlanned, plannedByLive)
+  const plannedOwnedSubtrees = ownedSubtrees.map(subtree => {
+    const planned = plannedByLive.get(subtree)
+
+    if (planned === undefined) {
+      throw new Error('Lumi lost an owned DOM subtree while planning')
+    }
+
+    return planned
+  })
+
+  // Planned content writes cannot attach a shadow root, so the shadow
+  // topology of the copy can only become smaller. One query stays correct.
+  const planningQuery = createElementQuery(planningRoot)
+  /** @type {Map<DomBindingRuntime<Data>, WeakSet<Element>>} */
+  const processedByRuntime = new Map()
+  /** @type {WeakMap<Element, ReadonlySet<number>>} */
+  const createdBy = new WeakMap()
+  /** @type {Array<DomOperation<Data>>} */
+  const operations = progress === null ? [] : progress.operations
+
+  for (const runtime of runtimes) {
+    if (isStructuralBinding(runtime.descriptor)) {
+      processedByRuntime.set(runtime, new WeakSet())
+    }
+  }
+
+  /**
+   * @param {DomBindingRuntime<Data>} runtime
+   * @param {Element} element
+   * @param {unknown} value
+   */
+  const plan = (runtime, element, value) => {
+    const processed = processedByRuntime.get(runtime)
+    /** @type {Set<number>} */
+    const creationHistory = new Set()
+
+    if (processed !== undefined) {
+      processed.add(element)
+
+      for (const index of createdBy.get(element) ?? []) {
+        creationHistory.add(index)
+      }
+
+      creationHistory.add(runtime.index)
+    }
+
+    applyPlannedValue(
+      runtime,
+      element,
+      value,
+      planningRoot,
+      liveByPlanned.get(element),
+      createdBy,
+      creationHistory,
+      plannedOwnedSubtrees,
+    )
+  }
+
+  /**
+   * @param {Element | undefined} live
+   * @returns {Element}
+   */
+  const plannedElement = live => {
+    const planned = live === undefined ? undefined : plannedByLive.get(live)
+
+    if (planned === undefined) {
+      throw new Error('Lumi lost a prepared DOM target while planning')
+    }
+
+    return planned
+  }
+
+  // The direct operations were resolved in the unchanged live view, which
+  // equals the copy until the last of them. Replay them in the same order.
+  for (const operation of operations) {
+    const elements = elementsByRuntime[operation.runtime.index] ?? []
+
+    if (operation.type === 'single') {
+      plan(
+        operation.runtime,
+        plannedElement(elements[operation.matchIndex]),
+        operation.value,
+      )
+      continue
+    }
+
+    for (let index = 0; index < operation.values.length; index += 1) {
+      const value = operation.values[index]
+
+      if (value !== unplannedMatch) {
+        plan(operation.runtime, plannedElement(elements[index]), value)
+      }
+    }
+  }
+
+  if (progress === null || progress.nextRuntime < 0) {
+    while (true) {
+      const task = nextStructuralTask(
+        planningRoot,
+        runtimes,
+        processedByRuntime,
+        createdBy,
+        plannedOwnedSubtrees,
+        planningQuery,
+      )
+
+      if (task === null) {
+        break
+      }
+
+      const value = projectValue(
+        task.runtime,
+        data,
+        task.element,
+        task.matchIndex,
+        trustedTypes,
+      )
+
+      plan(task.runtime, task.element, value)
       operations.push({
-        type: 'batch',
-        runtime,
-        values,
+        type: 'single',
+        runtime: task.runtime,
+        matchIndex: task.matchIndex,
+        value,
       })
     }
   }
 
-  return preparedDomUpdate(
-    root,
-    operations,
-    ownedSubtrees,
-    liveQuery,
-    publishShadowRoots,
-  )
+  const firstRuntime = progress === null || progress.nextRuntime < 0
+    ? 0
+    : progress.nextRuntime
+
+  for (
+    let runtimeIndex = firstRuntime;
+    runtimeIndex < runtimes.length;
+    runtimeIndex += 1
+  ) {
+    const runtime = runtimes[runtimeIndex]
+
+    if (runtime === undefined) {
+      continue
+    }
+
+    const processed = processedByRuntime.get(runtime)
+    const elements = queryOwnedElements(
+      planningRoot,
+      runtime.descriptor.selector,
+      plannedOwnedSubtrees,
+      planningQuery,
+    )
+    let planned = false
+    const values = elements.map((element, matchIndex) => {
+      if (
+        processed !== undefined
+        && (
+          processed.has(element)
+          || createdBy.get(element)?.has(runtime.index) === true
+        )
+      ) {
+        return unplannedMatch
+      }
+
+      planned = true
+      return projectValue(
+        runtime,
+        data,
+        element,
+        matchIndex,
+        trustedTypes,
+      )
+    })
+
+    if (!planned) {
+      continue
+    }
+
+    for (let index = 0; index < elements.length; index += 1) {
+      const element = elements[index]
+      const value = values[index]
+
+      if (element !== undefined && value !== unplannedMatch) {
+        plan(runtime, element, value)
+      }
+    }
+
+    operations.push({
+      type: 'batch',
+      runtime,
+      values,
+    })
+  }
+
+  return operations
 }
 
 /**
- * Staging is needed only when a content write can change another binding's
- * targets or cross a nested component ownership boundary.
+ * Returns whether a content write at this element can remove or create
+ * elements. The planner plans such a write before the rules for descendants.
+ * A text write to an element without element children changes only text, so
+ * it keeps its declaration order.
+ *
+ * @template Data
+ * @param {DomBindingRuntime<Data>} runtime
+ * @param {Element} element
+ * @returns {boolean}
+ */
+function isHoistedContent(runtime, element) {
+  const descriptor = runtime.descriptor
+
+  if (descriptor.kind === 'text') {
+    return element.firstElementChild !== null
+  }
+
+  if (descriptor.kind !== 'property' || !isStructuralProperty(descriptor.name)) {
+    return false
+  }
+
+  return descriptor.name !== 'textContent'
+    || element.firstElementChild !== null
+}
+
+/**
+ * Staging is needed from the start when a content write can change another
+ * binding's targets or cross a nested component ownership boundary. The
+ * direct planner finds other writes that change selector matches.
  *
  * @template Data
  * @param {Element} root
@@ -984,7 +1369,10 @@ function preparedDomUpdate(
         for (let index = 0; index < elements.length; index += 1) {
           const element = elements[index]
 
-          if (element !== undefined) {
+          if (
+            element !== undefined
+            && operation.values[index] !== unplannedMatch
+          ) {
             trackParentCache(
               parentCacheRecords,
               operation.runtime,
@@ -1093,6 +1481,7 @@ function canCacheFinalSubtree(descriptor) {
  * @param {Map<DomBindingRuntime<Data>, WeakSet<Element>>} processedByRuntime
  * @param {WeakMap<Element, ReadonlySet<number>>} createdBy
  * @param {ReadonlyArray<Element>} ownedSubtrees
+ * @param {ElementQuery} query
  * @returns {{
  *   runtime: DomBindingRuntime<Data>,
  *   element: Element,
@@ -1106,6 +1495,7 @@ function nextStructuralTask(
   processedByRuntime,
   createdBy,
   ownedSubtrees,
+  query,
 ) {
   /** @type {{
    *   runtime: DomBindingRuntime<Data>,
@@ -1125,6 +1515,7 @@ function nextStructuralTask(
       root,
       runtime.descriptor.selector,
       ownedSubtrees,
+      query,
     )
 
     for (let matchIndex = 0; matchIndex < elements.length; matchIndex += 1) {
@@ -1134,6 +1525,7 @@ function nextStructuralTask(
         element === undefined
         || processed?.has(element) === true
         || createdBy.get(element)?.has(runtime.index) === true
+        || !isHoistedContent(runtime, element)
       ) {
         continue
       }
@@ -1269,18 +1661,15 @@ function applyPlannedValue(
         assertDoesNotReplaceOwnedSubtree(element, ownedSubtrees)
       }
 
-      const current = Reflect.get(element, name)
-      const projectedValue = projectedCacheValue(runtime, value)
       const previous = liveElement === undefined
         ? undefined
         : runtime.values.get(liveElement)
 
       if (
-        Object.is(current, projectedValue)
-        || (
-          previous !== undefined
-          && Object.is(previous.projectedValue, projectedValue)
-          && Object.is(previous.domValue, current)
+        isPropertyCurrent(
+          Reflect.get(element, name),
+          projectedCacheValue(runtime, value),
+          previous,
         )
       ) {
         return
@@ -1362,11 +1751,8 @@ function setProperty(element, name, value) {
  */
 function setAttributeValue(element, name, value) {
   const next = /** @type {string | false} */ (value)
-  const current = element.hasAttribute(name)
-    ? element.getAttribute(name) ?? ''
-    : false
 
-  if (current === next) {
+  if (attributeValue(element, name) === next) {
     return false
   }
 
@@ -1377,6 +1763,56 @@ function setAttributeValue(element, name, value) {
   }
 
   return true
+}
+
+/**
+ * @param {Element} element
+ * @param {string} name
+ * @returns {string | false} The attribute value, or false when it is absent.
+ */
+function attributeValue(element, name) {
+  return element.hasAttribute(name)
+    ? element.getAttribute(name) ?? ''
+    : false
+}
+
+/**
+ * Returns whether a property already holds the projected value, either
+ * directly or as the value that the browser kept after the previous write.
+ *
+ * @param {unknown} current
+ * @param {unknown} projectedValue
+ * @param {CachedValue | undefined} previous
+ * @returns {boolean}
+ */
+function isPropertyCurrent(current, projectedValue, previous) {
+  return Object.is(current, projectedValue)
+    || (
+      previous !== undefined
+      && Object.is(previous.projectedValue, projectedValue)
+      && Object.is(previous.domValue, current)
+    )
+}
+
+/**
+ * @param {string} name
+ * @returns {boolean} Whether the class token can be found in the raw
+ *   attribute without a DOMTokenList.
+ */
+function isValidClassToken(name) {
+  return name !== '' && !/[\t\n\f\r ]/.test(name)
+}
+
+/**
+ * @param {string} name
+ * @returns {RegExp} A pattern that finds each occurrence of one class token.
+ */
+function classTokenOccurrence(name) {
+  return new RegExp(
+    `(^|${classWhitespace})${escapeRegularExpression(name)}`
+    + `(?=$|${classWhitespace})`,
+    'g',
+  )
 }
 
 /**
@@ -1670,6 +2106,29 @@ function warnIgnored(runtime, value, expected, category) {
     `Lumi ${runtime.descriptor.kind} binding `
     + `"${runtime.descriptor.selector}" ignored ${actual}; expected `
     + `${expected}. The existing DOM state was preserved.`,
+    runtime.view,
+  )
+}
+
+/**
+ * Reports once per mounted declaration that boolean `true` wrote an empty
+ * ARIA attribute. The written value stays the documented boolean mapping.
+ *
+ * @template Data
+ * @param {DomBindingRuntime<Data>} runtime
+ */
+function warnAriaBoolean(runtime) {
+  if (runtime.warnings.has('ARIA boolean true')) {
+    return
+  }
+
+  runtime.warnings.add('ARIA boolean true')
+  warn(
+    `Lumi ${runtime.descriptor.kind} binding `
+    + `"${runtime.descriptor.selector}" projected true into `
+    + `"${runtime.descriptor.name}"; true writes an empty attribute, but `
+    + 'ARIA states are string tokens. Project the string \'true\' or '
+    + '\'false\' instead, for example String(value).',
     runtime.view,
   )
 }

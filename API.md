@@ -250,6 +250,14 @@ perform no DOM operation and leave the corresponding state unchanged. Invalid
 operation and produce a deduplicated development warning. TrustedHTML property
 validation remains a preparation-time error.
 
+ARIA states, such as `aria-expanded` and `aria-pressed`, use string tokens.
+`attr` uses the same boolean rules for `aria-*` names as for other names. Thus
+`true` writes an empty attribute, and an empty value is not a valid ARIA state.
+Project the string `'true'` or `'false'`, for example `String(open)`. Project
+`false` only to remove the attribute. In development, Lumi writes one warning
+for each mounted `aria-*` declaration that projects `true`. In TypeScript, a
+literal `aria-*` name does not accept a projection that can return `true`.
+
 Except for HTML injection sinks, `prop` intentionally does not impose a
 generic value restriction. Native and custom properties may legitimately
 accept objects and arrays, and the property's setter remains responsible for
@@ -524,6 +532,9 @@ repeat(
   [text('.name', ({item}) => item.name)],
 )
 ```
+
+When the key order changes, Lumi moves the fewest possible elements: the
+largest group of elements already in the new order does not move.
 
 The key projection receives the new occurrence context. It does not receive
 an element because Lumi must compute the key before it selects an existing

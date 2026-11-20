@@ -140,17 +140,27 @@ export function prop<
   name: string,
 ): Binding<Data>
 
+/**
+ * ARIA states are string tokens. For a literal `aria-*` name, the projection
+ * cannot return `true`, because `true` writes an empty attribute. Project
+ * `'true'` or `'false'` instead; `false` still removes the attribute.
+ */
 export function attr<
   Item,
   Data = unknown,
   Selector extends string = string,
+  Name extends string = string,
 >(
   selector: Selector,
-  name: string,
+  name: Name,
   project: ContextProjection<
     Item,
     Data,
-    TextValue | null | undefined,
+    | (Lowercase<Name> extends `aria-${string}`
+      ? string | number | false
+      : TextValue)
+    | null
+    | undefined,
     SelectorElement<Selector>
   >,
 ): Binding<Data>

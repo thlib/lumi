@@ -219,6 +219,66 @@ function listScenario(resize) {
   }
 }
 
+/**
+ * @param {{size: number, order: 'stable' | 'rotate' | 'reverse'}} options
+ * @returns {Scenario}
+ */
+function keyedListScenario({size, order}) {
+  const {document, close} = createDocument()
+  const mounted = component({
+    source: createTemplate(
+      document,
+      '<ul><li class="item">default</li></ul>',
+    ),
+    bindings: [
+      repeat(
+        '.item',
+        ({data}) => /** @type {string[]} */ (data),
+        ({item}) => item,
+        [text(':scope', ({item}) => item)],
+      ),
+    ],
+  }).mount(document.createElement('div'))
+  const values = Array.from({length: size}, (_, index) => `key-${index}`)
+  const reversed = [...values].reverse()
+  /** @type {string[]} */
+  let current = values
+
+  mounted.update(values)
+
+  return {
+    operations: size > 1_000 ? 10 : 2_000,
+    warmup: size > 1_000 ? 2 : 200,
+    run(iteration) {
+      if (order === 'rotate') {
+        // Each update moves the last key to the front.
+        const shift = (iteration + 1) % size
+        current = new Array(size)
+        for (let index = 0; index < size; index += 1) {
+          current[index] = values[(index - shift + size) % size] ?? ''
+        }
+      } else if (order === 'reverse') {
+        current = iteration % 2 === 0 ? reversed : values
+      }
+      mounted.update(current)
+    },
+    validate() {
+      const items = mounted.root.querySelectorAll('.item')
+      if (
+        items.length !== size
+        || items[0]?.textContent !== current[0]
+        || items[size - 1]?.textContent !== current[size - 1]
+      ) {
+        throw new Error(`Expected ${size} keyed list items in order`)
+      }
+    },
+    close() {
+      mounted.unmount()
+      close()
+    },
+  }
+}
+
 /** @returns {Scenario} */
 function routedEventScenario() {
   const {document, close} = createDocument()
@@ -269,4 +329,19 @@ benchmark('32 matches unchanged', () => multiMatchScenario(false))
 benchmark('32 matches changing', () => multiMatchScenario(true))
 benchmark('positional list stable (32)', () => listScenario(false))
 benchmark('positional list resize (0-32)', () => listScenario(true))
+benchmark('keyed list stable (32)', () => {
+  return keyedListScenario({size: 32, order: 'stable'})
+})
+benchmark('keyed list rotate (32)', () => {
+  return keyedListScenario({size: 32, order: 'rotate'})
+})
+benchmark('keyed list reverse (32)', () => {
+  return keyedListScenario({size: 32, order: 'reverse'})
+})
+benchmark('keyed list stable (5000)', () => {
+  return keyedListScenario({size: 5_000, order: 'stable'})
+})
+benchmark('keyed list rotate (5000)', () => {
+  return keyedListScenario({size: 5_000, order: 'rotate'})
+})
 benchmark('routed event topology (100)', routedEventScenario)

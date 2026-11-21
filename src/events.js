@@ -68,21 +68,20 @@ const nonBubblingEventTypes = new Set(
  * @typedef {object} EventRuntime
  * @property {EventBindingDescriptor} descriptor
  * @property {boolean} isActive
- * @property {Set<Element>} elements
- * @property {((event: Event) => void) | null} listen
- * @property {EventRouter | null} router
  */
 
 /**
- * One logical component router: an event boundary group sharing a type,
- * capture phase, and passive declaration.
+ * One managed native listener and the targets that hold it. Component
+ * declarations with the same type, capture phase, and passive declaration
+ * share one group, whose targets are the event boundaries of the component.
+ * Each element declaration has its own group, whose targets are the
+ * matching elements. All declarations of a group have the same `at`, `type`,
+ * `capture`, and `passive` values as `descriptor`.
  *
- * @typedef {object} EventRouter
- * @property {string} type
- * @property {boolean} capture
- * @property {boolean} passive
+ * @typedef {object} ListenerGroup
+ * @property {EventBindingDescriptor} descriptor
  * @property {EventRuntime[]} runtimes
- * @property {Set<EventTarget>} boundaries
+ * @property {Set<EventTarget>} targets
  * @property {(event: Event) => void} listen
  */
 
@@ -151,7 +150,7 @@ export function getEventBindingDescriptor(binding) {
 /**
  * Connects every event declaration of one component to its managed listeners.
  *
- * Compatible component declarations share one logical router per component
+ * Compatible component declarations share one native listener per component
  * event boundary. Element declarations maintain native listeners that follow
  * their matching elements through the rendering lifecycle.
  *
@@ -169,28 +168,8 @@ export function connectEventBindings(
   readShadowRoots,
 ) {
   let isConnected = true
-
-  /** @type {EventRuntime[]} */
-  const runtimes = descriptors.map(descriptor => ({
-    descriptor,
-    isActive: true,
-    elements: new Set(),
-    listen: null,
-    router: null,
-  }))
-
-  // Validate every selector while connecting, including when it currently has
-  // no matches, so an invalid declaration fails mount atomically.
-  for (const runtime of runtimes) {
-    queryElements(root, runtime.descriptor.selector)
-  }
-
-  const elementRuntimes = runtimes.filter(runtime => {
-    return runtime.descriptor.at === 'elements'
-  })
-  const routers = createRouters(runtimes)
-  /** @type {import('./types.js').PreparedUpdate} */
-  const preparedReconciliation = { commit: reconcile }
+  /** @type {Map<unknown, ListenerGroup>} */
+  const groupsByKey = new Map()
 
   /**
    * A binding runs at most once per native event even when the event reaches
@@ -201,164 +180,119 @@ export function connectEventBindings(
    */
   const invokedByEvent = new WeakMap()
 
-  /**
-   * @param {EventRouter} router
-   * @param {Event} nativeEvent
-   */
-  function route(router, nativeEvent) {
-    if (!isConnected) {
-      return
+  for (const descriptor of descriptors) {
+    // Validate every selector while connecting, including when it currently
+    // has no matches, so an invalid declaration fails mount atomically.
+    queryElements(root, descriptor.selector)
+
+    /** @type {EventRuntime} */
+    const runtime = { descriptor, isActive: true }
+    // freq is binding state rather than part of the grouping key. The
+    // listener flags lead so that an arbitrary event type string cannot
+    // shift one field into another.
+    const key = descriptor.at === 'elements'
+      ? runtime
+      : `${+descriptor.capture}${+descriptor.passive} ${descriptor.type}`
+    let group = groupsByKey.get(key)
+
+    if (group === undefined) {
+      /** @type {ListenerGroup} */
+      const created = {
+        descriptor,
+        runtimes: [],
+        targets: new Set(),
+        listen: nativeEvent => {
+          dispatch(created, nativeEvent)
+        },
+      }
+      group = created
+      groupsByKey.set(key, group)
     }
 
+    group.runtimes.push(runtime)
+  }
+
+  // Component listeners are installed before element listeners.
+  const groups = [...groupsByKey.values()].sort((left, right) => {
+    return +(left.descriptor.at === 'elements')
+      - +(right.descriptor.at === 'elements')
+  })
+
+  /**
+   * @param {ListenerGroup} group
+   * @param {Event} nativeEvent
+   */
+  function dispatch(group, nativeEvent) {
+    const isRouted = group.descriptor.at === 'component'
+    const path = isRouted
+      ? componentPath(nativeEvent, root, ownedSubtrees)
+      : []
     let invoked = invokedByEvent.get(nativeEvent)
 
-    if (invoked === undefined) {
+    if (invoked === undefined && isRouted) {
       invoked = new Set()
       invokedByEvent.set(nativeEvent, invoked)
     }
 
-    const path = componentPath(nativeEvent, root, ownedSubtrees)
-
-    for (const runtime of router.runtimes) {
+    for (const runtime of group.runtimes) {
       // A handler may have unmounted this component.
       if (!isConnected) {
         return
       }
 
-      if (!runtime.isActive || invoked.has(runtime)) {
+      if (!runtime.isActive || (isRouted && invoked?.has(runtime))) {
         continue
       }
 
-      const element = nearestMatch(path, runtime.descriptor.selector)
+      const descriptor = runtime.descriptor
+      const element = isRouted
+        ? path.find(candidate => candidate.matches(descriptor.selector))
+        : /** @type {Element} */ (nativeEvent.currentTarget)
 
-      if (element === null) {
+      if (element === undefined) {
         continue
       }
 
-      invoked.add(runtime)
+      invoked?.add(runtime)
 
-      if (runtime.descriptor.freq === 'once') {
-        consume(runtime)
+      if (descriptor.freq === 'once') {
+        // A consumed binding leaves the listeners that other declarations
+        // of its group use.
+        runtime.isActive = false
+
+        if (!isActive(group)) {
+          detach(group)
+        }
       }
 
       try {
-        runtime.descriptor.handle(nativeEvent, element)
+        descriptor.handle(nativeEvent, element)
       } catch (error) {
+        // Native listener error behavior applies to element attachment.
+        if (!isRouted) {
+          throw error
+        }
+
         // Native dispatch reports a listener exception without stopping the
-        // remaining listeners. A shared router preserves that isolation.
+        // remaining listeners. A shared listener preserves that isolation.
         reportEventError(root, error)
       }
     }
   }
 
-  /**
-   * @param {ReadonlyArray<EventRuntime>} allRuntimes
-   * @returns {EventRouter[]}
-   */
-  function createRouters(allRuntimes) {
-    /** @type {Map<string, EventRouter>} */
-    const byKey = new Map()
-
-    for (const runtime of allRuntimes) {
-      const descriptor = runtime.descriptor
-
-      if (descriptor.at !== 'component') {
-        continue
-      }
-
-      // freq is binding state rather than part of the grouping key. The
-      // listener flags lead so that an arbitrary event type string cannot
-      // shift one field into another.
-      const key = `${descriptor.capture ? 1 : 0}${descriptor.passive ? 1 : 0} `
-        + descriptor.type
-      let router = byKey.get(key)
-
-      if (router === undefined) {
-        /** @type {EventRouter} */
-        const created = {
-          type: descriptor.type,
-          capture: descriptor.capture,
-          passive: descriptor.passive,
-          runtimes: [],
-          boundaries: new Set(),
-          listen: nativeEvent => {
-            route(created, nativeEvent)
-          },
-        }
-        router = created
-        byKey.set(key, created)
-      }
-
-      router.runtimes.push(runtime)
-      runtime.router = router
-    }
-
-    return Array.from(byKey.values())
+  /** @param {ListenerGroup} group */
+  function isActive(group) {
+    return group.runtimes.some(runtime => runtime.isActive)
   }
 
-  /**
-   * Consumes a once binding. Component routes are removed from their shared
-   * router without disturbing routes owned by other declarations.
-   *
-   * @param {EventRuntime} runtime
-   */
-  function consume(runtime) {
-    runtime.isActive = false
+  /** @param {ListenerGroup} group */
+  function detach(group) {
+    const { type, capture } = group.descriptor
 
-    if (runtime.descriptor.at === 'elements') {
-      detachElementListeners(runtime)
-      return
+    for (const target of group.targets) {
+      target.removeEventListener(type, group.listen, { capture })
     }
-
-    const router = runtime.router
-
-    if (
-      router !== null
-      && !router.runtimes.some(other => other.isActive)
-    ) {
-      detachRouter(router)
-    }
-  }
-
-  /** @param {EventRuntime} runtime */
-  function elementListener(runtime) {
-    runtime.listen ??= nativeEvent => {
-      if (!isConnected || !runtime.isActive) {
-        return
-      }
-
-      const element = /** @type {Element} */ (nativeEvent.currentTarget)
-
-      if (runtime.descriptor.freq === 'once') {
-        consume(runtime)
-      }
-
-      // Native listener error behavior applies to element attachment.
-      runtime.descriptor.handle(nativeEvent, element)
-    }
-
-    return runtime.listen
-  }
-
-  /** @param {EventRuntime} runtime */
-  function detachElementListeners(runtime) {
-    const descriptor = runtime.descriptor
-    detachListeners(
-      runtime.elements,
-      descriptor.type,
-      elementListener(runtime),
-      descriptor.capture,
-    )
-  }
-
-  /** @param {EventRouter} router */
-  function detachRouter(router) {
-    detachListeners(
-      router.boundaries,
-      router.type,
-      router.listen,
-      router.capture,
-    )
+    group.targets.clear()
   }
 
   /**
@@ -370,61 +304,53 @@ export function connectEventBindings(
       return
     }
 
-    if (routers.length > 0) {
-      reconcileRouters()
-    }
+    /** @type {Set<EventTarget> | undefined} */
+    let boundaries
 
-    if (elementRuntimes.length > 0) {
-      reconcileElements()
-    }
-  }
-
-  function reconcileRouters() {
-    const sharedShadowRoots = readShadowRoots?.() ?? null
-    const boundaries = sharedShadowRoots === null
-      ? collectEventBoundaries(root, ownedSubtrees)
-      : eventBoundariesFromShadowRoots(
-        root,
-        sharedShadowRoots,
-        ownedSubtrees,
-      )
-
-    for (const router of routers) {
-      if (!router.runtimes.some(runtime => runtime.isActive)) {
+    for (const group of groups) {
+      // A consumed group released its listeners and receives no new ones.
+      if (!isActive(group)) {
         continue
       }
 
-      reconcileListeners(
-        router.boundaries,
-        boundaries,
-        router.type,
-        router.listen,
-        router.capture,
-        router.passive,
-      )
-    }
-  }
+      const { type, capture, passive, at, selector } = group.descriptor
+      const current = group.targets
+      /** @type {ReadonlySet<EventTarget>} */
+      let next
 
-  function reconcileElements() {
-    for (const runtime of elementRuntimes) {
-      // A consumed binding released its listeners and receives no new ones.
-      if (!runtime.isActive) {
-        continue
+      if (at === 'elements') {
+        next = new Set(queryOwnedElements(root, selector, ownedSubtrees))
+      } else {
+        // The event trees that the component owns: its root tree plus
+        // every reachable open shadow root inside its own DOM. The final
+        // DOM commit of the same update can supply the shadow roots.
+        if (boundaries === undefined) {
+          boundaries = new Set([root])
+
+          for (const shadowRoot of readShadowRoots?.()
+            ?? collectOpenShadowRoots(root)) {
+            if (!isInsideOwnedSubtree(shadowRoot.host, ownedSubtrees)) {
+              boundaries.add(shadowRoot)
+            }
+          }
+        }
+
+        next = boundaries
       }
 
-      const descriptor = runtime.descriptor
-      const matches = new Set(
-        queryOwnedElements(root, descriptor.selector, ownedSubtrees),
-      )
+      for (const target of current) {
+        if (!next.has(target)) {
+          target.removeEventListener(type, group.listen, { capture })
+          current.delete(target)
+        }
+      }
 
-      reconcileListeners(
-        runtime.elements,
-        matches,
-        descriptor.type,
-        elementListener(runtime),
-        descriptor.capture,
-        descriptor.passive,
-      )
+      for (const target of next) {
+        if (!current.has(target)) {
+          target.addEventListener(type, group.listen, { capture, passive })
+          current.add(target)
+        }
+      }
     }
   }
 
@@ -434,100 +360,14 @@ export function connectEventBindings(
     prepare() {
       // Event declarations project no data. Listener membership follows the
       // committed DOM, so a failed preparation cannot change it.
-      return preparedReconciliation
+      return { commit: reconcile }
     },
 
     destroy() {
-      if (!isConnected) {
-        return
-      }
-
       isConnected = false
-
-      for (const router of routers) {
-        detachRouter(router)
-      }
-
-      for (const runtime of elementRuntimes) {
-        detachElementListeners(runtime)
-      }
-
-      for (const runtime of runtimes) {
-        runtime.isActive = false
-        runtime.listen = null
-        runtime.router = null
-      }
-
-      routers.length = 0
+      groups.forEach(detach)
     },
   }
-}
-
-/**
- * @template {EventTarget} Target
- * @param {Set<Target>} current
- * @param {ReadonlySet<Target>} next
- * @param {string} type
- * @param {(event: Event) => void} listener
- * @param {boolean} capture
- * @param {boolean} passive
- */
-function reconcileListeners(
-  current,
-  next,
-  type,
-  listener,
-  capture,
-  passive,
-) {
-  for (const target of current) {
-    if (!next.has(target)) {
-      target.removeEventListener(type, listener, {capture})
-      current.delete(target)
-    }
-  }
-
-  for (const target of next) {
-    if (!current.has(target)) {
-      target.addEventListener(type, listener, {capture, passive})
-      current.add(target)
-    }
-  }
-}
-
-/**
- * @param {Set<EventTarget>} targets
- * @param {string} type
- * @param {(event: Event) => void} listener
- * @param {boolean} capture
- */
-function detachListeners(targets, type, listener, capture) {
-  for (const target of targets) {
-    target.removeEventListener(type, listener, {capture})
-  }
-  targets.clear()
-}
-
-/**
- * Builds the component event-boundary set from topology already discovered by
- * the final DOM commit of the same synchronous update.
- *
- * @param {Element} root
- * @param {ReadonlySet<ShadowRoot>} shadowRoots
- * @param {ReadonlyArray<Element>} ownedSubtrees
- * @returns {Set<EventTarget>}
- */
-function eventBoundariesFromShadowRoots(root, shadowRoots, ownedSubtrees) {
-  /** @type {Set<EventTarget>} */
-  const boundaries = new Set([root])
-
-  for (const shadowRoot of shadowRoots) {
-    if (!isInsideOwnedSubtree(shadowRoot.host, ownedSubtrees)) {
-      boundaries.add(shadowRoot)
-    }
-  }
-
-  return boundaries
 }
 
 /**
@@ -545,72 +385,22 @@ function componentPath(nativeEvent, root, ownedSubtrees) {
   const path = []
 
   for (const target of nativeEvent.composedPath()) {
-    if (
-      typeof target !== 'object'
-      || target === null
-      || !('nodeType' in target)
-    ) {
-      // A Window ends the path outside every component.
-      break
-    }
-
-    const node = /** @type {Node} */ (target)
+    const node = /** @type {Element} */ (target)
 
     if (node === root) {
-      // The component root participates in selector matching.
+      // The component root participates in selector matching, and no
+      // target after it belongs to the component.
       path.push(root)
       break
     }
 
-    if (node.nodeType === 9) {
-      // A Document is reached only when the root is not on this path.
-      break
-    }
-
-    if (node.nodeType !== 1) {
-      // A ShadowRoot separates two element trees Lumi may both own.
-      continue
-    }
-
-    const element = /** @type {Element} */ (node)
-
-    if (!isInsideOwnedSubtree(element, ownedSubtrees)) {
-      path.push(element)
+    // A ShadowRoot separates two element trees Lumi may both own.
+    if (node.nodeType === 1 && !isInsideOwnedSubtree(node, ownedSubtrees)) {
+      path.push(node)
     }
   }
 
   return path
-}
-
-/**
- * @param {ReadonlyArray<Element>} path
- * @param {string} selector
- * @returns {Element | null}
- */
-function nearestMatch(path, selector) {
-  for (const element of path) {
-    if (element.matches(selector)) {
-      return element
-    }
-  }
-
-  return null
-}
-
-/**
- * Collects the event trees one component owns: its root tree plus every
- * reachable open shadow root inside its own DOM.
- *
- * @param {Element} root
- * @param {ReadonlyArray<Element>} ownedSubtrees
- * @returns {Set<EventTarget>}
- */
-function collectEventBoundaries(root, ownedSubtrees) {
-  return eventBoundariesFromShadowRoots(
-    root,
-    collectOpenShadowRoots(root),
-    ownedSubtrees,
-  )
 }
 
 /**
@@ -642,13 +432,15 @@ function reportEventError(root, error) {
 }
 
 /**
+ * Validates one event declaration.
+ *
  * @param {string} selector
  * @param {string} type
  * @param {unknown} handler
  * @param {unknown} options
  * @returns {EventBindingDescriptor}
  */
-function createEventDescriptor(selector, type, handler, options) {
+function createEventDescriptor(selector, type, handler, options = {}) {
   if (typeof selector !== 'string' || selector.trim().length === 0) {
     throw new TypeError(
       'Lumi event binding selector must be a non-empty string',
@@ -661,134 +453,92 @@ function createEventDescriptor(selector, type, handler, options) {
     )
   }
 
-  if (typeof handler !== 'function') {
-    throw invalidEventBinding(type, selector, 'handler must be a function')
+  /** @param {string} reason */
+  const invalid = reason => {
+    return new TypeError(
+      `Invalid Lumi event binding for "${type}" on "${selector}": ${reason}`,
+    )
   }
 
-  const settings = readEventOptions(type, selector, options)
-  const descriptor = Object.freeze({
-    type,
-    selector,
-    handle: /** @type {(event: Event, element: Element) => void} */ (handler),
-    ...settings,
-  })
+  /**
+   * @param {ReadonlyArray<string>} values
+   * @returns {string} The quoted values, for example `"a", "b" or "c"`.
+   */
+  const list = values => {
+    return values
+      .map(value => `"${value}"`)
+      .join(', ')
+      .replace(/, (?=[^,]*$)/, ' or ')
+  }
 
-  warnAboutNonBubblingComponentEvent(descriptor)
+  if (typeof handler !== 'function') {
+    throw invalid('handler must be a function')
+  }
 
-  return descriptor
-}
-
-/**
- * @param {string} type
- * @param {string} selector
- * @param {unknown} options
- * @returns {{
- *   at: import('./types.js').EventBindingLocation,
- *   capture: boolean,
- *   passive: boolean,
- *   freq: import('./types.js').EventBindingFrequency,
- * }}
- */
-function readEventOptions(type, selector, options = {}) {
   if (
     typeof options !== 'object'
     || options === null
     || Array.isArray(options)
   ) {
-    throw invalidEventBinding(type, selector, 'options must be an object')
+    throw invalid('options must be an object')
   }
 
   for (const name of Object.keys(options)) {
-    if (optionNames.includes(name)) {
-      continue
+    if (!optionNames.includes(name)) {
+      // The native listener option is the likeliest mistake, so name its
+      // replacement instead of only listing the supported options.
+      throw invalid(
+        name === 'once'
+          ? 'options.once is not a supported event option; '
+            + 'use freq: "once" for a binding-level once'
+          : `options.${name} is not a supported event option; `
+            + `use ${list(optionNames)}`,
+      )
     }
-
-    // The native listener option is the likeliest mistake, so name its
-    // replacement instead of only listing the supported options.
-    throw invalidEventBinding(
-      type,
-      selector,
-      name === 'once'
-        ? 'options.once is not a supported event option; '
-          + 'use freq: "once" for a binding-level once'
-        : `options.${name} is not a supported event option; `
-          + `use ${listValues(optionNames)}`,
-    )
   }
 
   /** @type {Record<string, unknown>} */
-  const settings = {}
+  const descriptor = { type, selector, handle: handler }
 
   for (const name of optionNames) {
     const allowed = eventOptions[name] ?? null
     const value = /** @type {Record<string, unknown>} */ (options)[name]
 
     if (value === undefined) {
-      settings[name] = allowed === null ? false : allowed[0]
+      descriptor[name] = allowed === null ? false : allowed[0]
     } else if (
       allowed === null
         ? typeof value === 'boolean'
         : allowed.includes(/** @type {string} */ (value))
     ) {
-      settings[name] = value
+      descriptor[name] = value
     } else {
-      throw invalidEventBinding(
-        type,
-        selector,
+      throw invalid(
         `options.${name} must be `
-        + (allowed === null ? 'a boolean' : listValues(allowed)),
+        + (allowed === null ? 'a boolean' : list(allowed)),
       )
     }
   }
 
-  return /** @type {any} */ (settings)
-}
-
-/**
- * @param {ReadonlyArray<string>} values
- * @returns {string} The quoted values, for example `"a", "b" or "c"`.
- */
-function listValues(values) {
-  return values
-    .map(value => `"${value}"`)
-    .join(', ')
-    .replace(/, (?=[^,]*$)/, ' or ')
-}
-
-/**
- * @param {string} type
- * @param {string} selector
- * @param {string} reason
- * @returns {TypeError}
- */
-function invalidEventBinding(type, selector, reason) {
-  return new TypeError(
-    `Invalid Lumi event binding for "${type}" on "${selector}": ${reason}`,
-  )
-}
-
-/**
- * Advises about a component declaration that a well-known native event type
- * normally cannot reach. This stays a warning because a custom event may
- * reuse any type string and choose its own bubbles value.
- *
- * @param {EventBindingDescriptor} descriptor
- */
-function warnAboutNonBubblingComponentEvent(descriptor) {
+  // A well-known native event type that does not bubble normally cannot
+  // reach a component listener. This stays a warning because a custom event
+  // may reuse any type string and choose its own bubbles value.
   if (
-    descriptor.at !== 'component'
-    || descriptor.capture
-    || !nonBubblingEventTypes.has(descriptor.type)
+    descriptor.at === 'component'
+    && !descriptor.capture
+    && nonBubblingEventTypes.has(type)
   ) {
-    return
+    warn(
+      `Lumi component event "${type}" normally does not bubble.\n`
+      + '\nUse:\n'
+      + '  {at: "elements"}\n'
+      + 'for native listeners on matching elements, or:\n'
+      + '  {capture: true}\n'
+      + 'for intentional component capture.',
+    )
   }
 
-  warn(
-    `Lumi component event "${descriptor.type}" normally does not bubble.\n`
-    + '\nUse:\n'
-    + '  {at: "elements"}\n'
-    + 'for native listeners on matching elements, or:\n'
-    + '  {capture: true}\n'
-    + 'for intentional component capture.',
+  return /** @type {EventBindingDescriptor} */ (
+    /** @type {unknown} */ (Object.freeze(descriptor))
   )
 }

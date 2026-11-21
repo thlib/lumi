@@ -7,12 +7,3 @@
  * @internal
  */
 export const noValue = Symbol('Lumi no projected value')
-
-/**
- * @param {unknown} value
- * @returns {value is typeof noValue}
- * @internal
- */
-export function isNoValue(value) {
-  return value === noValue
-}

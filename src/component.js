@@ -6,7 +6,7 @@ import {
   connectDomBindings,
   flattenDomBindingDescriptors,
   getDomBindingDescriptor,
-  getOwnedDomSubtrees,
+  ownedDomSubtrees,
 } from './plan.js'
 
 /**
@@ -90,12 +90,20 @@ function connectComponent(root, bindings) {
   const ownedSubtrees = []
   /** @type {Array<import('./types.js').PreparedUpdate>} */
   const prepared = []
-  let isSettled = true
+  // The shadow roots that the last DOM commit found, for the event manager.
+  /** @type {ReadonlySet<ShadowRoot> | null} */
+  let shadowRoots = null
+
+  // An update is settled when it is committed or discarded.
+  const settle = () => {
+    prepared.length = 0
+    isRendering = false
+  }
 
   /** @type {import('./types.js').PreparedUpdate} */
   const preparedUpdate = {
     commit() {
-      if (isSettled) {
+      if (!isRendering) {
         throw new Error('Cannot commit a settled Lumi update')
       }
 
@@ -110,23 +118,17 @@ function connectComponent(root, bindings) {
         discardPrepared(prepared, commitIndex)
         throw error
       } finally {
-        prepared.length = 0
-        isSettled = true
-        isRendering = false
+        settle()
       }
     },
 
     discard() {
-      if (isSettled) {
-        return
-      }
-
-      try {
-        discardPrepared(prepared)
-      } finally {
-        prepared.length = 0
-        isSettled = true
-        isRendering = false
+      if (isRendering) {
+        try {
+          discardPrepared(prepared)
+        } finally {
+          settle()
+        }
       }
     },
   }
@@ -151,8 +153,6 @@ function connectComponent(root, bindings) {
     }
 
     isRendering = true
-    isSettled = false
-    prepared.length = 0
 
     try {
       for (const binding of connected) {
@@ -160,9 +160,7 @@ function connectComponent(root, bindings) {
       }
     } catch (error) {
       discardPrepared(prepared)
-      prepared.length = 0
-      isSettled = true
-      isRendering = false
+      settle()
       throw error
     }
 
@@ -191,18 +189,18 @@ function connectComponent(root, bindings) {
       } else {
         const connectedBinding = binding.connect(root)
         connected.push(connectedBinding)
-        ownedSubtrees.push(...getOwnedDomSubtrees(connectedBinding))
+        ownedSubtrees.push(
+          .../** @type {{[ownedDomSubtrees]?: Element[]}} */ (
+            connectedBinding
+          )[ownedDomSubtrees] ?? [],
+        )
       }
     }
 
-    /** @type {{roots: ReadonlySet<ShadowRoot> | null} | null} */
-    const sharedShadowTopology = (
-      eventBindings.length > 0
-      && domBindingIndex !== undefined
+    // The event manager can use the shadow roots of the DOM commit only
+    // when no other binding commits between the two.
+    const sharesShadowRoots = eventBindings.length > 0
       && domBindingIndex === connected.length
-    )
-      ? { roots: null }
-      : null
 
     if (domBindingIndex !== undefined) {
       connected.splice(
@@ -212,11 +210,11 @@ function connectComponent(root, bindings) {
           root,
           flattenDomBindingDescriptors(domBindings),
           ownedSubtrees,
-          sharedShadowTopology === null
-            ? undefined
-            : roots => {
-              sharedShadowTopology.roots = roots
-            },
+          sharesShadowRoots
+            ? roots => {
+              shadowRoots = roots
+            }
+            : undefined,
         ),
       )
     }
@@ -228,13 +226,13 @@ function connectComponent(root, bindings) {
         root,
         eventBindings,
         ownedSubtrees,
-        sharedShadowTopology === null
-          ? undefined
-          : () => {
-            const roots = sharedShadowTopology.roots
-            sharedShadowTopology.roots = null
+        sharesShadowRoots
+          ? () => {
+            const roots = shadowRoots
+            shadowRoots = null
             return roots
-          },
+          }
+          : undefined,
       ))
     }
   } catch (error) {

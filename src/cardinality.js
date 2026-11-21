@@ -9,13 +9,14 @@
 
 import {
   elementAtPath,
-  elementDepth,
   elementPath,
   importElementTree,
+  markCreated,
   queryOwnedElements,
   shadowIncludingParent,
+  tasksByDepth,
 } from './dom.js'
-import { isNoValue } from './internal/no-value.js'
+import { noValue } from './internal/no-value.js'
 import { projectionError } from './internal/projection-error.js'
 import {itemContext, rootContext} from './internal/projection-context.js'
 import {isStructuralBinding} from './internal/structural.js'
@@ -33,10 +34,14 @@ const noKey = Symbol('Lumi unkeyed occurrence')
  *   scope?: Runtime['descriptor']
  * }} descriptor
  * @property {number} index
+ * @property {Runtime | undefined} [scope] The repeat declaration that owns
+ * this declaration. A declaration at the component boundary has none.
  * @property {WeakMap<Element, {
  *   projectedValue: unknown,
  *   domValue: unknown
  * }>} values
+ * @property {(projected: unknown) => unknown} normalize
+ * @property {(element: Element, value: unknown) => boolean} apply
  */
 
 /**
@@ -107,28 +112,31 @@ const noKey = Symbol('Lumi unkeyed occurrence')
  * @param {Element} blueprintRoot
  * @param {ReadonlyArray<Runtime>} runtimes
  * @param {ReadonlyArray<number[]>} ownedSubtreePaths
- * @param {(runtime: Runtime, projected: unknown) => unknown} normalize
- * @param {(runtime: Runtime, element: Element, value: unknown) => void} apply
  */
 export function connectCardinalityDomBindings(
   root,
   blueprintRoot,
   runtimes,
   ownedSubtreePaths,
-  normalize,
-  apply,
 ) {
-  const runtimesByDescriptor = new Map(
+  const runtimeByDescriptor = new Map(
     runtimes.map(runtime => [runtime.descriptor, runtime]),
   )
-  const ownedBlueprints = ownedSubtreePaths.map(path => {
-    return elementAtBindingPath(blueprintRoot, path)
-  })
+
+  // A declaration in the binding list of a repeat resolves its selector in
+  // the occurrences of that repeat only.
+  for (const runtime of runtimes) {
+    const owner = runtime.descriptor.scope
+
+    if (owner !== undefined) {
+      runtime.scope = runtimeByDescriptor.get(owner)
+    }
+  }
+
   const scope = compileScope(
     blueprintRoot,
     runtimes,
-    runtimesByDescriptor,
-    ownedBlueprints,
+    ownedSubtreePaths.map(path => elementAtPath(blueprintRoot, path)),
   )
   const needsDynamicPlanning = runtimes.some(runtime => {
     return canCreateTargets(runtime.descriptor)
@@ -138,35 +146,26 @@ export function connectCardinalityDomBindings(
 
   return {
     prepare(/** @type {unknown} */ data) {
-      const plan = prepareScope(
-        scope,
-        normalize,
-        rootContext(data),
-      )
+      const plan = prepareScope(scope, rootContext(data))
       const dynamicOperations = needsDynamicPlanning
         ? prepareDynamicOperations(
           blueprintRoot,
           scope,
           plan,
           runtimes,
-          runtimesByDescriptor,
           ownedSubtreePaths,
           data,
-          normalize,
-          apply,
         )
         : []
       return {
         commit() {
-          state ??= new ScopeState(root, scope, apply)
+          state ??= new ScopeState(root, scope, applyLive)
           state.apply(plan)
           commitDynamicOperations(
             root,
             dynamicOperations,
             runtimes,
-            runtimesByDescriptor,
             ownedSubtreePaths,
-            apply,
           )
         },
       }
@@ -180,30 +179,38 @@ export function connectCardinalityDomBindings(
 }
 
 /**
+ * Writes one prepared value to its element.
+ *
+ * @param {Runtime} runtime
+ * @param {Element} element
+ * @param {unknown} value
+ */
+function applyLive(runtime, element, value) {
+  if (value !== noValue) {
+    runtime.apply(element, value)
+  }
+}
+
+/**
  * Compiles static template locations into nested positional regions.
  *
  * @param {Element} root
  * @param {ReadonlyArray<Runtime>} runtimes
- * @param {ReadonlyMap<Runtime['descriptor'], Runtime>} runtimesByDescriptor
  * @param {ReadonlyArray<Element>} ownedSubtrees
  * @returns {ScopeSpec}
  */
-function compileScope(root, runtimes, runtimesByDescriptor, ownedSubtrees) {
-  /** @type {RegionSpec[]} */
-  const regions = []
+function compileScope(root, runtimes, ownedSubtrees) {
   /** @type {Map<Element, RegionSpec>} */
   const regionByTarget = new Map()
+  /** @type {ScopeSpec} */
+  const rootScope = { sinks: [], regions: [] }
+
   for (const runtime of runtimes) {
     if (runtime.descriptor.kind !== 'repeat') {
       continue
     }
 
-    const targets = queryRuntimeElements(
-      root,
-      runtime,
-      runtimesByDescriptor,
-      ownedSubtrees,
-    )
+    const targets = queryRuntimeElements(root, runtime, ownedSubtrees)
 
     if (targets.length === 0) {
       throw new TypeError(
@@ -221,9 +228,7 @@ function compileScope(root, runtimes, runtimesByDescriptor, ownedSubtrees) {
         )
       }
 
-      if (ownedSubtrees.some(owned => {
-        return target === owned || target.contains(owned)
-      })) {
+      if (ownedSubtrees.some(owned => target.contains(owned))) {
         throw new Error(
           'Lumi repeat cannot replace a child subtree',
         )
@@ -243,87 +248,88 @@ function compileScope(root, runtimes, runtimesByDescriptor, ownedSubtrees) {
     }
   }
 
-  regions.push(...regionByTarget.values())
+  // The regions of each scope are in document order.
+  const regions = [...regionByTarget.values()].sort((left, right) => {
+    const following = 4
+    return left.target.compareDocumentPosition(right.target) & following
+      ? -1
+      : 1
+  })
 
-  /** @type {ScopeSpec} */
-  const rootScope = { sinks: [], regions: [] }
+  /**
+   * Finds the region whose occurrences contain a target. A declaration in
+   * the binding list of a repeat must be in a region of that repeat.
+   *
+   * @param {Runtime} runtime
+   * @param {Element} target
+   * @param {boolean} strict
+   */
+  const parentRegion = (runtime, target, strict) => {
+    const parent = nearestRegion(target, regions, strict, runtime.scope)
 
-  for (const region of regions) {
-    const scope = scopeRuntime(region.runtime, runtimesByDescriptor)
-    const parent = nearestRegion(region.target, regions, true, scope)
-
-    if (scope !== null && parent === null) {
+    if (runtime.scope !== undefined && parent === null) {
       throw new Error('Lumi repeat binding escaped its owning repeat')
     }
 
-    const parentTarget = parent?.target ?? root
-    region.path = elementPath(
-      parentTarget,
-      region.target,
-      'Lumi binding targets do not share a component source',
-    )
-
-    if (parent === null) {
-      rootScope.regions.push(region)
-    } else {
-      parent.scope.regions.push(region)
-    }
+    return parent
   }
 
+  for (const region of regions) {
+    const parent = parentRegion(region.runtime, region.target, true)
+
+    region.path = elementPath(parent?.target ?? root, region.target)
+    ;(parent?.scope ?? rootScope).regions.push(region)
+  }
+
+  // The sinks of each scope are in declaration order.
   for (const runtime of runtimes) {
-    if (
-      runtime.descriptor.kind === 'repeat'
-    ) {
+    if (runtime.descriptor.kind === 'repeat') {
       continue
     }
 
-    const targets = queryRuntimeElements(
-      root,
-      runtime,
-      runtimesByDescriptor,
-      ownedSubtrees,
-    )
+    const targets = queryRuntimeElements(root, runtime, ownedSubtrees)
 
     for (let matchIndex = 0; matchIndex < targets.length; matchIndex += 1) {
       const target = /** @type {Element} */ (targets[matchIndex])
-      const scope = scopeRuntime(runtime, runtimesByDescriptor)
-      const nearest = nearestRegion(target, regions, false)
-      const parent = nearestRegion(target, regions, false, scope)
+      const parent = parentRegion(runtime, target, false)
 
-      if (scope !== null && parent === null) {
-        throw new Error('Lumi repeat binding escaped its owning repeat')
-      }
-
-      if (scope !== null && nearest !== parent) {
+      if (
+        runtime.scope !== undefined
+        && nearestRegion(target, regions, false) !== parent
+      ) {
         throw new Error(
           'Lumi repeat binding crossed a repeat it does not own',
         )
       }
 
-      const parentTarget = parent?.target ?? root
       const sink = {
         runtime,
         target,
         matchIndex,
-        path: elementPath(
-          parentTarget,
-          target,
-          'Lumi binding targets do not share a component source',
-        ),
+        path: elementPath(parent?.target ?? root, target),
+      }
+      const scope = parent?.scope ?? rootScope
+
+      if (parent !== null && sink.path.length === 0) {
+        parent.ownSinks.push(sink)
+        continue
       }
 
-      if (parent === null) {
-        rootScope.sinks.push(sink)
-      } else if (sink.path.length === 0) {
-        parent.ownSinks.push(sink)
-      } else {
-        parent.scope.sinks.push(sink)
+      // Array regions cannot safely live below another rule that replaces
+      // their complete containing subtree.
+      if (
+        isStructuralBinding(runtime.descriptor)
+        && scope.regions.some(region => target.contains(region.target))
+      ) {
+        throw new Error(
+          'Lumi repeat cannot overlap a content-owning binding',
+        )
       }
+
+      scope.sinks.push(sink)
     }
   }
 
-  sortScope(rootScope)
-  assertNoStructuralSinkOwnsRegion(rootScope)
   return rootScope
 }
 
@@ -331,16 +337,17 @@ function compileScope(root, runtimes, runtimesByDescriptor, ownedSubtrees) {
  * @param {Element} target
  * @param {ReadonlyArray<RegionSpec>} regions
  * @param {boolean} strict
- * @param {Runtime | null} [runtime]
+ * @param {Runtime} [runtime] The repeat declaration that must own the
+ * region.
  * @returns {RegionSpec | null}
  */
-function nearestRegion(target, regions, strict, runtime = null) {
+function nearestRegion(target, regions, strict, runtime) {
   /** @type {RegionSpec | null} */
   let nearest = null
 
   for (const candidate of regions) {
     if (
-      (runtime !== null && candidate.runtime !== runtime)
+      (runtime !== undefined && candidate.runtime !== runtime)
       ||
       (strict && candidate.target === target)
       || !candidate.target.contains(target)
@@ -360,54 +367,6 @@ function nearestRegion(target, regions, strict, runtime = null) {
 }
 
 /**
- * @param {ScopeSpec} scope
- */
-function sortScope(scope) {
-  scope.sinks.sort((left, right) => {
-    return left.runtime.index - right.runtime.index
-  })
-  scope.regions.sort((left, right) => {
-    const following = 4
-    return left.target.compareDocumentPosition(right.target) & following
-      ? -1
-      : 1
-  })
-
-  for (const region of scope.regions) {
-    region.ownSinks.sort((left, right) => {
-      return left.runtime.index - right.runtime.index
-    })
-    sortScope(region.scope)
-  }
-}
-
-/**
- * Array regions cannot safely live below another rule that replaces their
- * complete containing subtree.
- *
- * @param {ScopeSpec} scope
- */
-function assertNoStructuralSinkOwnsRegion(scope) {
-  for (const sink of scope.sinks) {
-    if (!isStructuralBinding(sink.runtime.descriptor)) {
-      continue
-    }
-
-    for (const region of scope.regions) {
-      if (sink.target.contains(region.target)) {
-        throw new Error(
-          'Lumi repeat cannot overlap a content-owning binding',
-        )
-      }
-    }
-  }
-
-  for (const region of scope.regions) {
-    assertNoStructuralSinkOwnsRegion(region.scope)
-  }
-}
-
-/**
  * innerHTML can introduce descendant selector matches while retaining the
  * statically compiled target that owns them.
  *
@@ -420,18 +379,15 @@ function canCreateTargets(descriptor) {
 
 /**
  * @param {ScopeSpec} scope
- * @param {(runtime: Runtime, projected: unknown) => unknown} normalize
  * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
  * @returns {ScopePlan}
  */
-function prepareScope(scope, normalize, context) {
+function prepareScope(scope, context) {
   return {
-    sinks: prepareSinks(scope.sinks, normalize, context),
+    sinks: prepareSinks(scope.sinks, context),
     regions: scope.regions.length === 0
       ? noRegionPlans
-      : scope.regions.map(spec => {
-        return prepareRegion(spec, normalize, context)
-      }),
+      : scope.regions.map(spec => prepareRegion(spec, context)),
   }
 }
 
@@ -445,11 +401,10 @@ const noRegionPlans = Object.freeze([])
  * Prepares one value for each sink spec, at the same index.
  *
  * @param {ReadonlyArray<SinkSpec>} specs
- * @param {(runtime: Runtime, projected: unknown) => unknown} normalize
  * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
  * @returns {ReadonlyArray<unknown>}
  */
-function prepareSinks(specs, normalize, context) {
+function prepareSinks(specs, context) {
   const length = specs.length
 
   if (length === 0) {
@@ -461,8 +416,7 @@ function prepareSinks(specs, normalize, context) {
 
   for (let index = 0; index < length; index += 1) {
     const spec = /** @type {SinkSpec} */ (specs[index])
-    values[index] = normalize(
-      spec.runtime,
+    values[index] = spec.runtime.normalize(
       projectValue(spec.runtime, spec.target, spec.matchIndex, context),
     )
   }
@@ -482,20 +436,15 @@ function sameKey(left, right) {
 
 /**
  * @param {RegionSpec} spec
- * @param {(runtime: Runtime, projected: unknown) => unknown} normalize
  * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
  * @returns {RegionPlan}
  */
-function prepareRegion(spec, normalize, context) {
-  const projected = projectValue(
-    spec.runtime,
-    spec.target,
-    spec.matchIndex,
-    context,
+function prepareRegion(spec, context) {
+  const resolved = spec.runtime.normalize(
+    projectValue(spec.runtime, spec.target, spec.matchIndex, context),
   )
-  const resolved = normalize(spec.runtime, projected)
 
-  if (isNoValue(resolved)) {
+  if (resolved === noValue) {
     return {
       spec,
       occurrences: [],
@@ -560,10 +509,10 @@ function prepareRegion(spec, normalize, context) {
     }
 
     occurrences[index] = {
-      ownSinks: prepareSinks(spec.ownSinks, normalize, occurrenceContext),
+      ownSinks: prepareSinks(spec.ownSinks, occurrenceContext),
       context: occurrenceContext,
       key,
-      scope: prepareScope(spec.scope, normalize, occurrenceContext),
+      scope: prepareScope(spec.scope, occurrenceContext),
     }
   }
 
@@ -632,11 +581,8 @@ function projectValue(runtime, element, matchIndex, context) {
  * @param {ScopeSpec} scope
  * @param {ScopePlan} plan
  * @param {ReadonlyArray<Runtime>} runtimes
- * @param {ReadonlyMap<Runtime['descriptor'], Runtime>} runtimesByDescriptor
  * @param {ReadonlyArray<number[]>} ownedSubtreePaths
  * @param {unknown} data
- * @param {(runtime: Runtime, projected: unknown) => unknown} normalize
- * @param {(runtime: Runtime, element: Element, value: unknown) => void} apply
  * @returns {DynamicOperation[]}
  */
 function prepareDynamicOperations(
@@ -644,19 +590,17 @@ function prepareDynamicOperations(
   scope,
   plan,
   runtimes,
-  runtimesByDescriptor,
   ownedSubtreePaths,
   data,
-  normalize,
-  apply,
 ) {
   const planningRoot = importElementTree(
     blueprintRoot.ownerDocument,
     blueprintRoot,
   )
   const ownedSubtrees = ownedSubtreePaths.map(path => {
-    return elementAtBindingPath(planningRoot, path)
+    return elementAtPath(planningRoot, path)
   })
+  // The targets that each declaration has planned.
   /** @type {Map<Runtime, WeakSet<Element>>} */
   const handledByRuntime = new Map(
     runtimes.map(runtime => [runtime, new WeakSet()]),
@@ -665,112 +609,101 @@ function prepareDynamicOperations(
   const contextByElement = new WeakMap()
   /** @type {WeakMap<Element, ReadonlySet<number>>} */
   const createdBy = new WeakMap()
-  /** @type {Array<{
-   *   runtime: Runtime,
-   *   element: Element,
-   * }>} */
-  const structuralApplications = []
+  /** @type {DynamicOperation[]} */
+  const operations = []
 
   contextByElement.set(planningRoot, rootContext(data))
 
   /**
+   * Applies one value to the copy. An innerHTML write marks the elements
+   * that it creates, so that the declaration cannot select its own output.
+   *
    * @param {Runtime} runtime
    * @param {Element} element
    * @param {unknown} value
    */
-  const applyStaticPlanningValue = (runtime, element, value) => {
-    const descriptor = runtime.descriptor
+  const applyPlanned = (runtime, element, value) => {
+    handledByRuntime.get(runtime)?.add(element)
 
-    apply(runtime, element, value)
+    if (value !== noValue) {
+      runtime.apply(element, value)
 
-    if (!isNoValue(value) && canCreateTargets(descriptor)) {
-      structuralApplications.push({
-        runtime,
-        element,
-      })
+      if (canCreateTargets(runtime.descriptor)) {
+        markCreated(
+          element.firstChild,
+          null,
+          createdBy,
+          new Set(createdBy.get(element)).add(runtime.index),
+        )
+      }
     }
   }
 
-  const planningState = new ScopeState(
-    planningRoot,
-    scope,
-    applyStaticPlanningValue,
-  )
+  const planningState = new ScopeState(planningRoot, scope, applyPlanned)
   planningState.apply(plan)
-  trackPlannedScope(
-    planningState,
-    plan,
-    handledByRuntime,
-    contextByElement,
-  )
+  trackOccurrences(planningState, plan, handledByRuntime, contextByElement)
 
-  for (const application of structuralApplications) {
-    markStructuralCreation(
-      application.runtime,
-      application.element,
-      contextByElement,
-      createdBy,
-    )
+  /** @param {Runtime} runtime */
+  const matchesOf = runtime => {
+    return queryRuntimeElements(planningRoot, runtime, ownedSubtrees)
   }
 
   /**
+   * Prepares the value for one target that the static scope does not own.
+   *
    * @param {Runtime} runtime
    * @param {Element} element
-   * @param {unknown} value
+   * @param {number} matchIndex
+   * @param {number} matchCount
    */
-  const applyDynamicPlanningValue = (runtime, element, value) => {
-    apply(runtime, element, value)
-
-    if (!isNoValue(value)) {
-      markStructuralCreation(
-        runtime,
-        element,
-        contextByElement,
-        createdBy,
-      )
-    }
-  }
-
-  /** @type {DynamicOperation[]} */
-  const operations = []
-  /** @type {Map<Runtime, WeakSet<Element>>} */
-  const processedByRuntime = new Map()
-  for (const runtime of runtimes) {
-    if (isStructuralRuntime(runtime)) {
-      processedByRuntime.set(runtime, new WeakSet())
-    }
-  }
-
-  while (true) {
-    const task = nextDynamicStructuralTask(
-      planningRoot,
-      runtimes,
-      ownedSubtrees,
-      runtimesByDescriptor,
-      handledByRuntime,
-      processedByRuntime,
-      createdBy,
+  const prepare = (runtime, element, matchIndex, matchCount) => {
+    const projected = projectValue(
+      runtime,
+      element,
+      matchIndex,
+      findContext(element, contextByElement),
     )
 
-    if (task === null) {
+    if (
+      runtime.descriptor.kind === 'property'
+      && runtime.descriptor.name === 'outerHTML'
+    ) {
+      throw new TypeError(
+        'Lumi outerHTML binding targets created during array planning '
+        + 'must exist in the component source',
+      )
+    }
+
+    const value = runtime.normalize(projected)
+    operations.push({ runtime, matchIndex, matchCount, value })
+    return value
+  }
+
+  const structuralRuntimes = runtimes.filter(isStructuralRuntime)
+
+  // Each content write can remove or create the targets of other tasks, so
+  // the tasks are listed again after each write.
+  while (true) {
+    const task = tasksByDepth(
+      planningRoot,
+      structuralRuntimes,
+      matchesOf,
+      (runtime, element) => {
+        return handledByRuntime.get(runtime)?.has(element) !== true
+          && createdBy.get(element)?.has(runtime.index) !== true
+      },
+    )[0]
+
+    if (task === undefined) {
       break
     }
 
-    processedByRuntime.get(task.runtime)?.add(task.element)
-    const value = prepareDynamicValue(
-      task.runtime,
-      task.element,
-      contextByElement,
-      normalize,
-      task.matchIndex,
+    const { runtime, element } = task
+    applyPlanned(
+      runtime,
+      element,
+      prepare(runtime, element, task.matchIndex, task.count),
     )
-    operations.push({
-      runtime: task.runtime,
-      matchIndex: task.matchIndex,
-      matchCount: task.matchCount,
-      value,
-    })
-    applyDynamicPlanningValue(task.runtime, task.element, value)
   }
 
   for (const runtime of runtimes) {
@@ -778,33 +711,15 @@ function prepareDynamicOperations(
       continue
     }
 
-    const elements = queryRuntimeElements(
-      planningRoot,
-      runtime,
-      runtimesByDescriptor,
-      ownedSubtrees,
-    )
+    const elements = matchesOf(runtime)
     const handled = handledByRuntime.get(runtime)
 
     for (let matchIndex = 0; matchIndex < elements.length; matchIndex += 1) {
       const element = /** @type {Element} */ (elements[matchIndex])
 
-      if (handled?.has(element) === true) {
-        continue
+      if (handled?.has(element) !== true) {
+        prepare(runtime, element, matchIndex, elements.length)
       }
-
-      operations.push({
-        runtime,
-        matchIndex,
-        matchCount: elements.length,
-        value: prepareDynamicValue(
-          runtime,
-          element,
-          contextByElement,
-          normalize,
-          matchIndex,
-        ),
-      })
     }
   }
 
@@ -812,213 +727,57 @@ function prepareDynamicOperations(
 }
 
 /**
+ * Applies the values for the targets that the static scope does not own.
+ *
+ * An innerHTML projection may establish content that dynamically discovered
+ * descendant rules refine. The commit caches the final subtree so the next
+ * update does not rebuild unchanged markup and discard persistent
+ * descendant nodes.
+ *
  * @param {Element} root
  * @param {ReadonlyArray<DynamicOperation>} operations
  * @param {ReadonlyArray<Runtime>} runtimes
- * @param {ReadonlyMap<Runtime['descriptor'], Runtime>} runtimesByDescriptor
  * @param {ReadonlyArray<number[]>} ownedSubtreePaths
- * @param {(runtime: Runtime, element: Element, value: unknown) => void} apply
  */
 function commitDynamicOperations(
   root,
   operations,
   runtimes,
-  runtimesByDescriptor,
   ownedSubtreePaths,
-  apply,
 ) {
   if (operations.length === 0) {
     return
   }
 
   const ownedSubtrees = ownedSubtreePaths.map(path => {
-    return elementAtBindingPath(root, path)
+    return elementAtPath(root, path)
   })
 
-  for (const operation of operations) {
-    const elements = queryRuntimeElements(
-      root,
-      operation.runtime,
-      runtimesByDescriptor,
-      ownedSubtrees,
-    )
-    const element = elements[operation.matchIndex]
+  for (const { runtime, matchIndex, matchCount, value } of operations) {
+    const elements = queryRuntimeElements(root, runtime, ownedSubtrees)
+    const element = elements[matchIndex]
 
-    if (
-      elements.length !== operation.matchCount
-      || element === undefined
-    ) {
+    if (elements.length !== matchCount || element === undefined) {
       throw new Error(
         'Lumi DOM changed while committing selector '
-        + `"${operation.runtime.descriptor.selector}"`,
+        + `"${runtime.descriptor.selector}"`,
       )
     }
 
-    apply(operation.runtime, element, operation.value)
+    applyLive(runtime, element, value)
   }
 
-  refreshDynamicParentCaches(
-    root,
-    runtimes,
-    runtimesByDescriptor,
-    ownedSubtrees,
-  )
-}
-
-/**
- * An innerHTML projection may establish content that dynamically discovered
- * descendant rules refine. Cache the final subtree so the next update does
- * not rebuild unchanged markup and discard persistent descendant nodes.
- *
- * @param {Element} root
- * @param {ReadonlyArray<Runtime>} runtimes
- * @param {ReadonlyMap<Runtime['descriptor'], Runtime>} runtimesByDescriptor
- * @param {ReadonlyArray<Element>} ownedSubtrees
- */
-function refreshDynamicParentCaches(
-  root,
-  runtimes,
-  runtimesByDescriptor,
-  ownedSubtrees,
-) {
   for (const runtime of runtimes) {
-    if (
-      runtime.descriptor.kind !== 'property'
-      || runtime.descriptor.name !== 'innerHTML'
-    ) {
-      continue
-    }
+    if (canCreateTargets(runtime.descriptor)) {
+      for (const element of queryRuntimeElements(root, runtime, ownedSubtrees)) {
+        const previous = runtime.values.get(element)
 
-    for (const element of queryRuntimeElements(
-      root,
-      runtime,
-      runtimesByDescriptor,
-      ownedSubtrees,
-    )) {
-      const previous = runtime.values.get(element)
-
-      if (previous === undefined) {
-        continue
-      }
-
-      runtime.values.set(element, {
-        projectedValue: previous.projectedValue,
-        domValue: element.innerHTML,
-      })
-    }
-  }
-}
-
-/**
- * @param {Element} root
- * @param {ReadonlyArray<Runtime>} runtimes
- * @param {ReadonlyArray<Element>} ownedSubtrees
- * @param {ReadonlyMap<Runtime['descriptor'], Runtime>} runtimesByDescriptor
- * @param {Map<Runtime, WeakSet<Element>>} handledByRuntime
- * @param {Map<Runtime, WeakSet<Element>>} processedByRuntime
- * @param {WeakMap<Element, ReadonlySet<number>>} createdBy
- * @returns {{
- *   runtime: Runtime,
- *   element: Element,
- *   matchIndex: number,
- *   matchCount: number,
- *   depth: number,
- * } | null}
- */
-function nextDynamicStructuralTask(
-  root,
-  runtimes,
-  ownedSubtrees,
-  runtimesByDescriptor,
-  handledByRuntime,
-  processedByRuntime,
-  createdBy,
-) {
-  /** @type {{
-   *   runtime: Runtime,
-   *   element: Element,
-   *   matchIndex: number,
-   *   matchCount: number,
-   *   depth: number,
-   * } | null} */
-  let selected = null
-
-  for (const runtime of runtimes) {
-    if (!isStructuralRuntime(runtime)) {
-      continue
-    }
-
-    const elements = queryRuntimeElements(
-      root,
-      runtime,
-      runtimesByDescriptor,
-      ownedSubtrees,
-    )
-    const handled = handledByRuntime.get(runtime)
-    const processed = processedByRuntime.get(runtime)
-
-    for (let matchIndex = 0; matchIndex < elements.length; matchIndex += 1) {
-      const element = /** @type {Element} */ (elements[matchIndex])
-
-      if (
-        handled?.has(element) === true
-        || processed?.has(element) === true
-        || createdBy.get(element)?.has(runtime.index) === true
-      ) {
-        continue
-      }
-
-      const depth = elementDepth(root, element)
-
-      // Declarations and matches are visited in ascending order, so only a
-      // smaller depth can come before the selected task.
-      if (selected === null || depth < selected.depth) {
-        selected = {
-          runtime,
-          element,
-          matchIndex,
-          matchCount: elements.length,
-          depth,
+        if (previous !== undefined) {
+          previous.domValue = element.innerHTML
         }
       }
     }
   }
-
-  return selected
-}
-
-/**
- * @param {Runtime} runtime
- * @param {Element} element
- * @param {WeakMap<Element, import('./types.js').ProjectionContext<unknown, unknown>>} contextByElement
- * @param {(runtime: Runtime, projected: unknown) => unknown} normalize
- * @param {number} matchIndex
- */
-function prepareDynamicValue(
-  runtime,
-  element,
-  contextByElement,
-  normalize,
-  matchIndex,
-) {
-  const context = findContext(element, contextByElement)
-  const projected = projectValue(
-    runtime,
-    element,
-    matchIndex,
-    context,
-  )
-  if (
-    runtime.descriptor.kind === 'property'
-    && runtime.descriptor.name === 'outerHTML'
-  ) {
-    throw new TypeError(
-      'Lumi outerHTML binding targets created during array planning '
-      + 'must exist in the component source',
-    )
-  }
-
-  return normalize(runtime, projected)
 }
 
 /**
@@ -1050,7 +809,7 @@ function findContext(el, contextByElement) {
 }
 
 /**
- * Records the statically compiled targets after their inert cardinality plan
+ * Records the context of each occurrence after the inert cardinality plan
  * has been applied. This traversal exists only in the mixed structural path;
  * the live cardinality state retains its original fast apply methods.
  *
@@ -1059,127 +818,32 @@ function findContext(el, contextByElement) {
  * @param {Map<Runtime, WeakSet<Element>>} handledByRuntime
  * @param {WeakMap<Element, import('./types.js').ProjectionContext<unknown, unknown>>} contextByElement
  */
-function trackPlannedScope(
-  state,
-  plan,
-  handledByRuntime,
-  contextByElement,
-) {
-  const context = findContext(state.root, contextByElement)
-
-  for (let index = 0; index < state.sinkSpecs.length; index += 1) {
-    const sink = /** @type {SinkSpec} */ (state.sinkSpecs[index])
-    const element = /** @type {Element} */ (state.sinkElements[index])
-
-    handledByRuntime.get(sink.runtime)?.add(element)
-    contextByElement.set(element, context)
-  }
-
-  for (let regionIndex = 0; regionIndex < plan.regions.length; regionIndex += 1) {
-    const regionPlan = /** @type {RegionPlan} */ (plan.regions[regionIndex])
-    const regionState = /** @type {RegionState} */ (state.regions[regionIndex])
+function trackOccurrences(state, plan, handledByRuntime, contextByElement) {
+  plan.regions.forEach((regionPlan, regionIndex) => {
+    const occurrences = /** @type {RegionState} */ (
+      state.regions[regionIndex]
+    ).occurrences
 
     // After the plan is applied, a region has one occurrence for each
     // occurrence plan.
-    for (
-      let occurrenceIndex = 0;
-      occurrenceIndex < regionPlan.occurrences.length;
-      occurrenceIndex += 1
-    ) {
-      const occurrencePlan = /** @type {OccurrencePlan} */ (
-        regionPlan.occurrences[occurrenceIndex]
-      )
-      const occurrenceState = /** @type {OccurrenceState} */ (
-        regionState.occurrences[occurrenceIndex]
+    regionPlan.occurrences.forEach((occurrencePlan, index) => {
+      const { element, scope } = /** @type {OccurrenceState} */ (
+        occurrences[index]
       )
 
-      handledByRuntime.get(regionPlan.spec.runtime)
-        ?.add(occurrenceState.element)
-      contextByElement.set(
-        occurrenceState.element,
-        occurrencePlan.context,
-      )
+      handledByRuntime.get(regionPlan.spec.runtime)?.add(element)
+      contextByElement.set(element, occurrencePlan.context)
 
-      for (const sink of regionPlan.spec.ownSinks) {
-        handledByRuntime.get(sink.runtime)?.add(occurrenceState.element)
-      }
-
-      if (occurrenceState.scope !== null) {
-        trackPlannedScope(
-          occurrenceState.scope,
+      if (scope !== null) {
+        trackOccurrences(
+          scope,
           occurrencePlan.scope,
           handledByRuntime,
           contextByElement,
         )
       }
-    }
-  }
-}
-
-/**
- * Marks elements produced by a structural property so that the same
- * declaration cannot recursively select its own output.
- *
- * @param {Runtime} runtime
- * @param {Element} element
- * @param {WeakMap<Element, import('./types.js').ProjectionContext<unknown, unknown>>} contextByElement
- * @param {WeakMap<Element, ReadonlySet<number>>} createdBy
- */
-function markStructuralCreation(
-  runtime,
-  element,
-  contextByElement,
-  createdBy,
-) {
-  const descriptor = runtime.descriptor
-
-  if (descriptor.kind !== 'property') {
-    return
-  }
-
-  const context = findContext(element, contextByElement)
-  const history = new Set(createdBy.get(element) ?? [])
-  history.add(runtime.index)
-
-  if (descriptor.name === 'innerHTML') {
-    for (const child of element.children) {
-      markCreatedSubtree(
-        child,
-        context,
-        history,
-        contextByElement,
-        createdBy,
-      )
-    }
-  }
-}
-
-/**
- * @param {Element} element
- * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
- * @param {ReadonlySet<number>} history
- * @param {WeakMap<Element, import('./types.js').ProjectionContext<unknown, unknown>>} contextByElement
- * @param {WeakMap<Element, ReadonlySet<number>>} createdBy
- */
-function markCreatedSubtree(
-  element,
-  context,
-  history,
-  contextByElement,
-  createdBy,
-) {
-  contextByElement.set(element, context)
-  createdBy.set(element, history)
-
-  for (const child of element.children) {
-    markCreatedSubtree(
-      child,
-      context,
-      history,
-      contextByElement,
-      createdBy,
-    )
-  }
+    })
+  })
 }
 
 class ScopeState {
@@ -1193,11 +857,11 @@ class ScopeState {
     this.applyValue = apply
     this.sinkSpecs = spec.sinks
     this.sinkElements = spec.sinks.map(sink => {
-      return elementAtBindingPath(root, sink.path)
+      return elementAtPath(root, sink.path)
     })
     this.regions = spec.regions.map(region => {
       return new RegionState(
-        elementAtBindingPath(root, region.path),
+        elementAtPath(root, region.path),
         region,
         apply,
       )
@@ -1217,7 +881,9 @@ class ScopeState {
     }
 
     for (let index = 0; index < plan.regions.length; index += 1) {
-      this.regions[index]?.apply(plan.regions[index])
+      /** @type {RegionState} */ (this.regions[index]).apply(
+        /** @type {RegionPlan} */ (plan.regions[index]),
+      )
     }
   }
 
@@ -1235,10 +901,6 @@ class RegionState {
    * @param {(runtime: Runtime, element: Element, value: unknown) => void} apply
    */
   constructor(target, spec, apply) {
-    if (target.parentNode === null) {
-      throw new Error('Lumi array binding target lost its parent')
-    }
-
     this.spec = spec
     this.applyValue = apply
     this.anchor = target.ownerDocument.createComment('lumi')
@@ -1246,12 +908,8 @@ class RegionState {
     this.occurrences = [new OccurrenceState(target)]
   }
 
-  /** @param {RegionPlan | undefined} plan */
+  /** @param {RegionPlan} plan */
   apply(plan) {
-    if (plan === undefined) {
-      throw new Error('Lumi lost an array region plan')
-    }
-
     if (plan.isNoop === true) {
       return
     }
@@ -1579,66 +1237,31 @@ class OccurrenceState {
 }
 
 /**
- * Resolves the repeat declaration that owns a locally declared binding.
- *
- * @param {Runtime} runtime
- * @param {ReadonlyMap<Runtime['descriptor'], Runtime>} runtimesByDescriptor
- * @returns {Runtime | null}
- */
-function scopeRuntime(runtime, runtimesByDescriptor) {
-  const descriptor = runtime.descriptor.scope
-
-  if (descriptor === undefined) {
-    return null
-  }
-
-  const scope = runtimesByDescriptor.get(descriptor)
-
-  if (scope === undefined || scope.descriptor.kind !== 'repeat') {
-    throw new Error('Lumi repeat binding lost its owning repeat')
-  }
-
-  return scope
-}
-
-/**
  * Resolves a declaration against its component boundary or, when it belongs
  * to a repeat binding list, against occurrences of that owning repeat only.
  *
  * @param {Element} root
  * @param {Runtime} runtime
- * @param {ReadonlyMap<Runtime['descriptor'], Runtime>} runtimesByDescriptor
  * @param {ReadonlyArray<Element>} ownedSubtrees
  * @returns {Element[]}
  */
-function queryRuntimeElements(
-  root,
-  runtime,
-  runtimesByDescriptor,
-  ownedSubtrees,
-) {
-  const scope = scopeRuntime(runtime, runtimesByDescriptor)
+function queryRuntimeElements(root, runtime, ownedSubtrees) {
+  const selector = runtime.descriptor.selector
 
-  if (scope === null) {
-    return queryOwnedElements(
-      root,
-      runtime.descriptor.selector,
-      ownedSubtrees,
-    )
+  if (runtime.scope === undefined) {
+    return queryOwnedElements(root, selector, ownedSubtrees)
   }
 
-  const scopeElements = queryRuntimeElements(
-    root,
-    scope,
-    runtimesByDescriptor,
-    ownedSubtrees,
-  )
   const elements = new Set()
 
-  for (const scopeElement of scopeElements) {
+  for (const scopeElement of queryRuntimeElements(
+    root,
+    runtime.scope,
+    ownedSubtrees,
+  )) {
     for (const element of queryOwnedElements(
       scopeElement,
-      runtime.descriptor.selector,
+      selector,
       ownedSubtrees,
     )) {
       elements.add(element)
@@ -1646,16 +1269,4 @@ function queryRuntimeElements(
   }
 
   return [...elements]
-}
-
-/**
- * @param {Element} root
- * @param {ReadonlyArray<number>} path
- */
-function elementAtBindingPath(root, path) {
-  return elementAtPath(
-    root,
-    path,
-    'Lumi array template lost a binding target',
-  )
 }

@@ -344,27 +344,71 @@ export function shadowIncludingContains(ancestor, descendant) {
 }
 
 /**
+ * Reports a DOM target that is not at its expected position. This occurs
+ * only when other code changes the DOM that Lumi owns.
+ *
+ * @returns {never}
+ */
+function lostTarget() {
+  throw new Error('Lumi lost a DOM target')
+}
+
+/**
  * Returns an element's depth in a shadow-including component tree.
  *
  * @param {Element} root
  * @param {Element} element
  */
-export function elementDepth(root, element) {
+function elementDepth(root, element) {
   let depth = 0
-  let current = element
 
-  while (current !== root) {
-    const parent = shadowIncludingParent(current)
-
-    if (parent === null) {
-      throw new Error('Lumi lost a DOM target')
-    }
-
-    current = parent
-    depth += 1
+  for (let current = element; current !== root; depth += 1) {
+    current = shadowIncludingParent(current) ?? lostTarget()
   }
 
   return depth
+}
+
+/**
+ * Lists the selector matches that pass `isTask`, sorted by depth. Matches
+ * with the same depth keep the declaration order, then the match order.
+ *
+ * @template {object} Runtime
+ * @param {Element} root
+ * @param {ReadonlyArray<Runtime>} runtimes
+ * @param {(runtime: Runtime) => ReadonlyArray<Element>} matchesOf
+ * @param {(runtime: Runtime, element: Element) => boolean} isTask
+ * @returns {Array<{
+ *   runtime: Runtime,
+ *   element: Element,
+ *   matchIndex: number,
+ *   count: number,
+ *   depth: number
+ * }>}
+ */
+export function tasksByDepth(root, runtimes, matchesOf, isTask) {
+  const tasks = []
+
+  for (const runtime of runtimes) {
+    const elements = matchesOf(runtime)
+
+    for (let matchIndex = 0; matchIndex < elements.length; matchIndex += 1) {
+      const element = /** @type {Element} */ (elements[matchIndex])
+
+      if (isTask(runtime, element)) {
+        tasks.push({
+          runtime,
+          element,
+          matchIndex,
+          count: elements.length,
+          depth: elementDepth(root, element),
+        })
+      }
+    }
+  }
+
+  // The sort is stable.
+  return tasks.sort((left, right) => left.depth - right.depth)
 }
 
 /**
@@ -373,48 +417,23 @@ export function elementDepth(root, element) {
  *
  * @param {Element} ancestor
  * @param {Element} descendant
- * @param {string} errorMessage
  * @returns {number[]}
  */
-export function elementPath(ancestor, descendant, errorMessage) {
-  if (ancestor === descendant) {
-    return []
-  }
-
+export function elementPath(ancestor, descendant) {
   /** @type {number[]} */
   const path = []
-  let current = descendant
 
-  while (current !== ancestor) {
-    const parent = current.parentElement
+  for (let current = descendant; current !== ancestor;) {
+    const parent = current.parentNode ?? lostTarget()
+    const index = Array.prototype.indexOf.call(parent.children, current)
 
-    if (parent !== null) {
-      path.unshift(Array.prototype.indexOf.call(parent.children, current))
-      current = parent
-      continue
+    if (parent.nodeType === 1) {
+      path.unshift(index)
+      current = /** @type {Element} */ (parent)
+    } else {
+      path.unshift(-index - 1)
+      current = /** @type {ShadowRoot} */ (parent).host ?? lostTarget()
     }
-
-    const shadowRoot = current.parentNode
-
-    if (
-      shadowRoot === null
-      || shadowRoot.nodeType !== 11
-      || !('host' in shadowRoot)
-    ) {
-      throw new Error(errorMessage)
-    }
-
-    const index = Array.prototype.indexOf.call(
-      /** @type {ShadowRoot} */ (shadowRoot).children,
-      current,
-    )
-
-    if (index < 0) {
-      throw new Error(errorMessage)
-    }
-
-    path.unshift(-index - 1)
-    current = /** @type {ShadowRoot} */ (shadowRoot).host
   }
 
   return path
@@ -425,21 +444,17 @@ export function elementPath(ancestor, descendant, errorMessage) {
  *
  * @param {Element} root
  * @param {ReadonlyArray<number>} path
- * @param {string} errorMessage
  * @returns {Element}
  */
-export function elementAtPath(root, path, errorMessage) {
+export function elementAtPath(root, path) {
   let current = root
 
   for (const step of path) {
-    const child = step < 0
-      ? current.shadowRoot?.children[-step - 1]
-      : current.children[step]
-
-    if (child === undefined) {
-      throw new Error(errorMessage)
-    }
-    current = child
+    current = (
+      step < 0
+        ? current.shadowRoot?.children[-step - 1]
+        : current.children[step]
+    ) ?? lostTarget()
   }
 
   return current
@@ -524,6 +539,25 @@ function pairChildren(left, right, visit) {
 }
 
 /**
+ * Marks the elements that a planned write created, from `node` to the
+ * sibling before `end`, with their descendants. A declaration in the
+ * history cannot select these elements again.
+ *
+ * @param {Node | null} node
+ * @param {Node | null} end
+ * @param {WeakMap<Element, ReadonlySet<number>>} createdBy
+ * @param {ReadonlySet<number>} history
+ */
+export function markCreated(node, end, createdBy, history) {
+  for (; node !== null && node !== end; node = node.nextSibling) {
+    if (node.nodeType === 1) {
+      createdBy.set(/** @type {Element} */ (node), history)
+      markCreated(node.firstChild, null, createdBy, history)
+    }
+  }
+}
+
+/**
  * Clones the single element that defines a component boundary.
  *
  * A template contributes its inert content. A fragment contributes its
@@ -536,56 +570,37 @@ function pairChildren(left, right, visit) {
  * exactly one root element.
  */
 export function cloneSourceRoot(source) {
-  if (source === null || typeof source !== 'object') {
+  const type = source?.nodeType
+  /** @type {DocumentFragment | null} */
+  let content = null
+
+  if (type === 1) {
+    const el = /** @type {Element} */ (source)
+
+    if (el.localName !== 'template' || !('content' in el)) {
+      return /** @type {Element} */ (el.cloneNode(true))
+    }
+
+    content = /** @type {HTMLTemplateElement} */ (el).content
+  } else if (type === 11) {
+    content = /** @type {DocumentFragment} */ (source)
+  }
+
+  if (content === null) {
     throw new TypeError(
       'Lumi component source must be a <template>, DocumentFragment, or Element',
     )
   }
 
-  if (source.nodeType === 1) {
-    const el = /** @type {Element} */ (source)
-
-    if (el.localName === 'template' && 'content' in el) {
-      const template = /** @type {HTMLTemplateElement} */ (
-        /** @type {unknown} */ (el)
-      )
-      return cloneFragmentRoot(template.content)
-    }
-
-    return /** @type {Element} */ (el.cloneNode(true))
-  }
-
-  if (source.nodeType === 11) {
-    return cloneFragmentRoot(/** @type {DocumentFragment} */ (source))
-  }
-
-  throw new TypeError(
-    'Lumi component source must be a <template>, DocumentFragment, or Element',
-  )
-}
-
-/**
- * @param {DocumentFragment} source
- * @returns {Element}
- */
-function cloneFragmentRoot(source) {
-  const fragment = 'host' in source
-    ? source.ownerDocument.createDocumentFragment()
-    : /** @type {DocumentFragment} */ (source.cloneNode(true))
-
-  if ('host' in source) {
-    for (const child of source.childNodes) {
-      fragment.append(child.cloneNode(true))
-    }
-  }
-
-  if (fragment.childElementCount !== 1) {
+  if (content.childElementCount !== 1) {
     throw new TypeError(
       'Lumi component source must provide exactly one root element',
     )
   }
 
-  return /** @type {Element} */ (fragment.firstElementChild)
+  return /** @type {Element} */ (
+    /** @type {Element} */ (content.firstElementChild).cloneNode(true)
+  )
 }
 
 /**

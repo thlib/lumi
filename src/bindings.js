@@ -3,9 +3,9 @@
 import { findElement } from './dom.js'
 import { prepareMounted } from './component.js'
 import {
-  claimDomSubtree,
   createDomBinding,
   getDomBindingDescriptor,
+  ownedDomSubtrees,
 } from './plan.js'
 
 /**
@@ -289,14 +289,15 @@ export function child(selector, childComponent, project) {
 
       const mounted = childComponent.mount(container)
 
-      return claimDomSubtree({
+      return {
+        [ownedDomSubtrees]: [container],
         prepare(data) {
           return prepareMounted(mounted, project(data))
         },
         destroy() {
           mounted.unmount()
         },
-      }, container)
+      }
     },
   }
 }

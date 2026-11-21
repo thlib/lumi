@@ -9,26 +9,31 @@
 
 import {
   createElementQuery,
-  elementDepth,
   elementPath,
   importElementTree,
+  markCreated,
   pairElementTrees,
   queryOwnedElements,
+  tasksByDepth,
 } from './dom.js'
 import { connectCardinalityDomBindings } from './cardinality.js'
 import {warn} from './internal/diagnostics.js'
-import { isNoValue, noValue } from './internal/no-value.js'
+import { noValue } from './internal/no-value.js'
 import { projectionError } from './internal/projection-error.js'
 import {rootContext} from './internal/projection-context.js'
-import {
-  isStructuralBinding,
-  isStructuralProperty,
-} from './internal/structural.js'
+import { isStructuralBinding } from './internal/structural.js'
 
 const domBindingDescriptor = Symbol('Lumi DOM binding descriptor')
-const ownedDomSubtrees = Symbol('Lumi owned DOM subtrees')
+/**
+ * The key of the containers that a connected binding owns. The DOM inside
+ * an owned container belongs to a nested component.
+ */
+export const ownedDomSubtrees = Symbol('Lumi owned DOM subtrees')
 const classWhitespace = '[\\t\\n\\f\\r ]'
 const textValues = 'a string, number, or boolean'
+// The cache of a binding that never caches a value.
+/** @type {WeakMap<Element, CachedValue>} */
+const unusedValues = new WeakMap()
 // Marks a batch match that an earlier hoisted content operation planned.
 const unplannedMatch = Symbol('Lumi unplanned match')
 
@@ -74,57 +79,46 @@ const unplannedMatch = Symbol('Lumi unplanned match')
  * @typedef {object} DomBindingRuntime
  * @property {DomBindingDescriptor<Data>} descriptor
  * @property {number} index
- * @property {WeakMap<Element, CachedValue>} values
+ * @property {boolean} structural Whether the binding replaces the complete
+ * contents of its element.
+ * @property {DomBindingRuntime<Data> | undefined} [scope] The repeat
+ * declaration that owns this declaration. The repeat planner sets it.
+ * @property {WeakMap<Element, CachedValue>} values The last value that a
+ * property binding gave to each element. Other bindings do not use it.
  * @property {boolean} requiresTrustedHTML
- * @property {Set<string>} warnings
+ * @property {Set<string> | null} warnings The categories of the warnings
+ * that the declaration has reported.
  * @property {Window | null} view
- * @property {(projected: unknown, trustedTypes: TrustedHTMLCheck | null) => unknown} normalize
+ * @property {(projected: unknown) => unknown} normalize
  * @property {(element: Element, value: unknown) => boolean} apply
  * @property {(element: Element, value: unknown) => boolean} changes
  */
 
 /**
+ * The prepared values for consecutive selector matches of one declaration,
+ * from the match at `start`. `count` is the number of matches when the
+ * values were prepared. A value of `unplannedMatch` marks a match that an
+ * earlier operation planned.
+ *
  * @template Data
- * @typedef {object} SingleOperation
- * @property {'single'} type
+ * @typedef {object} DomOperation
  * @property {DomBindingRuntime<Data>} runtime
- * @property {number} matchIndex
- * @property {unknown} value
- */
-
-/**
- * @template Data
- * @typedef {object} BatchOperation
- * @property {'batch'} type
- * @property {DomBindingRuntime<Data>} runtime
+ * @property {number} start
+ * @property {number} count
  * @property {ReadonlyArray<unknown>} values
  */
 
 /**
- * @template Data
- * @typedef {SingleOperation<Data> | BatchOperation<Data>} DomOperation
- */
-
-/**
- * Operations that the direct planner prepared. When `complete` is false, the
- * staged planner continues with hoisted content tasks (`nextRuntime` is -1)
- * or with the declaration at `nextRuntime`.
+ * One committed write of a content property.
  *
  * @template Data
- * @typedef {object} DirectProgress
- * @property {boolean} complete
- * @property {Array<DomOperation<Data>>} operations
- * @property {number} nextRuntime
- */
-
-/**
- * @template Data
- * @typedef {object} ParentCacheRecord
+ * @typedef {object} ContentWrite
  * @property {DomBindingRuntime<Data>} runtime
  * @property {Element} element
- * @property {unknown} value
- * @property {boolean} hasDescendantOperation
- * @property {boolean} isSuperseded
+ * @property {boolean} isRefined Whether a later operation changed a
+ * descendant of the element.
+ * @property {boolean} isSuperseded Whether a later content write replaced
+ * the contents of the same element.
  */
 
 /**
@@ -191,30 +185,6 @@ export function flattenDomBindingDescriptors(
 }
 
 /**
- * Marks a child container as a subtree owned by its connected binding.
- *
- * @template Data
- * @param {import('./types.js').ConnectedBinding<Data>} connected
- * @param {Element} container
- * @returns {import('./types.js').ConnectedBinding<Data>}
- */
-export function claimDomSubtree(connected, container) {
-  Reflect.defineProperty(connected, ownedDomSubtrees, {
-    value: [container],
-  })
-  return connected
-}
-
-/**
- * @template Data
- * @param {import('./types.js').ConnectedBinding<Data>} connected
- * @returns {ReadonlyArray<Element>}
- */
-export function getOwnedDomSubtrees(connected) {
-  return /** @type {any} */ (connected)[ownedDomSubtrees] ?? []
-}
-
-/**
  * Connects all built-in scalar declarations to one DOM-aware update planner.
  *
  * @template Data
@@ -230,61 +200,49 @@ export function connectDomBindings(
   ownedSubtrees = [],
   publishShadowRoots,
 ) {
-  /** @type {Array<DomBindingRuntime<Data>>} */
-  const runtimes = descriptors.map((descriptor, index) => {
-    return createDomBindingRuntime(descriptor, index, root)
-  })
-  const trustedTypes = runtimes.some(runtime => runtime.requiresTrustedHTML)
+  const trustedTypes = descriptors.some(requiresTrustedHTML)
     ? trustedTypesFactory(root)
     : null
+  const runtimes = descriptors.map((descriptor, index) => {
+    return createDomBindingRuntime(descriptor, index, root, trustedTypes)
+  })
 
-  if (!runtimes.some(runtime => runtime.descriptor.kind === 'repeat')) {
+  if (!descriptors.some(descriptor => descriptor.kind === 'repeat')) {
     return connectScalarDomBindings(
       root,
       runtimes,
       ownedSubtrees,
-      trustedTypes,
       publishShadowRoots,
     )
   }
 
-  const planningDocument = root.ownerDocument.implementation
-    .createHTMLDocument()
-  const blueprintRoot = importElementTree(planningDocument, root)
-  const ownedSubtreePaths = ownedSubtrees.map(subtree => {
-    return elementPath(
-      root,
-      subtree,
-      'Lumi owned subtree left its component boundary',
-    )
-  })
   return connectCardinalityDomBindings(
     root,
-    blueprintRoot,
-    /** @type {ReadonlyArray<import('./cardinality.js').Runtime>} */ (
-      runtimes
+    importElementTree(
+      root.ownerDocument.implementation.createHTMLDocument(),
+      root,
     ),
-    ownedSubtreePaths,
-    (runtime, projected) => {
-      return normalizeProjectedValue(
-        /** @type {DomBindingRuntime<Data>} */ (runtime),
-        projected,
-        trustedTypes,
-      )
-    },
-    (runtime, element, value) => {
-      applyLiveValue(
-        /** @type {DomBindingRuntime<Data>} */ (runtime),
-        element,
-        value,
-      )
-    },
+    runtimes,
+    ownedSubtrees.map(subtree => elementPath(root, subtree)),
   )
+}
+
+/**
+ * Tells whether a declaration writes markup, which must be TrustedHTML.
+ *
+ * @param {{kind: string, name?: string}} descriptor
+ */
+function requiresTrustedHTML(descriptor) {
+  return descriptor.kind === 'property'
+    && (descriptor.name === 'innerHTML' || descriptor.name === 'outerHTML')
 }
 
 /**
  * Compiles binding-kind-specific normalization and application once when a
  * component connects, keeping the per-element update loop monomorphic.
+ *
+ * `normalize` gives the value to write for a projected value, or `noValue`
+ * when the projected value asks for no DOM operation.
  *
  * `apply` writes a value and tells whether the live DOM changed. `changes`
  * is a read-only check that tells whether applying one value to the current
@@ -298,37 +256,55 @@ export function connectDomBindings(
  * @param {DomBindingDescriptor<Data>} descriptor
  * @param {number} index
  * @param {Element} root
+ * @param {TrustedHTMLCheck | null} trustedTypes
  * @returns {DomBindingRuntime<Data>}
  */
-function createDomBindingRuntime(descriptor, index, root) {
+function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
+  const kind = descriptor.kind
   const name = /** @type {string} */ (descriptor.name)
-  const requiresTrustedHTML = descriptor.kind === 'property'
-    && (name === 'innerHTML' || name === 'outerHTML')
   /** @type {DomBindingRuntime<Data>} */
   const runtime = {
     descriptor,
     index,
-    values: new WeakMap(),
-    requiresTrustedHTML,
-    warnings: new Set(),
+    structural: isStructuralBinding(descriptor),
+    values: kind === 'property' ? new WeakMap() : unusedValues,
+    requiresTrustedHTML: requiresTrustedHTML(descriptor),
+    warnings: null,
     view: root.ownerDocument.defaultView,
-    normalize: projected => projected,
+    normalize: projected => projected ?? noValue,
     apply: () => false,
     changes: () => false,
   }
 
-  switch (descriptor.kind) {
+  /**
+   * Sets `apply` and `changes` for a binding whose current DOM value can be
+   * read and compared with the normalized value.
+   *
+   * @param {(element: Element) => unknown} read
+   * @param {(element: Element, value: any) => void} write
+   */
+  const useDomValue = (read, write) => {
+    runtime.apply = (element, value) => {
+      if (read(element) === value) {
+        return false
+      }
+
+      write(element, value)
+      return true
+    }
+    runtime.changes = (element, value) => read(element) !== value
+  }
+
+  switch (kind) {
     case 'repeat':
       runtime.normalize = projected => {
         if (!Array.isArray(projected)) {
-          warnIgnored(runtime, projected, 'an array')
-          return noValue
+          return ignore(runtime, projected, 'an array')
         }
 
         for (let i = 0; i < projected.length; i += 1) {
           if (!Object.hasOwn(projected, i)) {
-            warnIgnored(runtime, projected, 'a dense array', 'sparse array')
-            return noValue
+            return ignore(runtime, projected, 'a dense array', 'sparse array')
           }
         }
         return projected
@@ -336,11 +312,9 @@ function createDomBindingRuntime(descriptor, index, root) {
       break
     case 'text':
       runtime.normalize = projected => {
-        if (!isTextValue(projected)) {
-          warnIgnored(runtime, projected, textValues)
-          return noValue
-        }
-        return String(projected)
+        return isTextValue(projected)
+          ? String(projected)
+          : ignore(runtime, projected, textValues)
       }
       runtime.apply = (element, value) => {
         const text = /** @type {string} */ (value)
@@ -359,7 +333,21 @@ function createDomBindingRuntime(descriptor, index, root) {
           return false
         }
 
-        writeText(element, text)
+        // Keep the text node when the element has only that node. An empty
+        // value removes all child nodes, as `textContent` does.
+        const first = element.firstChild
+
+        if (
+          text !== ''
+          && first !== null
+          && first.nodeType === 3
+          && first.nextSibling === null
+        ) {
+          /** @type {Text} */ (first).data = text
+        } else {
+          element.textContent = text
+        }
+
         return true
       }
       runtime.changes = (element, value) => {
@@ -383,9 +371,26 @@ function createDomBindingRuntime(descriptor, index, root) {
       }
       break
     case 'property':
-      if (requiresTrustedHTML) {
-        runtime.normalize = (projected, trustedTypes) => {
-          assertTrustedHTML(projected, trustedTypes, name)
+      if (runtime.requiresTrustedHTML) {
+        runtime.normalize = projected => {
+          if (projected === null || projected === undefined) {
+            return noValue
+          }
+
+          if (trustedTypes === null) {
+            throw new TypeError(
+              `Lumi property "${name}" requires TrustedHTML, but the `
+              + 'mounted document does not expose the Trusted Types API',
+            )
+          }
+
+          if (!trustedTypes(projected)) {
+            throw new TypeError(
+              `Lumi property "${name}" projection must return TrustedHTML; `
+              + `received ${projectionValueType(projected)}`,
+            )
+          }
+
           return projected
         }
       }
@@ -395,7 +400,7 @@ function createDomBindingRuntime(descriptor, index, root) {
         if (shouldWrite) {
           setProperty(element, name, value)
 
-          if (isStructuralProperty(name)) {
+          if (runtime.structural) {
             /** @type {TextSink} */ (element)[writtenText] = undefined
           }
         }
@@ -419,9 +424,9 @@ function createDomBindingRuntime(descriptor, index, root) {
       const isAria = /^aria-/i.test(name)
       runtime.normalize = projected => {
         if (!isTextValue(projected)) {
-          warnIgnored(runtime, projected, textValues)
-          return noValue
+          return ignore(runtime, projected, textValues)
         }
+
         if (isAria && projected === true) {
           warnOnce(
             runtime,
@@ -438,8 +443,11 @@ function createDomBindingRuntime(descriptor, index, root) {
             : String(projected)
       }
       useDomValue(
-        runtime,
-        element => attributeValue(element, name),
+        // The attribute value, or false when the attribute is absent.
+        element => {
+          return element.hasAttribute(name)
+            && (element.getAttribute(name) ?? '')
+        },
         (element, value) => {
           if (value === false) {
             element.removeAttribute(name)
@@ -452,11 +460,9 @@ function createDomBindingRuntime(descriptor, index, root) {
     }
     case 'class': {
       runtime.normalize = projected => {
-        if (typeof projected !== 'boolean') {
-          warnIgnored(runtime, projected, 'a boolean')
-          return noValue
-        }
-        return projected
+        return typeof projected === 'boolean'
+          ? projected
+          : ignore(runtime, projected, 'a boolean')
       }
 
       // Keep native DOMTokenList errors for invalid tokens. Valid fixed
@@ -464,7 +470,6 @@ function createDomBindingRuntime(descriptor, index, root) {
       // search a DOMTokenList for all classes on the element.
       if (name === '' || /[\t\n\f\r ]/.test(name)) {
         useDomValue(
-          runtime,
           element => element.classList.contains(name),
           (element, value) => element.classList.toggle(name, value),
         )
@@ -472,12 +477,12 @@ function createDomBindingRuntime(descriptor, index, root) {
       }
 
       const occurrence = new RegExp(
-        `(^|${classWhitespace})${escapeRegularExpression(name)}`
+        `(^|${classWhitespace})`
+        + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
         + `(?=$|${classWhitespace})`,
         'g',
       )
       useDomValue(
-        runtime,
         element => (element.getAttribute('class') ?? '').search(occurrence) >= 0,
         (element, value) => {
           const current = element.getAttribute('class') ?? ''
@@ -495,11 +500,9 @@ function createDomBindingRuntime(descriptor, index, root) {
     }
     case 'style': {
       runtime.normalize = projected => {
-        if (typeof projected !== 'string') {
-          warnIgnored(runtime, projected, 'a string')
-          return noValue
-        }
-        return projected
+        return typeof projected === 'string'
+          ? projected
+          : ignore(runtime, projected, 'a string')
       }
 
       // The CSSStyleDeclaration property for a standard CSS property name.
@@ -528,7 +531,6 @@ function createDomBindingRuntime(descriptor, index, root) {
       }
 
       useDomValue(
-        runtime,
         element => {
           const style = styleOf(element)
           return property !== null && typeof style[property] === 'string'
@@ -540,9 +542,8 @@ function createDomBindingRuntime(descriptor, index, root) {
 
           if (property !== null && typeof style[property] === 'string') {
             style[property] = value
-          } else if (value === '') {
-            style.removeProperty(name)
           } else {
+            // An empty value removes the property.
             style.setProperty(name, value)
           }
         },
@@ -555,34 +556,17 @@ function createDomBindingRuntime(descriptor, index, root) {
 }
 
 /**
- * Sets `apply` and `changes` for a binding whose current DOM value can be
- * read and compared with the normalized value.
- *
- * @template Data
- * @param {DomBindingRuntime<Data>} runtime
- * @param {(element: Element) => unknown} read
- * @param {(element: Element, value: any) => void} write
- */
-function useDomValue(runtime, read, write) {
-  runtime.apply = (element, value) => {
-    if (read(element) === value) {
-      return false
-    }
-
-    write(element, value)
-    return true
-  }
-  runtime.changes = (element, value) => read(element) !== value
-}
-
-/**
- * Connects the existing one-value-per-match planner.
+ * Connects the planner for a component without a repeat binding. Each update
+ * resolves every selector again. Content writes that can remove or create
+ * elements are planned first, in DOM ancestor order, so the selectors for
+ * their descendants see the planned result. All other writes are planned in
+ * declaration order: each declaration resolves its selector after the
+ * earlier planned writes.
  *
  * @template Data
  * @param {Element} root
  * @param {ReadonlyArray<DomBindingRuntime<Data>>} runtimes
  * @param {ReadonlyArray<Element>} ownedSubtrees
- * @param {TrustedHTMLCheck | null} trustedTypes
  * @param {(roots: ReadonlySet<ShadowRoot>) => void} [publishShadowRoots]
  * @returns {import('./types.js').ConnectedBinding<Data>}
  */
@@ -590,897 +574,409 @@ function connectScalarDomBindings(
   root,
   runtimes,
   ownedSubtrees,
-  trustedTypes,
   publishShadowRoots,
 ) {
+  const contentRuntimes = runtimes.filter(runtime => runtime.structural)
+  const lastRuntime = runtimes[runtimes.length - 1]
   /** @type {Document | null} */
   let planningDocument = null
 
   return {
     prepare(data) {
+      const context = rootContext(data)
       const liveQuery = createElementQuery(root)
-      const staging = analyzeStaging(
-        root,
-        runtimes,
-        ownedSubtrees,
-        liveQuery,
-      )
-      /** @type {DirectProgress<Data> | null} */
-      const progress = staging.required
-        ? null
-        : prepareDirectUpdate(
-          root,
-          runtimes,
-          ownedSubtrees,
-          staging.elementsByRuntime,
-          data,
-          trustedTypes,
+      // The planning view is the live tree, which the plan only reads, until
+      // a prepared write can change the result of a later selector
+      // resolution. From then on, the view is an inert copy that receives
+      // the planned writes. The operations and the projection calls have
+      // the same order in the two views, and each projection runs one time.
+      let view = root
+      let owned = ownedSubtrees
+      let query = liveQuery
+      /** @type {WeakMap<Element, Element> | null} */
+      let liveByPlanned = null
+      /**
+       * The matches of each declaration in the live view. Null in the copy,
+       * where a planned write can change the matches.
+       *
+       * @type {Array<Element[] | undefined> | null}
+       */
+      let liveMatches = []
+      // Tells whether a prepared write can change a later selector result.
+      let changesMatches = false
+      // The last declaration is resolved before its own writes, and no other
+      // declaration is resolved after it.
+      let isLastBatch = false
+      // False until a content task is planned or a write creates elements.
+      let hasPlannedContent = false
+      /** @type {Array<DomOperation<Data>>} */
+      const operations = []
+      /** @type {Map<DomBindingRuntime<Data>, WeakSet<Element>>} */
+      const hoistedByRuntime = new Map()
+      /** @type {WeakMap<Element, ReadonlySet<number>>} */
+      const createdBy = new WeakMap()
+
+      /** @param {DomBindingRuntime<Data>} runtime */
+      const matchesOf = runtime => {
+        const known = liveMatches?.[runtime.index]
+
+        if (known !== undefined) {
+          return known
+        }
+
+        const elements = queryOwnedElements(
+          view,
+          runtime.descriptor.selector,
+          owned,
+          query,
         )
 
-      if (progress !== null && progress.complete) {
-        return preparedDomUpdate(
-          root,
-          progress.operations,
-          ownedSubtrees,
-          liveQuery,
-          publishShadowRoots,
+        if (liveMatches !== null) {
+          liveMatches[runtime.index] = elements
+        }
+
+        return elements
+      }
+
+      /**
+       * Tells whether a content task planned this match, or whether the
+       * declaration created the element. A declaration cannot select its
+       * own output again.
+       *
+       * @param {DomBindingRuntime<Data>} runtime
+       * @param {Element} element
+       */
+      const isPlanned = (runtime, element) => {
+        return hasPlannedContent
+          && (
+            hoistedByRuntime.get(runtime)?.has(element) === true
+            || createdBy.get(element)?.has(runtime.index) === true
+          )
+      }
+
+      /**
+       * @param {DomBindingRuntime<Data>} runtime
+       * @param {Element} element
+       */
+      const markHoisted = (runtime, element) => {
+        let hoisted = hoistedByRuntime.get(runtime)
+
+        if (hoisted === undefined) {
+          hoisted = new WeakSet()
+          hoistedByRuntime.set(runtime, hoisted)
+        }
+
+        hoisted.add(element)
+        hasPlannedContent = true
+      }
+
+      /**
+       * Plans one value for one match. In the live view, this only finds
+       * whether the write can change a later selector result. In the copy,
+       * this applies the write.
+       *
+       * @param {DomBindingRuntime<Data>} runtime
+       * @param {Element} element
+       * @param {unknown} value
+       */
+      const plan = (runtime, element, value) => {
+        if (value === noValue) {
+          return
+        }
+
+        const kind = runtime.descriptor.kind
+        const name = /** @type {string} */ (runtime.descriptor.name)
+
+        if (runtime.structural) {
+          assertDoesNotReplaceOwnedSubtree(element, owned)
+
+          if (name === 'outerHTML' && element === view) {
+            throw new TypeError(
+              'Lumi cannot replace a mounted component root with outerHTML',
+            )
+          }
+        }
+
+        if (liveByPlanned === null) {
+          changesMatches ||= !isLastBatch && runtime.changes(element, value)
+          return
+        }
+
+        if (kind !== 'property') {
+          runtime.apply(element, value)
+          return
+        }
+
+        const live = liveByPlanned.get(element)
+
+        if (
+          isPropertyCurrent(
+            /** @type {any} */ (element)[name],
+            projectedCacheValue(runtime, value),
+            live === undefined ? undefined : runtime.values.get(live),
+          )
+        ) {
+          return
+        }
+
+        const parent = element.parentNode
+        const previous = element.previousSibling
+        const next = element.nextSibling
+
+        setProperty(element, name, value)
+        // The commit forgets the remembered text of the element also.
+        ;/** @type {TextSink} */ (element)[writtenText] = undefined
+
+        const history = new Set(createdBy.get(element)).add(runtime.index)
+        hasPlannedContent = true
+
+        if (name === 'innerHTML' || name === 'innerText') {
+          markCreated(element.firstChild, null, createdBy, history)
+        } else if (name === 'outerHTML' && parent !== null) {
+          markCreated(
+            previous === null ? parent.firstChild : previous.nextSibling,
+            next,
+            createdBy,
+            history,
+          )
+        }
+      }
+
+      /**
+       * Moves the plan from the live view to an inert copy of the component.
+       */
+      const stage = () => {
+        // Import into a document without a browsing context or
+        // custom-element registry. Unlike cloneNode() in the live document,
+        // this cannot invoke custom-element constructors merely to prepare
+        // an update. Each update imports a new detached copy, so one
+        // document serves all updates.
+        planningDocument ??= root.ownerDocument.implementation
+          .createHTMLDocument()
+        const copy = importElementTree(planningDocument, root)
+        /** @type {WeakMap<Element, Element>} */
+        const lives = new WeakMap()
+        /** @type {WeakMap<Element, Element>} */
+        const plannedByLive = new WeakMap()
+        pairElementTrees(root, copy, (live, planned) => {
+          lives.set(planned, live)
+          plannedByLive.set(live, planned)
+
+          // The commit does not write a remembered text again, so the copy
+          // must remember the same text.
+          const written = /** @type {TextSink} */ (live)[writtenText]
+
+          if (written !== undefined) {
+            /** @type {TextSink} */ (planned)[writtenText] = written
+          }
+        })
+
+        /** @param {Element | undefined} live */
+        const plannedElement = live => {
+          const planned = live === undefined
+            ? undefined
+            : plannedByLive.get(live)
+
+          if (planned === undefined) {
+            throw new Error('Lumi lost a DOM target while planning')
+          }
+
+          return planned
+        }
+
+        const matches = liveMatches ?? []
+        liveMatches = null
+        liveByPlanned = lives
+        view = copy
+        owned = ownedSubtrees.map(live => plannedElement(live))
+        // Planned content writes cannot attach a shadow root, so the shadow
+        // topology of the copy can only become smaller. One query stays
+        // correct.
+        query = createElementQuery(copy)
+
+        // The operations were resolved in the unchanged live view, which
+        // equals the copy until the last of them. Replay them in the same
+        // order.
+        for (const {runtime, start, values} of operations) {
+          const elements = matches[runtime.index] ?? []
+
+          for (let index = 0; index < values.length; index += 1) {
+            const value = values[index]
+
+            if (value !== unplannedMatch) {
+              const element = plannedElement(elements[start + index])
+
+              if (runtime.structural) {
+                markHoisted(runtime, element)
+              }
+
+              plan(runtime, element, value)
+            }
+          }
+        }
+      }
+
+      // The matches where a content write can remove or create elements.
+      const contentTasks = () => {
+        return tasksByDepth(
+          view,
+          contentRuntimes,
+          matchesOf,
+          (runtime, element) => {
+            // A text write to an element without element children changes
+            // only text, so it keeps its declaration order.
+            const name = runtime.descriptor.name
+
+            return (
+              (name !== undefined && name !== 'textContent')
+              || element.firstElementChild !== null
+            ) && !isPlanned(runtime, element)
+          },
         )
       }
 
-      // Import into a document without a browsing context or custom-element
-      // registry. Unlike cloneNode() in the live document, this cannot invoke
-      // custom-element constructors merely to prepare an update. Each update
-      // imports a new detached copy, so one document serves all updates.
-      planningDocument ??= root.ownerDocument.implementation
-        .createHTMLDocument()
-      const operations = prepareStagedUpdate(
-        planningDocument,
-        root,
-        runtimes,
-        ownedSubtrees,
-        staging.elementsByRuntime,
-        data,
-        trustedTypes,
-        progress,
-      )
+      // In the live view, no task changes the tasks that follow it. In the
+      // copy, each task can remove or create the targets of other tasks.
+      for (let tasks = contentTasks(), next = 0; next < tasks.length;) {
+        const {runtime, element, matchIndex, count} = /** @type {typeof tasks[0]} */ (
+          tasks[next]
+        )
+        const value = projectValue(runtime, context, element, matchIndex)
 
-      return preparedDomUpdate(
-        root,
-        operations,
-        ownedSubtrees,
-        liveQuery,
-        publishShadowRoots,
-      )
+        operations.push({ runtime, start: matchIndex, count, values: [value] })
+        markHoisted(runtime, element)
+        plan(runtime, element, value)
+
+        if (changesMatches && liveByPlanned === null) {
+          stage()
+        }
+
+        if (liveByPlanned === null) {
+          next += 1
+        } else {
+          tasks = contentTasks()
+          next = 0
+        }
+      }
+
+      for (const runtime of runtimes) {
+        const elements = matchesOf(runtime)
+        let planned = false
+        const values = elements.map((element, matchIndex) => {
+          if (isPlanned(runtime, element)) {
+            return unplannedMatch
+          }
+
+          planned = true
+          return projectValue(runtime, context, element, matchIndex)
+        })
+
+        if (!planned) {
+          continue
+        }
+
+        operations.push({ runtime, start: 0, count: elements.length, values })
+        isLastBatch = runtime === lastRuntime
+
+        for (let index = 0; index < elements.length; index += 1) {
+          if (values[index] !== unplannedMatch) {
+            plan(
+              runtime,
+              /** @type {Element} */ (elements[index]),
+              values[index],
+            )
+          }
+        }
+
+        if (changesMatches && liveByPlanned === null) {
+          stage()
+        }
+      }
+
+      return {
+        commit() {
+          // Custom binding commits run between preparation and this DOM
+          // commit. Refresh once in case one changed the component's shadow
+          // topology.
+          liveQuery.invalidate()
+          // A content property can establish content that the rules for
+          // descendants refine. Its cache then gets the final refined DOM,
+          // not the intermediate write, so the next update does not rebuild
+          // a subtree that is still correct. A later content write to the
+          // same element supersedes the earlier write.
+          /** @type {Array<ContentWrite<Data>>} */
+          const contentWrites = []
+
+          for (const {runtime, start, count, values} of operations) {
+            const selector = runtime.descriptor.selector
+            const elements = queryOwnedElements(
+              root,
+              selector,
+              ownedSubtrees,
+              liveQuery,
+            )
+
+            if (elements.length !== count) {
+              throw new Error(
+                `Lumi DOM changed while committing selector "${selector}"`,
+              )
+            }
+
+            for (let index = 0; index < values.length; index += 1) {
+              const value = values[index]
+
+              if (value !== unplannedMatch && value !== noValue) {
+                const element = /** @type {Element} */ (
+                  elements[start + index]
+                )
+
+                for (const write of contentWrites) {
+                  if (write.element === element) {
+                    write.isSuperseded ||= runtime.structural
+                  } else {
+                    write.isRefined ||= write.element.contains(element)
+                  }
+                }
+
+                if (
+                  runtime.structural
+                  && runtime.descriptor.kind === 'property'
+                  && runtime.descriptor.name !== 'outerHTML'
+                ) {
+                  contentWrites.push({
+                    runtime,
+                    element,
+                    isRefined: false,
+                    isSuperseded: false,
+                  })
+                }
+
+                if (runtime.apply(element, value)) {
+                  liveQuery.recheck(element)
+                }
+              }
+            }
+          }
+
+          for (const write of contentWrites) {
+            if (write.isRefined && !write.isSuperseded) {
+              /** @type {CachedValue} */ (
+                write.runtime.values.get(write.element)
+              ).domValue = /** @type {any} */ (write.element)[
+                /** @type {string} */ (write.runtime.descriptor.name)
+              ]
+            }
+          }
+
+          publishShadowRoots?.(liveQuery.openShadowRoots())
+        },
+      }
     },
 
     destroy() {
       planningDocument = null
     },
   }
-}
-
-/**
- * Uses the live tree as a read-only preparation view. The operations and the
- * projection calls occur in the same order as in the staged planner. The live
- * view stays correct only while no prepared write can change the result of a
- * later selector resolution. When a write can do that, the direct planner
- * stops and returns its progress, and the staged planner continues from it.
- * Thus no projection runs two times in one update.
- *
- * @template Data
- * @param {Element} root
- * @param {ReadonlyArray<DomBindingRuntime<Data>>} runtimes
- * @param {ReadonlyArray<Element>} ownedSubtrees
- * @param {ReadonlyArray<ReadonlyArray<Element>>} elementsByRuntime
- * @param {Data} data
- * @param {TrustedHTMLCheck | null} trustedTypes
- * @returns {DirectProgress<Data>}
- */
-function prepareDirectUpdate(
-  root,
-  runtimes,
-  ownedSubtrees,
-  elementsByRuntime,
-  data,
-  trustedTypes,
-) {
-  /** @type {Array<DomOperation<Data>>} */
-  const operations = []
-  const hoisted = directHoistedTasks(root, runtimes, elementsByRuntime)
-
-  for (const task of hoisted) {
-    const value = projectValue(
-      task.runtime,
-      data,
-      task.element,
-      task.matchIndex,
-      trustedTypes,
-    )
-
-    validateDirectStructuralTarget(
-      task.runtime,
-      task.element,
-      root,
-      ownedSubtrees,
-    )
-    operations.push({
-      type: 'single',
-      runtime: task.runtime,
-      matchIndex: task.matchIndex,
-      value,
-    })
-
-    if (!isNoValue(value) && task.runtime.changes(task.element, value)) {
-      return { complete: false, operations, nextRuntime: -1 }
-    }
-  }
-
-  const lastRuntime = runtimes.length - 1
-
-  for (let runtimeIndex = 0; runtimeIndex <= lastRuntime; runtimeIndex += 1) {
-    const runtime = /** @type {DomBindingRuntime<Data>} */ (
-      runtimes[runtimeIndex]
-    )
-
-    const elements = /** @type {ReadonlyArray<Element>} */ (elementsByRuntime[runtimeIndex])
-    const structural = isStructuralBinding(runtime.descriptor)
-    let planned = false
-    const values = elements.map((element, matchIndex) => {
-      if (
-        structural
-        && hoisted.length > 0
-        && isHoistedContent(runtime, element)
-      ) {
-        return unplannedMatch
-      }
-
-      planned = true
-      return projectValue(
-        runtime,
-        data,
-        element,
-        matchIndex,
-        trustedTypes,
-      )
-    })
-
-    if (!planned) {
-      continue
-    }
-
-    if (structural) {
-      for (let index = 0; index < elements.length; index += 1) {
-        const element = /** @type {Element} */ (elements[index])
-
-        if (values[index] !== unplannedMatch) {
-          validateDirectStructuralTarget(
-            runtime,
-            element,
-            root,
-            ownedSubtrees,
-          )
-        }
-      }
-    }
-
-    operations.push({
-      type: 'batch',
-      runtime,
-      values,
-    })
-
-    // The last declaration is resolved before its own writes, and no other
-    // declaration is resolved after it.
-    if (
-      runtimeIndex < lastRuntime
-      && batchChangesDom(runtime, elements, values)
-    ) {
-      return { complete: false, operations, nextRuntime: runtimeIndex + 1 }
-    }
-  }
-
-  return { complete: true, operations, nextRuntime: runtimes.length }
-}
-
-/**
- * Lists the hoisted content tasks of the unchanged live view in the order in
- * which the staged planner selects them.
- *
- * @template Data
- * @param {Element} root
- * @param {ReadonlyArray<DomBindingRuntime<Data>>} runtimes
- * @param {ReadonlyArray<ReadonlyArray<Element>>} elementsByRuntime
- * @returns {Array<{
- *   runtime: DomBindingRuntime<Data>,
- *   element: Element,
- *   matchIndex: number,
- *   depth: number
- * }>}
- */
-function directHoistedTasks(root, runtimes, elementsByRuntime) {
-  /** @type {Array<{
-   *   runtime: DomBindingRuntime<Data>,
-   *   element: Element,
-   *   matchIndex: number,
-   *   depth: number
-   * }>} */
-  const tasks = []
-
-  for (let runtimeIndex = 0; runtimeIndex < runtimes.length; runtimeIndex += 1) {
-    const runtime = /** @type {DomBindingRuntime<Data>} */ (
-      runtimes[runtimeIndex]
-    )
-
-    if (!isStructuralBinding(runtime.descriptor)) {
-      continue
-    }
-
-    const elements = /** @type {ReadonlyArray<Element>} */ (elementsByRuntime[runtimeIndex])
-
-    for (let matchIndex = 0; matchIndex < elements.length; matchIndex += 1) {
-      const element = /** @type {Element} */ (elements[matchIndex])
-
-      if (isHoistedContent(runtime, element)) {
-        tasks.push({
-          runtime,
-          element,
-          matchIndex,
-          depth: elementDepth(root, element),
-        })
-      }
-    }
-  }
-
-  // The tasks are in declaration and match order, and the sort is stable.
-  if (tasks.length > 1) {
-    tasks.sort((left, right) => left.depth - right.depth)
-  }
-
-  return tasks
-}
-
-/**
- * @template Data
- * @param {DomBindingRuntime<Data>} runtime
- * @param {ReadonlyArray<Element>} elements
- * @param {ReadonlyArray<unknown>} values
- * @returns {boolean}
- */
-function batchChangesDom(runtime, elements, values) {
-  for (let index = 0; index < elements.length; index += 1) {
-    const element = /** @type {Element} */ (elements[index])
-    const value = values[index]
-
-    if (
-      value !== unplannedMatch
-      && !isNoValue(value)
-      && runtime.changes(element, value)
-    ) {
-      return true
-    }
-  }
-
-  return false
-}
-
-/**
- * Plans an update in an inert copy of the component. Content writes that can
- * remove or create elements are planned first, in DOM ancestor order, so the
- * selectors for their descendants see the planned result. All other writes
- * are planned in declaration order: each declaration resolves its selector
- * after the earlier planned writes. When the direct planner has prepared part
- * of the update, this function replays those operations in the copy and
- * continues after them.
- *
- * @template Data
- * @param {Document} planningDocument
- * @param {Element} root
- * @param {ReadonlyArray<DomBindingRuntime<Data>>} runtimes
- * @param {ReadonlyArray<Element>} ownedSubtrees
- * @param {ReadonlyArray<ReadonlyArray<Element>>} elementsByRuntime
- * @param {Data} data
- * @param {TrustedHTMLCheck | null} trustedTypes
- * @param {DirectProgress<Data> | null} progress
- * @returns {Array<DomOperation<Data>>}
- */
-function prepareStagedUpdate(
-  planningDocument,
-  root,
-  runtimes,
-  ownedSubtrees,
-  elementsByRuntime,
-  data,
-  trustedTypes,
-  progress,
-) {
-  const planningRoot = importElementTree(planningDocument, root)
-  /** @type {WeakMap<Element, Element>} */
-  const liveByPlanned = new WeakMap()
-  /** @type {WeakMap<Element, Element>} */
-  const plannedByLive = new WeakMap()
-  pairElementTrees(root, planningRoot, (live, planned) => {
-    liveByPlanned.set(planned, live)
-    plannedByLive.set(live, planned)
-  })
-  const plannedOwnedSubtrees = ownedSubtrees.map(subtree => {
-    const planned = plannedByLive.get(subtree)
-
-    if (planned === undefined) {
-      throw new Error('Lumi lost an owned DOM subtree while planning')
-    }
-
-    return planned
-  })
-
-  // Planned content writes cannot attach a shadow root, so the shadow
-  // topology of the copy can only become smaller. One query stays correct.
-  const planningQuery = createElementQuery(planningRoot)
-  /** @type {Map<DomBindingRuntime<Data>, WeakSet<Element>>} */
-  const processedByRuntime = new Map()
-  /** @type {WeakMap<Element, ReadonlySet<number>>} */
-  const createdBy = new WeakMap()
-  /** @type {Array<DomOperation<Data>>} */
-  const operations = progress === null ? [] : progress.operations
-
-  for (const runtime of runtimes) {
-    if (isStructuralBinding(runtime.descriptor)) {
-      processedByRuntime.set(runtime, new WeakSet())
-    }
-  }
-
-  /**
-   * @param {DomBindingRuntime<Data>} runtime
-   * @param {Element} element
-   * @param {unknown} value
-   */
-  const plan = (runtime, element, value) => {
-    const processed = processedByRuntime.get(runtime)
-    /** @type {Set<number>} */
-    const creationHistory = new Set()
-
-    if (processed !== undefined) {
-      processed.add(element)
-
-      for (const index of createdBy.get(element) ?? []) {
-        creationHistory.add(index)
-      }
-
-      creationHistory.add(runtime.index)
-    }
-
-    applyPlannedValue(
-      runtime,
-      element,
-      value,
-      planningRoot,
-      liveByPlanned.get(element),
-      createdBy,
-      creationHistory,
-      plannedOwnedSubtrees,
-    )
-  }
-
-  /**
-   * @param {Element | undefined} live
-   * @returns {Element}
-   */
-  const plannedElement = live => {
-    const planned = live === undefined ? undefined : plannedByLive.get(live)
-
-    if (planned === undefined) {
-      throw new Error('Lumi lost a prepared DOM target while planning')
-    }
-
-    return planned
-  }
-
-  // The direct operations were resolved in the unchanged live view, which
-  // equals the copy until the last of them. Replay them in the same order.
-  for (const operation of operations) {
-    const elements = /** @type {ReadonlyArray<Element>} */ (elementsByRuntime[operation.runtime.index])
-
-    if (operation.type === 'single') {
-      plan(
-        operation.runtime,
-        plannedElement(elements[operation.matchIndex]),
-        operation.value,
-      )
-      continue
-    }
-
-    for (let index = 0; index < operation.values.length; index += 1) {
-      const value = operation.values[index]
-
-      if (value !== unplannedMatch) {
-        plan(operation.runtime, plannedElement(elements[index]), value)
-      }
-    }
-  }
-
-  if (progress === null || progress.nextRuntime < 0) {
-    while (true) {
-      const task = nextStructuralTask(
-        planningRoot,
-        runtimes,
-        processedByRuntime,
-        createdBy,
-        plannedOwnedSubtrees,
-        planningQuery,
-      )
-
-      if (task === null) {
-        break
-      }
-
-      const value = projectValue(
-        task.runtime,
-        data,
-        task.element,
-        task.matchIndex,
-        trustedTypes,
-      )
-
-      plan(task.runtime, task.element, value)
-      operations.push({
-        type: 'single',
-        runtime: task.runtime,
-        matchIndex: task.matchIndex,
-        value,
-      })
-    }
-  }
-
-  const firstRuntime = progress === null || progress.nextRuntime < 0
-    ? 0
-    : progress.nextRuntime
-
-  for (
-    let runtimeIndex = firstRuntime;
-    runtimeIndex < runtimes.length;
-    runtimeIndex += 1
-  ) {
-    const runtime = /** @type {DomBindingRuntime<Data>} */ (
-      runtimes[runtimeIndex]
-    )
-
-    const processed = processedByRuntime.get(runtime)
-    const elements = queryOwnedElements(
-      planningRoot,
-      runtime.descriptor.selector,
-      plannedOwnedSubtrees,
-      planningQuery,
-    )
-    let planned = false
-    const values = elements.map((element, matchIndex) => {
-      if (
-        processed !== undefined
-        && (
-          processed.has(element)
-          || createdBy.get(element)?.has(runtime.index) === true
-        )
-      ) {
-        return unplannedMatch
-      }
-
-      planned = true
-      return projectValue(
-        runtime,
-        data,
-        element,
-        matchIndex,
-        trustedTypes,
-      )
-    })
-
-    if (!planned) {
-      continue
-    }
-
-    for (let index = 0; index < elements.length; index += 1) {
-      const element = /** @type {Element} */ (elements[index])
-      const value = values[index]
-
-      if (value !== unplannedMatch) {
-        plan(runtime, element, value)
-      }
-    }
-
-    operations.push({
-      type: 'batch',
-      runtime,
-      values,
-    })
-  }
-
-  return operations
-}
-
-/**
- * Returns whether a content write at this element can remove or create
- * elements. The planner plans such a write before the rules for descendants.
- * A text write to an element without element children changes only text, so
- * it keeps its declaration order.
- *
- * @template Data
- * @param {DomBindingRuntime<Data>} runtime
- * @param {Element} element
- * @returns {boolean}
- */
-function isHoistedContent(runtime, element) {
-  const descriptor = runtime.descriptor
-
-  if (descriptor.kind === 'text') {
-    return element.firstElementChild !== null
-  }
-
-  if (descriptor.kind !== 'property' || !isStructuralProperty(descriptor.name)) {
-    return false
-  }
-
-  return descriptor.name !== 'textContent'
-    || element.firstElementChild !== null
-}
-
-/**
- * Staging is needed from the start when a content write can change another
- * binding's targets or cross a nested component ownership boundary. The
- * direct planner finds other writes that change selector matches.
- *
- * @template Data
- * @param {Element} root
- * @param {ReadonlyArray<DomBindingRuntime<Data>>} runtimes
- * @param {ReadonlyArray<Element>} ownedSubtrees
- * @param {ElementQuery} liveQuery
- * @returns {{
- *   required: boolean,
- *   elementsByRuntime: ReadonlyArray<ReadonlyArray<Element>>
- * }}
- */
-function analyzeStaging(root, runtimes, ownedSubtrees, liveQuery) {
-  const elementsByRuntime = runtimes.map(runtime => {
-    return queryOwnedElements(
-      root,
-      runtime.descriptor.selector,
-      ownedSubtrees,
-      liveQuery,
-    )
-  })
-  /** @type {Map<Element, number>} */
-  const runtimeByElement = new Map()
-  /** @type {Map<Element, number>} */
-  const structuralRuntimeByElement = new Map()
-
-  for (let runtimeIndex = 0; runtimeIndex < runtimes.length; runtimeIndex += 1) {
-    const runtime = /** @type {DomBindingRuntime<Data>} */ (
-      runtimes[runtimeIndex]
-    )
-
-    const elements = /** @type {ReadonlyArray<Element>} */ (elementsByRuntime[runtimeIndex])
-
-    for (const element of elements) {
-      recordRuntime(runtimeByElement, element, runtimeIndex)
-
-      if (isStructuralBinding(runtime.descriptor)) {
-        recordRuntime(structuralRuntimeByElement, element, runtimeIndex)
-      }
-    }
-  }
-
-  // A structural target cannot replace a child binding's owned subtree.
-  // Walking upward from each owned root avoids comparing every structural
-  // target with every owned subtree.
-  for (const owned of ownedSubtrees) {
-    let current = /** @type {Element | null} */ (owned)
-
-    while (current !== null) {
-      if (structuralRuntimeByElement.has(current)) {
-        return { required: true, elementsByRuntime }
-      }
-
-      current = current.parentElement
-    }
-  }
-
-  // Walk each distinct match toward its tree root. This preserves the exact
-  // contains() relationship used by the former nested search, including its
-  // deliberate separation at ShadowRoot boundaries, while avoiding a full
-  // structural-target × matched-element comparison.
-  for (const [element, matchingRuntime] of runtimeByElement) {
-    let current = /** @type {Element | null} */ (element)
-
-    while (current !== null) {
-      const structuralRuntime = structuralRuntimeByElement.get(current)
-
-      if (
-        structuralRuntime !== undefined
-        && (
-          current !== element
-          || structuralRuntime !== matchingRuntime
-          || structuralRuntime === -1
-        )
-      ) {
-        // A declaration does not depend on itself at one target. Any other
-        // declaration at the same element is a real ordered dependency.
-        return { required: true, elementsByRuntime }
-      }
-
-      current = current.parentElement
-    }
-  }
-
-  return {
-    required: structuralRuntimeByElement.size > 0
-      && elementsByRuntime.some(elements => elements.length === 0),
-    elementsByRuntime,
-  }
-}
-
-/**
- * Records one declaration index, or -1 when several declarations share an
- * element.
- *
- * @param {Map<Element, number>} owners
- * @param {Element} element
- * @param {number} runtimeIndex
- */
-function recordRuntime(owners, element, runtimeIndex) {
-  owners.set(element, owners.has(element) ? -1 : runtimeIndex)
-}
-
-/**
- * Ensures ownership and component-root failures remain preparation failures
- * on the direct path.
- *
- * @template Data
- * @param {DomBindingRuntime<Data>} runtime
- * @param {Element} element
- * @param {Element} root
- * @param {ReadonlyArray<Element>} ownedSubtrees
- */
-function validateDirectStructuralTarget(
-  runtime,
-  element,
-  root,
-  ownedSubtrees,
-) {
-  const descriptor = runtime.descriptor
-
-  assertDoesNotReplaceOwnedSubtree(element, ownedSubtrees)
-
-  if (
-    descriptor.kind === 'property'
-    && descriptor.name === 'outerHTML'
-    && element === root
-  ) {
-    throw new TypeError(
-      'Lumi cannot replace a mounted component root with outerHTML',
-    )
-  }
-}
-
-/**
- * @template Data
- * @param {Element} root
- * @param {ReadonlyArray<DomOperation<Data>>} operations
- * @param {ReadonlyArray<Element>} ownedSubtrees
- * @param {ElementQuery} liveQuery
- * @param {(roots: ReadonlySet<ShadowRoot>) => void} [publishShadowRoots]
- * @returns {import('./types.js').PreparedUpdate}
- */
-function preparedDomUpdate(
-  root,
-  operations,
-  ownedSubtrees,
-  liveQuery,
-  publishShadowRoots,
-) {
-  return {
-    commit() {
-      // Custom binding commits run between preparation and this DOM commit.
-      // Refresh once in case one changed the component's shadow topology.
-      liveQuery.invalidate()
-      /** @type {Array<ParentCacheRecord<Data>>} */
-      const parentCacheRecords = []
-
-      for (const operation of operations) {
-        const elements = queryOwnedElements(
-          root,
-          operation.runtime.descriptor.selector,
-          ownedSubtrees,
-          liveQuery,
-        )
-
-        const single = operation.type === 'single'
-
-        if (
-          single
-            ? elements[operation.matchIndex] === undefined
-            : elements.length !== operation.values.length
-        ) {
-          throw new Error(
-            'Lumi DOM changed while committing selector '
-            + `"${operation.runtime.descriptor.selector}"`,
-          )
-        }
-
-        const end = single ? operation.matchIndex + 1 : elements.length
-
-        for (
-          let index = single ? operation.matchIndex : 0;
-          index < end;
-          index += 1
-        ) {
-          const element = /** @type {Element} */ (elements[index])
-          const value = single ? operation.value : operation.values[index]
-
-          if (value !== unplannedMatch) {
-            trackParentCache(
-              parentCacheRecords,
-              operation.runtime,
-              element,
-              value,
-            )
-
-            if (applyLiveValue(operation.runtime, element, value)) {
-              liveQuery.recheck(element)
-            }
-          }
-        }
-      }
-
-      refreshParentCaches(parentCacheRecords)
-      publishShadowRoots?.(liveQuery.openShadowRoots())
-    },
-  }
-}
-
-/**
- * Remembers which parent content projections contain later scalar work.
- * Same-element content writers supersede earlier parent cache records.
- *
- * @template Data
- * @param {Array<ParentCacheRecord<Data>>} records
- * @param {DomBindingRuntime<Data>} runtime
- * @param {Element} element
- * @param {unknown} value
- */
-function trackParentCache(records, runtime, element, value) {
-  for (const record of records) {
-    if (record.element === element) {
-      if (isStructuralBinding(runtime.descriptor)) {
-        record.isSuperseded = true
-      }
-    } else if (record.element.contains(element)) {
-      record.hasDescendantOperation = true
-    }
-  }
-
-  if (canCacheFinalSubtree(runtime.descriptor)) {
-    records.push({
-      runtime,
-      element,
-      value,
-      hasDescendantOperation: false,
-      isSuperseded: false,
-    })
-  }
-}
-
-/**
- * Parent structural properties may establish content that descendant rules
- * refine. Cache the final refined DOM, rather than the parent's intermediate
- * write, so the next update does not rebuild a still-authoritative subtree.
- *
- * @template Data
- * @param {ReadonlyArray<ParentCacheRecord<Data>>} records
- */
-function refreshParentCaches(records) {
-  for (const record of records) {
-    if (
-      !record.hasDescendantOperation
-      || record.isSuperseded
-    ) {
-      continue
-    }
-
-    const runtime = record.runtime
-    const descriptor = runtime.descriptor
-    const domValue = /** @type {any} */ (record.element)[
-      /** @type {string} */ (descriptor.name)
-    ]
-
-    runtime.values.set(record.element, {
-      projectedValue: projectedCacheValue(runtime, record.value),
-      domValue,
-    })
-  }
-}
-
-/**
- * @template Data
- * @param {DomBindingDescriptor<Data>} descriptor
- * @returns {boolean}
- */
-function canCacheFinalSubtree(descriptor) {
-  return descriptor.kind === 'property'
-    && (
-      descriptor.name === 'innerHTML'
-      || descriptor.name === 'innerText'
-      || descriptor.name === 'textContent'
-    )
-}
-
-/**
- * @template Data
- * @param {Element} root
- * @param {ReadonlyArray<DomBindingRuntime<Data>>} runtimes
- * @param {Map<DomBindingRuntime<Data>, WeakSet<Element>>} processedByRuntime
- * @param {WeakMap<Element, ReadonlySet<number>>} createdBy
- * @param {ReadonlyArray<Element>} ownedSubtrees
- * @param {ElementQuery} query
- * @returns {{
- *   runtime: DomBindingRuntime<Data>,
- *   element: Element,
- *   matchIndex: number,
- *   depth: number
- * } | null}
- */
-function nextStructuralTask(
-  root,
-  runtimes,
-  processedByRuntime,
-  createdBy,
-  ownedSubtrees,
-  query,
-) {
-  /** @type {{
-   *   runtime: DomBindingRuntime<Data>,
-   *   element: Element,
-   *   matchIndex: number,
-   *   depth: number
-   * } | null} */
-  let selected = null
-
-  for (const runtime of runtimes) {
-    if (!isStructuralBinding(runtime.descriptor)) {
-      continue
-    }
-
-    const processed = processedByRuntime.get(runtime)
-    const elements = queryOwnedElements(
-      root,
-      runtime.descriptor.selector,
-      ownedSubtrees,
-      query,
-    )
-
-    for (let matchIndex = 0; matchIndex < elements.length; matchIndex += 1) {
-      const element = /** @type {Element} */ (elements[matchIndex])
-
-      if (
-        processed?.has(element) === true
-        || createdBy.get(element)?.has(runtime.index) === true
-        || !isHoistedContent(runtime, element)
-      ) {
-        continue
-      }
-
-      const depth = elementDepth(root, element)
-
-      // Declarations and matches are visited in ascending order, so only a
-      // smaller depth can come before the selected task.
-      if (selected === null || depth < selected.depth) {
-        selected = {
-          runtime,
-          element,
-          matchIndex,
-          depth,
-        }
-      }
-    }
-  }
-
-  return selected
 }
 
 /**
@@ -1499,138 +995,22 @@ function projectedCacheValue(runtime, value) {
 /**
  * @template Data
  * @param {DomBindingRuntime<Data>} runtime
- * @param {Data} data
+ * @param {import('./types.js').ProjectionContext<Data, Data>} context
  * @param {Element} element
  * @param {number} matchIndex
- * @param {TrustedHTMLCheck | null} trustedTypes
  * @returns {unknown}
  */
-function projectValue(runtime, data, element, matchIndex, trustedTypes) {
+function projectValue(runtime, context, element, matchIndex) {
   const descriptor = runtime.descriptor
   let projected
 
   try {
-    projected = descriptor.project(rootContext(data), element)
+    projected = descriptor.project(context, element)
   } catch (error) {
     throw projectionError(descriptor, matchIndex, error)
   }
 
-  return normalizeProjectedValue(runtime, projected, trustedTypes)
-}
-
-/**
- * @template Data
- * @param {DomBindingRuntime<Data>} runtime
- * @param {unknown} projected
- * @param {TrustedHTMLCheck | null} trustedTypes
- * @returns {unknown}
- */
-function normalizeProjectedValue(runtime, projected, trustedTypes) {
-  if (projected === null || projected === undefined) {
-    return noValue
-  }
-
-  return runtime.normalize(projected, trustedTypes)
-}
-
-/**
- * Applies one value to detached planning DOM. Structural writes mark any
- * elements they create so a declaration cannot recursively select its own
- * output forever.
- *
- * @template Data
- * @param {DomBindingRuntime<Data>} runtime
- * @param {Element} element
- * @param {unknown} value
- * @param {Element} planningRoot
- * @param {Element | undefined} liveElement
- * @param {WeakMap<Element, ReadonlySet<number>>} createdBy
- * @param {ReadonlySet<number>} creationHistory
- * @param {ReadonlyArray<Element>} ownedSubtrees
- */
-function applyPlannedValue(
-  runtime,
-  element,
-  value,
-  planningRoot,
-  liveElement,
-  createdBy,
-  creationHistory,
-  ownedSubtrees,
-) {
-  if (isNoValue(value)) {
-    return
-  }
-
-  const descriptor = runtime.descriptor
-
-  switch (descriptor.kind) {
-    case 'text': {
-      assertDoesNotReplaceOwnedSubtree(element, ownedSubtrees)
-
-      // The commit does not write a remembered value again, so the plan
-      // must keep the same content.
-      if (
-        liveElement !== undefined
-        && /** @type {TextSink} */ (liveElement)[writtenText] === value
-      ) {
-        return
-      }
-
-      if (element.textContent !== value) {
-        element.textContent = /** @type {string} */ (value)
-      }
-      return
-    }
-    case 'property': {
-      const name = /** @type {string} */ (descriptor.name)
-
-      if (name === 'outerHTML' && element === planningRoot) {
-        throw new TypeError(
-          'Lumi cannot replace a mounted component root with outerHTML',
-        )
-      }
-
-      if (isStructuralProperty(name)) {
-        assertDoesNotReplaceOwnedSubtree(element, ownedSubtrees)
-      }
-
-      const previous = liveElement === undefined
-        ? undefined
-        : runtime.values.get(liveElement)
-
-      if (
-        isPropertyCurrent(
-          /** @type {any} */ (element)[name],
-          projectedCacheValue(runtime, value),
-          previous,
-        )
-      ) {
-        return
-      }
-
-      const parent = element.parentNode
-      const previousSibling = element.previousSibling
-      const nextSibling = element.nextSibling
-
-      setProperty(element, name, value)
-
-      if (name === 'innerHTML' || name === 'innerText') {
-        markElementChildren(element, createdBy, creationHistory)
-      } else if (name === 'outerHTML' && parent !== null) {
-        markSiblingsBetween(
-          parent,
-          previousSibling,
-          nextSibling,
-          createdBy,
-          creationHistory,
-        )
-      }
-      return
-    }
-    default:
-      runtime.apply(element, value)
-  }
+  return runtime.normalize(projected)
 }
 
 /**
@@ -1646,44 +1026,6 @@ const writtenText = Symbol('lumi.text')
 /** @typedef {Element & {[writtenText]?: string | undefined}} TextSink */
 
 /**
- * Writes text and keeps the text node when the element has only that node.
- * An empty value removes all child nodes, as `textContent` does.
- *
- * @param {Element} element
- * @param {string} text
- */
-function writeText(element, text) {
-  const first = element.firstChild
-
-  if (
-    text !== ''
-    && first !== null
-    && first.nodeType === 3
-    && first.nextSibling === null
-  ) {
-    /** @type {Text} */ (first).data = text
-    return
-  }
-
-  element.textContent = text
-}
-
-/**
- * @template Data
- * @param {DomBindingRuntime<Data>} runtime
- * @param {Element} element
- * @param {unknown} value
- * @returns {boolean} Whether the live DOM was changed.
- */
-function applyLiveValue(runtime, element, value) {
-  if (isNoValue(value)) {
-    return false
-  }
-
-  return runtime.apply(element, value)
-}
-
-/**
  * @param {Element} element
  * @param {string} name
  * @param {unknown} value
@@ -1694,17 +1036,6 @@ function setProperty(element, name, value) {
       `Lumi could not set property "${name}" on <${element.localName}>`,
     )
   }
-}
-
-/**
- * @param {Element} element
- * @param {string} name
- * @returns {string | false} The attribute value, or false when it is absent.
- */
-function attributeValue(element, name) {
-  return element.hasAttribute(name)
-    ? element.getAttribute(name) ?? ''
-    : false
 }
 
 /**
@@ -1726,80 +1057,16 @@ function isPropertyCurrent(current, projectedValue, previous) {
 }
 
 /**
- * Escapes a fixed string for use in a regular expression.
- *
- * @param {string} value
- * @returns {string}
- */
-function escapeRegularExpression(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-/**
  * @param {Element} target
  * @param {ReadonlyArray<Element>} ownedSubtrees
  */
 function assertDoesNotReplaceOwnedSubtree(target, ownedSubtrees) {
   for (const owned of ownedSubtrees) {
-    if (target === owned || target.contains(owned)) {
+    if (target.contains(owned)) {
       throw new Error(
         'Lumi content binding cannot replace a child subtree',
       )
     }
-  }
-}
-
-/**
- * @param {ParentNode} parent
- * @param {WeakMap<Element, ReadonlySet<number>>} createdBy
- * @param {ReadonlySet<number>} history
- */
-function markElementChildren(parent, createdBy, history) {
-  for (const child of parent.children) {
-    markCreatedSubtree(child, createdBy, history)
-  }
-}
-
-/**
- * @param {Node} parent
- * @param {ChildNode | null} previousSibling
- * @param {ChildNode | null} nextSibling
- * @param {WeakMap<Element, ReadonlySet<number>>} createdBy
- * @param {ReadonlySet<number>} history
- */
-function markSiblingsBetween(
-  parent,
-  previousSibling,
-  nextSibling,
-  createdBy,
-  history,
-) {
-  let current = previousSibling === null
-    ? parent.firstChild
-    : previousSibling.nextSibling
-
-  while (current !== null && current !== nextSibling) {
-    if (current.nodeType === 1) {
-      markCreatedSubtree(
-        /** @type {Element} */ (current),
-        createdBy,
-        history,
-      )
-    }
-    current = current.nextSibling
-  }
-}
-
-/**
- * @param {Element} element
- * @param {WeakMap<Element, ReadonlySet<number>>} createdBy
- * @param {ReadonlySet<number>} history
- */
-function markCreatedSubtree(element, createdBy, history) {
-  createdBy.set(element, history)
-
-  for (const child of element.children) {
-    markCreatedSubtree(child, createdBy, history)
   }
 }
 
@@ -1822,67 +1089,40 @@ function trustedTypesFactory(root) {
 }
 
 /**
- * @param {unknown} value
- * @param {TrustedHTMLCheck | null} trustedTypes
- * @param {string} name
- */
-function assertTrustedHTML(value, trustedTypes, name) {
-  if (trustedTypes === null) {
-    throw new TypeError(
-      `Lumi property "${name}" requires TrustedHTML, `
-      + 'but the mounted document does not expose the Trusted Types API',
-    )
-  }
-
-  if (!trustedTypes(value)) {
-    throw invalidProjectionValue(
-      `property "${name}"`,
-      'TrustedHTML',
-      value,
-    )
-  }
-}
-
-/**
  * Describes a rejected projection value without coercing it.
  *
  * @param {unknown} value
  * @returns {string}
  */
 function projectionValueType(value) {
-  if (value === null) {
-    return 'null'
-  }
-
-  if (Array.isArray(value)) {
-    return 'an array'
-  }
-
-  return `type ${typeof value}`
+  return Array.isArray(value) ? 'an array' : `type ${typeof value}`
 }
 
 /**
- * Reports one recoverable value-domain mismatch per mounted declaration and
- * received category.
+ * Gives `noValue` for a projected value that a binding cannot write, so the
+ * existing DOM state stays. A nullish value asks for that result. Each
+ * other value is a recoverable mismatch, reported one time per mounted
+ * declaration and received category.
  *
  * @template Data
  * @param {DomBindingRuntime<Data>} runtime
  * @param {unknown} value
  * @param {string} expected
  * @param {string} [category]
+ * @returns {typeof noValue}
  */
-function warnIgnored(
-  runtime,
-  value,
-  expected,
-  category = projectionValueType(value),
-) {
-  warnOnce(
-    runtime,
-    category,
-    `ignored ${category}; expected ${expected}. `
-    + 'The existing DOM state was preserved.',
-  )
+function ignore(runtime, value, expected, category) {
+  if (value !== null && value !== undefined) {
+    category ??= projectionValueType(value)
+    warnOnce(
+      runtime,
+      category,
+      `ignored ${category}; expected ${expected}. `
+      + 'The existing DOM state was preserved.',
+    )
+  }
+
+  return noValue
 }
 
 /**
@@ -1894,27 +1134,16 @@ function warnIgnored(
  * @param {string} message
  */
 function warnOnce(runtime, category, message) {
-  if (runtime.warnings.has(category)) {
+  if (runtime.warnings?.has(category) === true) {
     return
   }
 
+  runtime.warnings ??= new Set()
   runtime.warnings.add(category)
   warn(
     `Lumi ${runtime.descriptor.kind} binding `
     + `"${runtime.descriptor.selector}" ${message}`,
     runtime.view,
-  )
-}
-
-/**
- * @param {string} binding
- * @param {string} expected
- * @param {unknown} value
- * @returns {TypeError}
- */
-function invalidProjectionValue(binding, expected, value) {
-  return new TypeError(
-    `Lumi ${binding} projection must return ${expected}; received ${projectionValueType(value)}`,
   )
 }
 

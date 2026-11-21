@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {JSDOM} from 'jsdom'
-import {component, prop, repeat, text} from '../src/index.js'
+import {classToggle, component, prop, repeat, text} from '../src/index.js'
 
 /**
  * @template Data
@@ -236,6 +236,31 @@ test('text wins after an earlier content property for the same element', () => {
 
   mounted.update({property: 'P', text: 'T'})
   assert.equal(span.textContent, 'T')
+})
+
+test('the plan writes a remembered text again after a content property', () => {
+  const {document} = createDocument()
+  /** @type {Options<{property: string, text: string}>} */
+  const options = {
+    source: createTemplate(document, '<p><span class="v">0</span></p>'),
+    bindings: [
+      prop('.v', ({data}) => data.property, 'textContent'),
+      text('.v', ({data}) => data.text),
+      classToggle('.v:not(:empty)', 'filled', () => true),
+    ],
+  }
+  const mounted = component(options).mount(document.body)
+  const span = required(mounted.root.querySelector('.v'))
+
+  mounted.update({property: 'P', text: ''})
+  assert.equal(span.textContent, '')
+  assert.equal(span.classList.contains('filled'), false)
+
+  // The property write makes the commit write the same text again. The plan
+  // must do the same, so the last selector sees an empty element.
+  mounted.update({property: 'P', text: ''})
+  assert.equal(span.textContent, '')
+  assert.equal(span.classList.contains('filled'), false)
 })
 
 test('a repeated text sink updates only the changed occurrence', () => {

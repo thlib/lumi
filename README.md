@@ -47,7 +47,7 @@ Without a build step, load the browser bundle from a CDN:
 </script>
 ```
 
-`dist/lumi.js` is one minified ES module of approximately 12 kB when compressed
+`dist/lumi.js` is one minified ES module of approximately 10 kB when compressed
 with gzip. One request replaces the module graph. Its source map resolves to
 the published source, so developer tools show the original code. Use a fixed
 version because an unpinned CDN URL follows the latest release.

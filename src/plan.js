@@ -12,6 +12,7 @@ import {
   elementDepth,
   elementPath,
   importElementTree,
+  pairElementTrees,
   queryOwnedElements,
 } from './dom.js'
 import { connectCardinalityDomBindings } from './cardinality.js'
@@ -26,8 +27,8 @@ import {
 
 const domBindingDescriptor = Symbol('Lumi DOM binding descriptor')
 const ownedDomSubtrees = Symbol('Lumi owned DOM subtrees')
-const noOperation = () => {}
 const classWhitespace = '[\\t\\n\\f\\r ]'
+const textValues = 'a string, number, or boolean'
 // Marks a batch match that an earlier hoisted content operation planned.
 const unplannedMatch = Symbol('Lumi unplanned match')
 
@@ -151,17 +152,7 @@ export function createDomBinding(descriptor) {
  * @returns {DomBindingDescriptor<Data> | null}
  */
 export function getDomBindingDescriptor(binding) {
-  if (
-    typeof binding !== 'object'
-    || binding === null
-    || !Reflect.has(binding, domBindingDescriptor)
-  ) {
-    return null
-  }
-
-  return /** @type {DomBindingDescriptor<Data>} */ (
-    Reflect.get(binding, domBindingDescriptor)
-  )
+  return /** @type {any} */ (binding)?.[domBindingDescriptor] ?? null
 }
 
 /**
@@ -220,10 +211,7 @@ export function claimDomSubtree(connected, container) {
  * @returns {ReadonlyArray<Element>}
  */
 export function getOwnedDomSubtrees(connected) {
-  const owned = Reflect.get(connected, ownedDomSubtrees)
-  return Array.isArray(owned)
-    ? /** @type {ReadonlyArray<Element>} */ (owned)
-    : []
+  return /** @type {any} */ (connected)[ownedDomSubtrees] ?? []
 }
 
 /**
@@ -298,6 +286,14 @@ export function connectDomBindings(
  * Compiles binding-kind-specific normalization and application once when a
  * component connects, keeping the per-element update loop monomorphic.
  *
+ * `apply` writes a value and tells whether the live DOM changed. `changes`
+ * is a read-only check that tells whether applying one value to the current
+ * DOM can change the result of a later selector resolution. Any attribute,
+ * class token, property, or inline style write can do that. A text write
+ * changes only text when the element keeps one non-empty text node, so only
+ * a write that changes the element's child nodes otherwise (for example the
+ * result of `:empty`) is a change.
+ *
  * @template Data
  * @param {DomBindingDescriptor<Data>} descriptor
  * @param {number} index
@@ -305,8 +301,9 @@ export function connectDomBindings(
  * @returns {DomBindingRuntime<Data>}
  */
 function createDomBindingRuntime(descriptor, index, root) {
+  const name = /** @type {string} */ (descriptor.name)
   const requiresTrustedHTML = descriptor.kind === 'property'
-    && (descriptor.name === 'innerHTML' || descriptor.name === 'outerHTML')
+    && (name === 'innerHTML' || name === 'outerHTML')
   /** @type {DomBindingRuntime<Data>} */
   const runtime = {
     descriptor,
@@ -315,27 +312,14 @@ function createDomBindingRuntime(descriptor, index, root) {
     requiresTrustedHTML,
     warnings: new Set(),
     view: root.ownerDocument.defaultView,
-    normalize: () => noValue,
+    normalize: projected => projected,
     apply: () => false,
     changes: () => false,
   }
 
-  runtime.normalize = createRuntimeNormalizer(runtime)
-  runtime.apply = createRuntimeApply(runtime)
-  runtime.changes = createRuntimeChange(runtime)
-  return runtime
-}
-
-/**
- * @template Data
- * @param {DomBindingRuntime<Data>} runtime
- */
-function createRuntimeNormalizer(runtime) {
-  const descriptor = runtime.descriptor
-
   switch (descriptor.kind) {
     case 'repeat':
-      return (/** @type {unknown} */ projected) => {
+      runtime.normalize = projected => {
         if (!Array.isArray(projected)) {
           warnIgnored(runtime, projected, 'an array')
           return noValue
@@ -349,81 +333,16 @@ function createRuntimeNormalizer(runtime) {
         }
         return projected
       }
+      break
     case 'text':
-      return (/** @type {unknown} */ projected) => {
+      runtime.normalize = projected => {
         if (!isTextValue(projected)) {
-          warnIgnored(
-            runtime,
-            projected,
-            'a string, number, or boolean',
-          )
+          warnIgnored(runtime, projected, textValues)
           return noValue
         }
         return String(projected)
       }
-    case 'property': {
-      if (!runtime.requiresTrustedHTML) {
-        return (/** @type {unknown} */ projected) => projected
-      }
-
-      const name = /** @type {string} */ (descriptor.name)
-      return (
-        /** @type {unknown} */ projected,
-        /** @type {TrustedHTMLCheck | null} */ trustedTypes,
-      ) => {
-        assertTrustedHTML(projected, trustedTypes, name)
-        return projected
-      }
-    }
-    case 'attribute': {
-      // Decided once per declaration so the update path pays one boolean test.
-      const isAria = /^aria-/i.test(/** @type {string} */ (descriptor.name))
-      return (/** @type {unknown} */ projected) => {
-        if (!isTextValue(projected)) {
-          warnIgnored(runtime, projected, 'a string, number, or boolean')
-          return noValue
-        }
-        if (isAria && projected === true) {
-          warnAriaBoolean(runtime)
-        }
-        return projected === false
-          ? false
-          : projected === true
-            ? ''
-            : String(projected)
-      }
-    }
-    case 'class':
-      return (/** @type {unknown} */ projected) => {
-        if (typeof projected !== 'boolean') {
-          warnIgnored(runtime, projected, 'a boolean')
-          return noValue
-        }
-        return projected
-      }
-    case 'style':
-      return (/** @type {unknown} */ projected) => {
-        if (typeof projected !== 'string') {
-          warnIgnored(runtime, projected, 'a string')
-          return noValue
-        }
-        return projected
-      }
-  }
-}
-
-/**
- * @template Data
- * @param {DomBindingRuntime<Data>} runtime
- */
-function createRuntimeApply(runtime) {
-  const descriptor = runtime.descriptor
-
-  switch (descriptor.kind) {
-    case 'repeat':
-      return () => false
-    case 'text':
-      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
+      runtime.apply = (element, value) => {
         const text = /** @type {string} */ (value)
         const sink = /** @type {TextSink} */ (element)
         const written = sink[writtenText]
@@ -443,133 +362,7 @@ function createRuntimeApply(runtime) {
         writeText(element, text)
         return true
       }
-    case 'property': {
-      const name = /** @type {string} */ (descriptor.name)
-      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
-        const current = Reflect.get(element, name)
-        const projectedValue = projectedCacheValue(runtime, value)
-        const shouldWrite = !isPropertyCurrent(
-          current,
-          projectedValue,
-          runtime.values.get(element),
-        )
-
-        if (shouldWrite) {
-          setProperty(element, name, value)
-
-          if (isStructuralProperty(name)) {
-            /** @type {TextSink} */ (element)[writtenText] = undefined
-          }
-        }
-
-        runtime.values.set(element, {
-          projectedValue,
-          domValue: Reflect.get(element, name),
-        })
-        return shouldWrite
-      }
-    }
-    case 'attribute': {
-      const name = /** @type {string} */ (descriptor.name)
-      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
-        return setAttributeValue(element, name, value)
-      }
-    }
-    case 'class': {
-      const name = /** @type {string} */ (descriptor.name)
-      const valid = isValidClassToken(name)
-      const occurrence = classTokenOccurrence(name)
-
-      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
-        const next = /** @type {boolean} */ (value)
-
-        // Keep native DOMTokenList errors for invalid tokens. Valid fixed
-        // tokens use the raw attribute so an update does not create and
-        // search a DOMTokenList for all classes on the element.
-        if (!valid) {
-          if (element.classList.contains(name) === next) {
-            return false
-          }
-
-          element.classList.toggle(name, next)
-          return true
-        }
-
-        const current = element.getAttribute('class') ?? ''
-
-        if ((current.search(occurrence) >= 0) === next) {
-          return false
-        }
-
-        const className = next
-          ? appendClassToken(current, name)
-          : current.replace(occurrence, '$1')
-        element.setAttribute('class', className)
-        return true
-      }
-    }
-    case 'style': {
-      const name = /** @type {string} */ (descriptor.name)
-      const property = styleProperty(name)
-
-      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
-        const styledElement = asStyledElement(element)
-        const declaration = styledElement.style
-
-        if (
-          property !== null
-          && typeof Reflect.get(declaration, property) === 'string'
-        ) {
-          const style = /** @type {Record<string, unknown>} */ (
-            /** @type {unknown} */ (declaration)
-          )
-          const current = style[property]
-
-          if (current === value) {
-            return false
-          }
-
-          style[property] = /** @type {string} */ (value)
-          return true
-        }
-
-        const current = declaration.getPropertyValue(name)
-
-        if (current === value) {
-          return false
-        }
-
-        if (value === '') {
-          declaration.removeProperty(name)
-        } else {
-          declaration.setProperty(name, /** @type {string} */ (value))
-        }
-        return true
-      }
-    }
-  }
-}
-
-/**
- * Compiles a read-only check that tells whether applying one value to the
- * current DOM can change the result of a later selector resolution. Any
- * attribute, class token, property, or inline style write can do that. A
- * text write changes only text when the element keeps one non-empty text
- * node, so only a write that changes the element's child nodes otherwise
- * (for example the result of `:empty`) is a change.
- *
- * @template Data
- * @param {DomBindingRuntime<Data>} runtime
- * @returns {(element: Element, value: unknown) => boolean}
- */
-function createRuntimeChange(runtime) {
-  const descriptor = runtime.descriptor
-
-  switch (descriptor.kind) {
-    case 'repeat':
-      return () => false
-    case 'text':
-      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
+      runtime.changes = (element, value) => {
         if (/** @type {TextSink} */ (element)[writtenText] === value) {
           return false
         }
@@ -588,50 +381,198 @@ function createRuntimeChange(runtime) {
 
         return element.textContent !== value
       }
-    case 'property': {
-      const name = /** @type {string} */ (descriptor.name)
-      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
+      break
+    case 'property':
+      if (requiresTrustedHTML) {
+        runtime.normalize = (projected, trustedTypes) => {
+          assertTrustedHTML(projected, trustedTypes, name)
+          return projected
+        }
+      }
+      runtime.apply = (element, value) => {
+        const shouldWrite = runtime.changes(element, value)
+
+        if (shouldWrite) {
+          setProperty(element, name, value)
+
+          if (isStructuralProperty(name)) {
+            /** @type {TextSink} */ (element)[writtenText] = undefined
+          }
+        }
+
+        runtime.values.set(element, {
+          projectedValue: projectedCacheValue(runtime, value),
+          domValue: /** @type {any} */ (element)[name],
+        })
+        return shouldWrite
+      }
+      runtime.changes = (element, value) => {
         return !isPropertyCurrent(
-          Reflect.get(element, name),
+          /** @type {any} */ (element)[name],
           projectedCacheValue(runtime, value),
           runtime.values.get(element),
         )
       }
-    }
+      break
     case 'attribute': {
-      const name = /** @type {string} */ (descriptor.name)
-      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
-        return attributeValue(element, name) !== value
+      // Decided once per declaration so the update path pays one boolean test.
+      const isAria = /^aria-/i.test(name)
+      runtime.normalize = projected => {
+        if (!isTextValue(projected)) {
+          warnIgnored(runtime, projected, textValues)
+          return noValue
+        }
+        if (isAria && projected === true) {
+          warnOnce(
+            runtime,
+            'ARIA boolean true',
+            `projected true into "${name}"; true writes an empty attribute, `
+            + 'but ARIA states are string tokens. Project the string \'true\' '
+            + 'or \'false\' instead, for example String(value).',
+          )
+        }
+        return projected === false
+          ? false
+          : projected === true
+            ? ''
+            : String(projected)
       }
+      useDomValue(
+        runtime,
+        element => attributeValue(element, name),
+        (element, value) => {
+          if (value === false) {
+            element.removeAttribute(name)
+          } else {
+            element.setAttribute(name, value)
+          }
+        },
+      )
+      break
     }
     case 'class': {
-      const name = /** @type {string} */ (descriptor.name)
-      const valid = isValidClassToken(name)
-      const occurrence = classTokenOccurrence(name)
-
-      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
-        const present = valid
-          ? (element.getAttribute('class') ?? '').search(occurrence) >= 0
-          : element.classList.contains(name)
-        return present !== value
+      runtime.normalize = projected => {
+        if (typeof projected !== 'boolean') {
+          warnIgnored(runtime, projected, 'a boolean')
+          return noValue
+        }
+        return projected
       }
+
+      // Keep native DOMTokenList errors for invalid tokens. Valid fixed
+      // tokens use the raw attribute so an update does not create and
+      // search a DOMTokenList for all classes on the element.
+      if (name === '' || /[\t\n\f\r ]/.test(name)) {
+        useDomValue(
+          runtime,
+          element => element.classList.contains(name),
+          (element, value) => element.classList.toggle(name, value),
+        )
+        break
+      }
+
+      const occurrence = new RegExp(
+        `(^|${classWhitespace})${escapeRegularExpression(name)}`
+        + `(?=$|${classWhitespace})`,
+        'g',
+      )
+      useDomValue(
+        runtime,
+        element => (element.getAttribute('class') ?? '').search(occurrence) >= 0,
+        (element, value) => {
+          const current = element.getAttribute('class') ?? ''
+          element.setAttribute(
+            'class',
+            !value
+              ? current.replace(occurrence, '$1')
+              : current === '' || /[\t\n\f\r ]$/.test(current)
+                ? current + name
+                : `${current} ${name}`,
+          )
+        },
+      )
+      break
     }
     case 'style': {
-      const name = /** @type {string} */ (descriptor.name)
-      const property = styleProperty(name)
-
-      return (/** @type {Element} */ element, /** @type {unknown} */ value) => {
-        const declaration = asStyledElement(element).style
-        const current = (
-          property !== null
-          && typeof Reflect.get(declaration, property) === 'string'
-        )
-          ? Reflect.get(declaration, property)
-          : declaration.getPropertyValue(name)
-        return current !== value
+      runtime.normalize = projected => {
+        if (typeof projected !== 'string') {
+          warnIgnored(runtime, projected, 'a string')
+          return noValue
+        }
+        return projected
       }
+
+      // The CSSStyleDeclaration property for a standard CSS property name.
+      // Custom properties and non-standard spellings use the CSSOM methods.
+      const property = name.startsWith('--') || /[A-Z]/.test(name)
+        ? null
+        : name === 'float'
+          ? 'cssFloat'
+          : name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())
+
+      /**
+       * @param {Element} element
+       * @returns {Record<string, unknown> & CSSStyleDeclaration}
+       */
+      const styleOf = element => {
+        if (!('style' in element)) {
+          throw new TypeError(
+            'Lumi style binding requires a styled element, '
+            + `received <${element.localName}>`,
+          )
+        }
+
+        return /** @type {Record<string, unknown> & CSSStyleDeclaration} */ (
+          element.style
+        )
+      }
+
+      useDomValue(
+        runtime,
+        element => {
+          const style = styleOf(element)
+          return property !== null && typeof style[property] === 'string'
+            ? style[property]
+            : style.getPropertyValue(name)
+        },
+        (element, value) => {
+          const style = styleOf(element)
+
+          if (property !== null && typeof style[property] === 'string') {
+            style[property] = value
+          } else if (value === '') {
+            style.removeProperty(name)
+          } else {
+            style.setProperty(name, value)
+          }
+        },
+      )
+      break
     }
   }
+
+  return runtime
+}
+
+/**
+ * Sets `apply` and `changes` for a binding whose current DOM value can be
+ * read and compared with the normalized value.
+ *
+ * @template Data
+ * @param {DomBindingRuntime<Data>} runtime
+ * @param {(element: Element) => unknown} read
+ * @param {(element: Element, value: any) => void} write
+ */
+function useDomValue(runtime, read, write) {
+  runtime.apply = (element, value) => {
+    if (read(element) === value) {
+      return false
+    }
+
+    write(element, value)
+    return true
+  }
+  runtime.changes = (element, value) => read(element) !== value
 }
 
 /**
@@ -777,13 +718,11 @@ function prepareDirectUpdate(
   const lastRuntime = runtimes.length - 1
 
   for (let runtimeIndex = 0; runtimeIndex <= lastRuntime; runtimeIndex += 1) {
-    const runtime = runtimes[runtimeIndex]
+    const runtime = /** @type {DomBindingRuntime<Data>} */ (
+      runtimes[runtimeIndex]
+    )
 
-    if (runtime === undefined) {
-      continue
-    }
-
-    const elements = elementsByRuntime[runtimeIndex] ?? []
+    const elements = /** @type {ReadonlyArray<Element>} */ (elementsByRuntime[runtimeIndex])
     const structural = isStructuralBinding(runtime.descriptor)
     let planned = false
     const values = elements.map((element, matchIndex) => {
@@ -811,9 +750,9 @@ function prepareDirectUpdate(
 
     if (structural) {
       for (let index = 0; index < elements.length; index += 1) {
-        const element = elements[index]
+        const element = /** @type {Element} */ (elements[index])
 
-        if (element !== undefined && values[index] !== unplannedMatch) {
+        if (values[index] !== unplannedMatch) {
           validateDirectStructuralTarget(
             runtime,
             element,
@@ -868,18 +807,20 @@ function directHoistedTasks(root, runtimes, elementsByRuntime) {
   const tasks = []
 
   for (let runtimeIndex = 0; runtimeIndex < runtimes.length; runtimeIndex += 1) {
-    const runtime = runtimes[runtimeIndex]
+    const runtime = /** @type {DomBindingRuntime<Data>} */ (
+      runtimes[runtimeIndex]
+    )
 
-    if (runtime === undefined || !isStructuralBinding(runtime.descriptor)) {
+    if (!isStructuralBinding(runtime.descriptor)) {
       continue
     }
 
-    const elements = elementsByRuntime[runtimeIndex] ?? []
+    const elements = /** @type {ReadonlyArray<Element>} */ (elementsByRuntime[runtimeIndex])
 
     for (let matchIndex = 0; matchIndex < elements.length; matchIndex += 1) {
-      const element = elements[matchIndex]
+      const element = /** @type {Element} */ (elements[matchIndex])
 
-      if (element !== undefined && isHoistedContent(runtime, element)) {
+      if (isHoistedContent(runtime, element)) {
         tasks.push({
           runtime,
           element,
@@ -890,12 +831,9 @@ function directHoistedTasks(root, runtimes, elementsByRuntime) {
     }
   }
 
+  // The tasks are in declaration and match order, and the sort is stable.
   if (tasks.length > 1) {
-    tasks.sort((left, right) => {
-      return left.depth - right.depth
-        || left.runtime.index - right.runtime.index
-        || left.matchIndex - right.matchIndex
-    })
+    tasks.sort((left, right) => left.depth - right.depth)
   }
 
   return tasks
@@ -910,12 +848,11 @@ function directHoistedTasks(root, runtimes, elementsByRuntime) {
  */
 function batchChangesDom(runtime, elements, values) {
   for (let index = 0; index < elements.length; index += 1) {
-    const element = elements[index]
+    const element = /** @type {Element} */ (elements[index])
     const value = values[index]
 
     if (
-      element !== undefined
-      && value !== unplannedMatch
+      value !== unplannedMatch
       && !isNoValue(value)
       && runtime.changes(element, value)
     ) {
@@ -961,7 +898,10 @@ function prepareStagedUpdate(
   const liveByPlanned = new WeakMap()
   /** @type {WeakMap<Element, Element>} */
   const plannedByLive = new WeakMap()
-  pairElementTrees(root, planningRoot, liveByPlanned, plannedByLive)
+  pairElementTrees(root, planningRoot, (live, planned) => {
+    liveByPlanned.set(planned, live)
+    plannedByLive.set(live, planned)
+  })
   const plannedOwnedSubtrees = ownedSubtrees.map(subtree => {
     const planned = plannedByLive.get(subtree)
 
@@ -1037,7 +977,7 @@ function prepareStagedUpdate(
   // The direct operations were resolved in the unchanged live view, which
   // equals the copy until the last of them. Replay them in the same order.
   for (const operation of operations) {
-    const elements = elementsByRuntime[operation.runtime.index] ?? []
+    const elements = /** @type {ReadonlyArray<Element>} */ (elementsByRuntime[operation.runtime.index])
 
     if (operation.type === 'single') {
       plan(
@@ -1099,11 +1039,9 @@ function prepareStagedUpdate(
     runtimeIndex < runtimes.length;
     runtimeIndex += 1
   ) {
-    const runtime = runtimes[runtimeIndex]
-
-    if (runtime === undefined) {
-      continue
-    }
+    const runtime = /** @type {DomBindingRuntime<Data>} */ (
+      runtimes[runtimeIndex]
+    )
 
     const processed = processedByRuntime.get(runtime)
     const elements = queryOwnedElements(
@@ -1139,10 +1077,10 @@ function prepareStagedUpdate(
     }
 
     for (let index = 0; index < elements.length; index += 1) {
-      const element = elements[index]
+      const element = /** @type {Element} */ (elements[index])
       const value = values[index]
 
-      if (element !== undefined && value !== unplannedMatch) {
+      if (value !== unplannedMatch) {
         plan(runtime, element, value)
       }
     }
@@ -1213,13 +1151,11 @@ function analyzeStaging(root, runtimes, ownedSubtrees, liveQuery) {
   const structuralRuntimeByElement = new Map()
 
   for (let runtimeIndex = 0; runtimeIndex < runtimes.length; runtimeIndex += 1) {
-    const runtime = runtimes[runtimeIndex]
+    const runtime = /** @type {DomBindingRuntime<Data>} */ (
+      runtimes[runtimeIndex]
+    )
 
-    if (runtime === undefined) {
-      continue
-    }
-
-    const elements = elementsByRuntime[runtimeIndex] ?? []
+    const elements = /** @type {ReadonlyArray<Element>} */ (elementsByRuntime[runtimeIndex])
 
     for (const element of elements) {
       recordRuntime(runtimeByElement, element, runtimeIndex)
@@ -1354,57 +1290,38 @@ function preparedDomUpdate(
           liveQuery,
         )
 
-        if (operation.type === 'single') {
-          const element = elements[operation.matchIndex]
+        const single = operation.type === 'single'
 
-          if (element === undefined) {
-            throw changedDuringCommit(
-              operation.runtime.descriptor.selector,
-            )
-          }
-
-          trackParentCache(
-            parentCacheRecords,
-            operation.runtime,
-            element,
-            operation.value,
-          )
-          const changed = applyLiveValue(
-            operation.runtime,
-            element,
-            operation.value,
-          )
-          if (changed) {
-            liveQuery.recheck(element)
-          }
-          continue
-        }
-
-        if (elements.length !== operation.values.length) {
-          throw changedDuringCommit(
-            operation.runtime.descriptor.selector,
+        if (
+          single
+            ? elements[operation.matchIndex] === undefined
+            : elements.length !== operation.values.length
+        ) {
+          throw new Error(
+            'Lumi DOM changed while committing selector '
+            + `"${operation.runtime.descriptor.selector}"`,
           )
         }
 
-        for (let index = 0; index < elements.length; index += 1) {
-          const element = elements[index]
+        const end = single ? operation.matchIndex + 1 : elements.length
 
-          if (
-            element !== undefined
-            && operation.values[index] !== unplannedMatch
-          ) {
+        for (
+          let index = single ? operation.matchIndex : 0;
+          index < end;
+          index += 1
+        ) {
+          const element = /** @type {Element} */ (elements[index])
+          const value = single ? operation.value : operation.values[index]
+
+          if (value !== unplannedMatch) {
             trackParentCache(
               parentCacheRecords,
               operation.runtime,
               element,
-              operation.values[index],
+              value,
             )
-            const changed = applyLiveValue(
-              operation.runtime,
-              element,
-              operation.values[index],
-            )
-            if (changed) {
+
+            if (applyLiveValue(operation.runtime, element, value)) {
               liveQuery.recheck(element)
             }
           }
@@ -1468,10 +1385,9 @@ function refreshParentCaches(records) {
 
     const runtime = record.runtime
     const descriptor = runtime.descriptor
-    const domValue = Reflect.get(
-      record.element,
-      /** @type {string} */ (descriptor.name),
-    )
+    const domValue = /** @type {any} */ (record.element)[
+      /** @type {string} */ (descriptor.name)
+    ]
 
     runtime.values.set(record.element, {
       projectedValue: projectedCacheValue(runtime, record.value),
@@ -1539,11 +1455,10 @@ function nextStructuralTask(
     )
 
     for (let matchIndex = 0; matchIndex < elements.length; matchIndex += 1) {
-      const element = elements[matchIndex]
+      const element = /** @type {Element} */ (elements[matchIndex])
 
       if (
-        element === undefined
-        || processed?.has(element) === true
+        processed?.has(element) === true
         || createdBy.get(element)?.has(runtime.index) === true
         || !isHoistedContent(runtime, element)
       ) {
@@ -1552,19 +1467,9 @@ function nextStructuralTask(
 
       const depth = elementDepth(root, element)
 
-      if (
-        selected === null
-        || depth < selected.depth
-        || (
-          depth === selected.depth
-          && runtime.index < selected.runtime.index
-        )
-        || (
-          depth === selected.depth
-          && runtime.index === selected.runtime.index
-          && matchIndex < selected.matchIndex
-        )
-      ) {
+      // Declarations and matches are visited in ascending order, so only a
+      // smaller depth can come before the selected task.
+      if (selected === null || depth < selected.depth) {
         selected = {
           runtime,
           element,
@@ -1696,7 +1601,7 @@ function applyPlannedValue(
 
       if (
         isPropertyCurrent(
-          Reflect.get(element, name),
+          /** @type {any} */ (element)[name],
           projectedCacheValue(runtime, value),
           previous,
         )
@@ -1723,24 +1628,8 @@ function applyPlannedValue(
       }
       return
     }
-    case 'attribute': {
-      setAttributeValue(
-        element,
-        /** @type {string} */ (descriptor.name),
-        value,
-      )
-      return
-    }
-    case 'class': {
+    default:
       runtime.apply(element, value)
-      return
-    }
-    case 'style': {
-      runtime.apply(element, value)
-      return
-    }
-    case 'repeat':
-      return
   }
 }
 
@@ -1810,28 +1699,6 @@ function setProperty(element, name, value) {
 /**
  * @param {Element} element
  * @param {string} name
- * @param {unknown} value
- * @returns {boolean} Whether the attribute was changed.
- */
-function setAttributeValue(element, name, value) {
-  const next = /** @type {string | false} */ (value)
-
-  if (attributeValue(element, name) === next) {
-    return false
-  }
-
-  if (next === false) {
-    element.removeAttribute(name)
-  } else {
-    element.setAttribute(name, next)
-  }
-
-  return true
-}
-
-/**
- * @param {Element} element
- * @param {string} name
  * @returns {string | false} The attribute value, or false when it is absent.
  */
 function attributeValue(element, name) {
@@ -1859,42 +1726,6 @@ function isPropertyCurrent(current, projectedValue, previous) {
 }
 
 /**
- * @param {string} name
- * @returns {boolean} Whether the class token can be found in the raw
- *   attribute without a DOMTokenList.
- */
-function isValidClassToken(name) {
-  return name !== '' && !/[\t\n\f\r ]/.test(name)
-}
-
-/**
- * @param {string} name
- * @returns {RegExp} A pattern that finds each occurrence of one class token.
- */
-function classTokenOccurrence(name) {
-  return new RegExp(
-    `(^|${classWhitespace})${escapeRegularExpression(name)}`
-    + `(?=$|${classWhitespace})`,
-    'g',
-  )
-}
-
-/**
- * Adds one class token without parsing or serializing unrelated tokens.
- *
- * @param {string} current
- * @param {string} name
- * @returns {string}
- */
-function appendClassToken(current, name) {
-  if (current === '' || /[\t\n\f\r ]$/.test(current)) {
-    return current + name
-  }
-
-  return `${current} ${name}`
-}
-
-/**
  * Escapes a fixed string for use in a regular expression.
  *
  * @param {string} value
@@ -1902,100 +1733,6 @@ function appendClassToken(current, name) {
  */
 function escapeRegularExpression(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-/**
- * Gets the CSSStyleDeclaration property for a standard CSS property name.
- * Custom properties and non-standard spellings use the CSSOM methods.
- *
- * @param {string} name
- * @returns {string | null}
- */
-function styleProperty(name) {
-  if (name.startsWith('--') || /[A-Z]/.test(name)) {
-    return null
-  }
-
-  if (name === 'float') {
-    return 'cssFloat'
-  }
-
-  return name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())
-}
-
-/**
- * @param {Element} element
- * @returns {HTMLElement | SVGElement}
- */
-function asStyledElement(element) {
-  if (!('style' in element)) {
-    throw new TypeError(
-      `Lumi style binding requires a styled element, received <${element.localName}>`,
-    )
-  }
-
-  return /** @type {HTMLElement | SVGElement} */ (element)
-}
-
-/**
- * @param {Element} live
- * @param {Element} planned
- * @param {WeakMap<Element, Element>} liveByPlanned
- * @param {WeakMap<Element, Element>} plannedByLive
- */
-function pairElementTrees(
-  live,
-  planned,
-  liveByPlanned,
-  plannedByLive,
-) {
-  liveByPlanned.set(planned, live)
-  plannedByLive.set(live, planned)
-
-  if (live.shadowRoot !== null && planned.shadowRoot !== null) {
-    pairElementChildren(
-      live.shadowRoot.children,
-      planned.shadowRoot.children,
-      liveByPlanned,
-      plannedByLive,
-    )
-  }
-
-  pairElementChildren(
-    live.children,
-    planned.children,
-    liveByPlanned,
-    plannedByLive,
-  )
-}
-
-/**
- * @param {HTMLCollectionOf<Element>} liveChildren
- * @param {HTMLCollectionOf<Element>} plannedChildren
- * @param {WeakMap<Element, Element>} liveByPlanned
- * @param {WeakMap<Element, Element>} plannedByLive
- */
-function pairElementChildren(
-  liveChildren,
-  plannedChildren,
-  liveByPlanned,
-  plannedByLive,
-) {
-  const length = Math.min(liveChildren.length, plannedChildren.length)
-
-  for (let index = 0; index < length; index += 1) {
-    const liveChild = liveChildren[index]
-    const plannedChild = plannedChildren[index]
-
-    if (liveChild !== undefined && plannedChild !== undefined) {
-      pairElementTrees(
-        liveChild,
-        plannedChild,
-        liveByPlanned,
-        plannedByLive,
-      )
-    }
-  }
 }
 
 /**
@@ -2067,16 +1804,6 @@ function markCreatedSubtree(element, createdBy, history) {
 }
 
 /**
- * @param {string} selector
- * @returns {Error}
- */
-function changedDuringCommit(selector) {
-  return new Error(
-    `Lumi DOM changed while committing selector "${selector}"`,
-  )
-}
-
-/**
  * Gets the policy factory from the mounted component's realm. Detached
  * planning documents have no Window, so the live root is the authoritative
  * realm for authenticating values used during both planning and commit.
@@ -2085,27 +1812,13 @@ function changedDuringCommit(selector) {
  * @returns {TrustedHTMLCheck | null}
  */
 function trustedTypesFactory(root) {
-  const view = root.ownerDocument.defaultView
+  const factory = /** @type {any} */ (root.ownerDocument.defaultView)
+    ?.trustedTypes
+  const isHTML = factory?.isHTML
 
-  if (view === null) {
-    return null
-  }
-
-  const factory = Reflect.get(view, 'trustedTypes')
-
-  if (typeof factory !== 'object' || factory === null) {
-    return null
-  }
-
-  const isHTML = Reflect.get(factory, 'isHTML')
-
-  if (typeof isHTML !== 'function') {
-    return null
-  }
-
-  return value => {
-    return Reflect.apply(isHTML, factory, [value]) === true
-  }
+  return typeof isHTML === 'function'
+    ? value => isHTML.call(factory, value) === true
+    : null
 }
 
 /**
@@ -2158,41 +1871,37 @@ function projectionValueType(value) {
  * @param {string} expected
  * @param {string} [category]
  */
-function warnIgnored(runtime, value, expected, category) {
-  const actual = category ?? projectionValueType(value)
-
-  if (runtime.warnings.has(actual)) {
-    return
-  }
-
-  runtime.warnings.add(actual)
-  warn(
-    `Lumi ${runtime.descriptor.kind} binding `
-    + `"${runtime.descriptor.selector}" ignored ${actual}; expected `
-    + `${expected}. The existing DOM state was preserved.`,
-    runtime.view,
+function warnIgnored(
+  runtime,
+  value,
+  expected,
+  category = projectionValueType(value),
+) {
+  warnOnce(
+    runtime,
+    category,
+    `ignored ${category}; expected ${expected}. `
+    + 'The existing DOM state was preserved.',
   )
 }
 
 /**
- * Reports once per mounted declaration that boolean `true` wrote an empty
- * ARIA attribute. The written value stays the documented boolean mapping.
+ * Reports one diagnostic per mounted declaration and category.
  *
  * @template Data
  * @param {DomBindingRuntime<Data>} runtime
+ * @param {string} category
+ * @param {string} message
  */
-function warnAriaBoolean(runtime) {
-  if (runtime.warnings.has('ARIA boolean true')) {
+function warnOnce(runtime, category, message) {
+  if (runtime.warnings.has(category)) {
     return
   }
 
-  runtime.warnings.add('ARIA boolean true')
+  runtime.warnings.add(category)
   warn(
     `Lumi ${runtime.descriptor.kind} binding `
-    + `"${runtime.descriptor.selector}" projected true into `
-    + `"${runtime.descriptor.name}"; true writes an empty attribute, but `
-    + 'ARIA states are string tokens. Project the string \'true\' or '
-    + '\'false\' instead, for example String(value).',
+    + `"${runtime.descriptor.selector}" ${message}`,
     runtime.view,
   )
 }

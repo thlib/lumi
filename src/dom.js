@@ -471,54 +471,55 @@ export function importElementTree(document, source) {
  * @param {Element} target
  */
 function copyOpenShadowTrees(document, source, target) {
-  const sourceShadow = source.shadowRoot
-  let targetShadow = target.shadowRoot
+  pairElementTrees(source, target, (sourceElement, targetElement) => {
+    const sourceShadow = sourceElement.shadowRoot
 
-  if (sourceShadow !== null && targetShadow === null) {
-    targetShadow = target.attachShadow({
-      mode: 'open',
-      delegatesFocus: sourceShadow.delegatesFocus,
-    })
+    if (sourceShadow !== null && targetElement.shadowRoot === null) {
+      const targetShadow = targetElement.attachShadow({
+        mode: 'open',
+        delegatesFocus: sourceShadow.delegatesFocus,
+      })
 
-    for (const child of sourceShadow.childNodes) {
-      targetShadow.append(document.importNode(child, true))
+      for (const child of sourceShadow.childNodes) {
+        targetShadow.append(document.importNode(child, true))
+      }
     }
-  }
-
-  if (sourceShadow !== null && targetShadow !== null) {
-    pairChildren(
-      Array.from(sourceShadow.children),
-      Array.from(targetShadow.children),
-      (sourceChild, targetChild) => {
-        copyOpenShadowTrees(document, sourceChild, targetChild)
-      },
-    )
-  }
-
-  pairChildren(
-    Array.from(source.children),
-    Array.from(target.children),
-    (sourceChild, targetChild) => {
-      copyOpenShadowTrees(document, sourceChild, targetChild)
-    },
-  )
+  })
 }
 
 /**
- * @param {Element[]} sources
- * @param {Element[]} targets
- * @param {(source: Element, target: Element) => void} pair
+ * Visits two element trees side by side: first the two elements, then the
+ * children of their open shadow roots, then their light DOM children. When
+ * the trees differ, only the children at the same positions are visited.
+ *
+ * @param {Element} left
+ * @param {Element} right
+ * @param {(left: Element, right: Element) => void} visit
  */
-function pairChildren(sources, targets, pair) {
-  const length = Math.min(sources.length, targets.length)
+export function pairElementTrees(left, right, visit) {
+  visit(left, right)
+
+  if (left.shadowRoot !== null && right.shadowRoot !== null) {
+    pairChildren(left.shadowRoot.children, right.shadowRoot.children, visit)
+  }
+
+  pairChildren(left.children, right.children, visit)
+}
+
+/**
+ * @param {HTMLCollection} left
+ * @param {HTMLCollection} right
+ * @param {(left: Element, right: Element) => void} visit
+ */
+function pairChildren(left, right, visit) {
+  const length = Math.min(left.length, right.length)
 
   for (let index = 0; index < length; index += 1) {
-    const source = sources[index]
-    const target = targets[index]
-
-    if (source !== undefined && target !== undefined) {
-      pair(source, target)
-    }
+    pairElementTrees(
+      /** @type {Element} */ (left[index]),
+      /** @type {Element} */ (right[index]),
+      visit,
+    )
   }
 }
 

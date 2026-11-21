@@ -18,11 +18,19 @@ import {warn} from './internal/diagnostics.js'
 
 const eventBindingDescriptor = Symbol('Lumi event binding descriptor')
 
-/** @type {ReadonlyArray<import('./types.js').EventBindingLocation>} */
-const eventLocations = ['component', 'elements']
-/** @type {ReadonlyArray<import('./types.js').EventBindingFrequency>} */
-const frequencies = ['always', 'once']
-const optionNames = ['at', 'capture', 'passive', 'freq']
+/**
+ * The supported event options. A list holds the allowed values, and its first
+ * value is the default. A null option is a boolean, and its default is false.
+ *
+ * @type {Readonly<Record<string, ReadonlyArray<string> | null>>}
+ */
+const eventOptions = {
+  at: ['component', 'elements'],
+  capture: null,
+  passive: null,
+  freq: ['always', 'once'],
+}
+const optionNames = Object.keys(eventOptions)
 
 /**
  * Native event types that normally do not bubble. Lumi never rewrites an
@@ -137,17 +145,7 @@ export function on(selector, type, handler, options) {
  * @returns {EventBindingDescriptor | null}
  */
 export function getEventBindingDescriptor(binding) {
-  if (
-    typeof binding !== 'object'
-    || binding === null
-    || !Reflect.has(binding, eventBindingDescriptor)
-  ) {
-    return null
-  }
-
-  return /** @type {EventBindingDescriptor} */ (
-    Reflect.get(binding, eventBindingDescriptor)
-  )
+  return /** @type {any} */ (binding)?.[eventBindingDescriptor] ?? null
 }
 
 /**
@@ -623,22 +621,15 @@ function collectEventBoundaries(root, ownedSubtrees) {
  * @param {unknown} error
  */
 function reportEventError(root, error) {
-  const view = root.ownerDocument.defaultView
+  const view = /** @type {any} */ (root.ownerDocument.defaultView)
 
-  if (view !== null) {
-    const report = Reflect.get(view, 'reportError')
-
-    if (typeof report === 'function') {
-      Reflect.apply(report, view, [error])
-      return
-    }
+  if (typeof view?.reportError === 'function') {
+    view.reportError(error)
+    return
   }
 
-  const schedule = view === null
-    ? globalThis.setTimeout
-    : /** @type {typeof globalThis.setTimeout} */ (
-      Reflect.get(view, 'setTimeout')
-    )
+  /** @type {unknown} */
+  const schedule = view === null ? globalThis.setTimeout : view.setTimeout
 
   if (typeof schedule === 'function') {
     schedule(() => {
@@ -698,16 +689,7 @@ function createEventDescriptor(selector, type, handler, options) {
  *   freq: import('./types.js').EventBindingFrequency,
  * }}
  */
-function readEventOptions(type, selector, options) {
-  if (options === undefined) {
-    return {
-      at: 'component',
-      capture: false,
-      passive: false,
-      freq: 'always',
-    }
-  }
-
+function readEventOptions(type, selector, options = {}) {
   if (
     typeof options !== 'object'
     || options === null
@@ -734,80 +716,43 @@ function readEventOptions(type, selector, options) {
     )
   }
 
-  return {
-    at: readEnumOption(type, selector, options, 'at', eventLocations, 'component'),
-    capture: readBooleanOption(type, selector, options, 'capture'),
-    passive: readBooleanOption(type, selector, options, 'passive'),
-    freq: readEnumOption(type, selector, options, 'freq', frequencies, 'always'),
-  }
-}
+  /** @type {Record<string, unknown>} */
+  const settings = {}
 
-/**
- * @template {string} Value
- * @param {string} type
- * @param {string} selector
- * @param {object} options
- * @param {string} name
- * @param {ReadonlyArray<Value>} allowed
- * @param {Value} fallback
- * @returns {Value}
- */
-function readEnumOption(type, selector, options, name, allowed, fallback) {
-  const value = Reflect.get(options, name)
+  for (const name of optionNames) {
+    const allowed = eventOptions[name] ?? null
+    const value = /** @type {Record<string, unknown>} */ (options)[name]
 
-  if (value === undefined) {
-    return fallback
-  }
-
-  if (
-    typeof value !== 'string'
-    || !allowed.includes(/** @type {Value} */ (value))
-  ) {
-    throw invalidEventBinding(
-      type,
-      selector,
-      `options.${name} must be ${listValues(allowed)}`,
-    )
+    if (value === undefined) {
+      settings[name] = allowed === null ? false : allowed[0]
+    } else if (
+      allowed === null
+        ? typeof value === 'boolean'
+        : allowed.includes(/** @type {string} */ (value))
+    ) {
+      settings[name] = value
+    } else {
+      throw invalidEventBinding(
+        type,
+        selector,
+        `options.${name} must be `
+        + (allowed === null ? 'a boolean' : listValues(allowed)),
+      )
+    }
   }
 
-  return /** @type {Value} */ (value)
-}
-
-/**
- * @param {string} type
- * @param {string} selector
- * @param {object} options
- * @param {string} name
- * @returns {boolean}
- */
-function readBooleanOption(type, selector, options, name) {
-  const value = Reflect.get(options, name)
-
-  if (value === undefined) {
-    return false
-  }
-
-  if (typeof value !== 'boolean') {
-    throw invalidEventBinding(
-      type,
-      selector,
-      `options.${name} must be a boolean`,
-    )
-  }
-
-  return value
+  return /** @type {any} */ (settings)
 }
 
 /**
  * @param {ReadonlyArray<string>} values
- * @returns {string}
+ * @returns {string} The quoted values, for example `"a", "b" or "c"`.
  */
 function listValues(values) {
-  const quoted = values.map(value => `"${value}"`)
-
-  return quoted.length < 2
-    ? quoted.join('')
-    : `${quoted.slice(0, -1).join(', ')} or ${quoted[quoted.length - 1]}`
+  return values
+    .map(value => `"${value}"`)
+    .join(', ')
+    .replace(/, (?=[^,]*$)/, ' or ')
 }
 
 /**

@@ -601,16 +601,7 @@ function projectKey(spec, context, index) {
   try {
     return project(context)
   } catch (error) {
-    const detail = error instanceof Error
-      ? error.message
-      : String(error)
-
-    throw new Error(
-      `Lumi repeat key projection for "${spec.runtime.descriptor.selector}" `
-      + `at matched position ${spec.matchIndex + 1}, item ${index + 1} `
-      + `failed: ${detail}`,
-      {cause: error},
-    )
+    throw projectionError(spec.runtime.descriptor, spec.matchIndex, error, index)
   }
 }
 
@@ -796,9 +787,9 @@ function prepareDynamicOperations(
     const handled = handledByRuntime.get(runtime)
 
     for (let matchIndex = 0; matchIndex < elements.length; matchIndex += 1) {
-      const element = elements[matchIndex]
+      const element = /** @type {Element} */ (elements[matchIndex])
 
-      if (element === undefined || handled?.has(element) === true) {
+      if (handled?.has(element) === true) {
         continue
       }
 
@@ -912,7 +903,7 @@ function refreshDynamicParentCaches(
 
       runtime.values.set(element, {
         projectedValue: previous.projectedValue,
-        domValue: Reflect.get(element, 'innerHTML'),
+        domValue: element.innerHTML,
       })
     }
   }
@@ -967,11 +958,10 @@ function nextDynamicStructuralTask(
     const processed = processedByRuntime.get(runtime)
 
     for (let matchIndex = 0; matchIndex < elements.length; matchIndex += 1) {
-      const element = elements[matchIndex]
+      const element = /** @type {Element} */ (elements[matchIndex])
 
       if (
-        element === undefined
-        || handled?.has(element) === true
+        handled?.has(element) === true
         || processed?.has(element) === true
         || createdBy.get(element)?.has(runtime.index) === true
       ) {
@@ -980,19 +970,9 @@ function nextDynamicStructuralTask(
 
       const depth = elementDepth(root, element)
 
-      if (
-        selected === null
-        || depth < selected.depth
-        || (
-          depth === selected.depth
-          && runtime.index < selected.runtime.index
-        )
-        || (
-          depth === selected.depth
-          && runtime.index === selected.runtime.index
-          && matchIndex < selected.matchIndex
-        )
-      ) {
+      // Declarations and matches are visited in ascending order, so only a
+      // smaller depth can come before the selected task.
+      if (selected === null || depth < selected.depth) {
         selected = {
           runtime,
           element,
@@ -1088,34 +1068,30 @@ function trackPlannedScope(
   const context = findContext(state.root, contextByElement)
 
   for (let index = 0; index < state.sinkSpecs.length; index += 1) {
-    const sink = state.sinkSpecs[index]
-    const element = state.sinkElements[index]
+    const sink = /** @type {SinkSpec} */ (state.sinkSpecs[index])
+    const element = /** @type {Element} */ (state.sinkElements[index])
 
-    if (sink !== undefined && element !== undefined) {
-      handledByRuntime.get(sink.runtime)?.add(element)
-      contextByElement.set(element, context)
-    }
+    handledByRuntime.get(sink.runtime)?.add(element)
+    contextByElement.set(element, context)
   }
 
   for (let regionIndex = 0; regionIndex < plan.regions.length; regionIndex += 1) {
-    const regionPlan = plan.regions[regionIndex]
-    const regionState = state.regions[regionIndex]
+    const regionPlan = /** @type {RegionPlan} */ (plan.regions[regionIndex])
+    const regionState = /** @type {RegionState} */ (state.regions[regionIndex])
 
-    if (regionPlan === undefined || regionState === undefined) {
-      continue
-    }
-
+    // After the plan is applied, a region has one occurrence for each
+    // occurrence plan.
     for (
       let occurrenceIndex = 0;
       occurrenceIndex < regionPlan.occurrences.length;
       occurrenceIndex += 1
     ) {
-      const occurrencePlan = regionPlan.occurrences[occurrenceIndex]
-      const occurrenceState = regionState.occurrences[occurrenceIndex]
-
-      if (occurrencePlan === undefined || occurrenceState === undefined) {
-        continue
-      }
+      const occurrencePlan = /** @type {OccurrencePlan} */ (
+        regionPlan.occurrences[occurrenceIndex]
+      )
+      const occurrenceState = /** @type {OccurrenceState} */ (
+        regionState.occurrences[occurrenceIndex]
+      )
 
       handledByRuntime.get(regionPlan.spec.runtime)
         ?.add(occurrenceState.element)
@@ -1233,12 +1209,11 @@ class ScopeState {
     const specs = this.sinkSpecs
 
     for (let index = 0; index < specs.length; index += 1) {
-      const sink = specs[index]
-      const element = this.sinkElements[index]
-
-      if (sink !== undefined && element !== undefined) {
-        this.applyValue(sink.runtime, element, plan.sinks[index])
-      }
+      this.applyValue(
+        /** @type {SinkSpec} */ (specs[index]).runtime,
+        /** @type {Element} */ (this.sinkElements[index]),
+        plan.sinks[index],
+      )
     }
 
     for (let index = 0; index < plan.regions.length; index += 1) {
@@ -1288,12 +1263,10 @@ class RegionState {
     }
 
     for (let index = 0; index < plan.occurrences.length; index += 1) {
-      const occurrence = this.occurrences[index]
-      const occurrencePlan = plan.occurrences[index]
-
-      if (occurrence !== undefined && occurrencePlan !== undefined) {
-        this.applyOccurrence(occurrence, occurrencePlan)
-      }
+      this.applyOccurrence(
+        /** @type {OccurrenceState} */ (this.occurrences[index]),
+        /** @type {OccurrencePlan} */ (plan.occurrences[index]),
+      )
     }
   }
 
@@ -1418,26 +1391,27 @@ class RegionState {
         (stable === null || stable[index] === 0)
         && element.nextSibling !== reference
       ) {
-        placeBefore(parent, element, reference)
+        // An element already in the parent moves with moveBefore when the
+        // browser provides it. A new element, or one that other code took
+        // out of the parent, is inserted.
+        const move = /** @type {any} */ (parent).moveBefore
+
+        if (element.parentNode === parent && typeof move === 'function') {
+          move.call(parent, element, reference)
+        } else {
+          parent.insertBefore(element, reference)
+        }
       }
       reference = element
     }
 
+    // The longest run comes from the remembered order. Other code can
+    // reorder the elements, so a second walk reads the live DOM and moves
+    // only on a mismatch; without outside changes it moves nothing. The first
+    // walk cannot do this check for a stable element, because its next
+    // sibling can correctly be a lower-index element that has not moved yet.
     if (stable !== null) {
-      // The longest run comes from the remembered order. Other code can
-      // reorder the elements, so this pass reads the live DOM and moves only
-      // on a mismatch; without outside changes it moves nothing. The main
-      // walk cannot do this check for a stable element, because its next
-      // sibling can correctly be a lower-index element that has not moved yet.
-      reference = this.anchor
-      for (let index = next.length - 1; index >= 0; index -= 1) {
-        const element = /** @type {OccurrenceState} */ (next[index]).element
-
-        if (element.nextSibling !== reference) {
-          placeBefore(parent, element, reference)
-        }
-        reference = element
-      }
+      this.placeInOrder(next, null)
     }
   }
 
@@ -1587,41 +1561,6 @@ function stableOccurrences(previous, next) {
   }
 
   return stable
-}
-
-/**
- * Puts a keyed occurrence element before the reference node. An element that
- * is already in the parent moves with moveBefore when possible. A new element,
- * or one that other code took out of the parent, is inserted.
- *
- * @param {Node} parent
- * @param {Node} node
- * @param {Node} reference
- */
-function placeBefore(parent, node, reference) {
-  if (node.parentNode === parent) {
-    moveBefore(parent, node, reference)
-  } else {
-    parent.insertBefore(node, reference)
-  }
-}
-
-/**
- * Uses the state-preserving DOM move operation when the browser provides it.
- *
- * @param {Node} parent
- * @param {Node} node
- * @param {Node | null} reference
- */
-function moveBefore(parent, node, reference) {
-  const move = Reflect.get(parent, 'moveBefore')
-
-  if (typeof move === 'function') {
-    Reflect.apply(move, parent, [node, reference])
-    return
-  }
-
-  parent.insertBefore(node, reference)
 }
 
 class OccurrenceState {

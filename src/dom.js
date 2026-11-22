@@ -201,7 +201,7 @@ function queryElementTree(scope, selector, matches, hasOpenShadowRoot) {
  *
  * @param {Element | ShadowRoot} scope
  */
-function containsOpenShadowRoot(scope) {
+export function containsOpenShadowRoot(scope) {
   if (scope.nodeType === 1) {
     const element = /** @type {Element} */ (scope)
 
@@ -461,19 +461,120 @@ export function elementAtPath(root, path) {
 }
 
 /**
+ * The steps from one element to a set of its descendants. The paths that
+ * start with the same steps share one node, so one walk finds all targets.
+ *
+ * @typedef {object} Locator
+ * @property {number[]} slots The result positions that receive the element
+ * of this node.
+ * @property {number[]} steps The elementPath() steps to the child nodes:
+ * first the light DOM steps, then the shadow root steps, each in tree order.
+ * @property {Locator[]} nodes The node for each step.
+ */
+
+/**
+ * Compiles paths produced by elementPath() into one locator. The element
+ * for the path at index `i` goes to the result position `i`.
+ *
+ * @param {ReadonlyArray<ReadonlyArray<number>>} paths
+ * @returns {Locator}
+ */
+export function createLocator(paths) {
+  /** @returns {Locator} */
+  const createNode = () => ({slots: [], steps: [], nodes: []})
+  // Light DOM steps come before shadow root steps.
+  const rank = (/** @type {number} */ step) => step < 0 ? 2 ** 31 - step : step
+  const root = createNode()
+
+  paths.forEach((path, slot) => {
+    let node = root
+
+    for (const step of path) {
+      const {steps, nodes} = node
+      let at = steps.findIndex(other => rank(other) >= rank(step))
+
+      if (at < 0) {
+        at = steps.length
+      }
+
+      if (steps[at] !== step) {
+        steps.splice(at, 0, step)
+        nodes.splice(at, 0, createNode())
+      }
+
+      node = /** @type {Locator} */ (nodes[at])
+    }
+
+    node.slots.push(slot)
+  })
+
+  return root
+}
+
+/**
+ * Finds the elements of a locator below one element. The walk moves from
+ * sibling to sibling, so it reads each child list one time and does not
+ * create a child collection for each element.
+ *
+ * @param {Element} element
+ * @param {Locator} locator
+ * @param {Element[]} found Receives each element at its result position.
+ */
+export function locateElements(element, {slots, steps, nodes}, found) {
+  for (let index = 0; index < slots.length; index += 1) {
+    found[/** @type {number} */ (slots[index])] = element
+  }
+
+  // The child list of the last step: the element or its shadow root.
+  /** @type {Element | ShadowRoot | null | undefined} */
+  let list
+  /** @type {Element | null | undefined} */
+  let child
+  let position = 0
+
+  for (let index = 0; index < steps.length; index += 1) {
+    const step = /** @type {number} */ (steps[index])
+    const parent = step < 0 ? element.shadowRoot : element
+
+    if (list !== parent) {
+      list = parent
+      child = parent?.firstElementChild
+      position = 0
+    }
+
+    for (; position < (step < 0 ? -step - 1 : step); position += 1) {
+      child = child?.nextElementSibling
+    }
+
+    locateElements(
+      child ?? lostTarget(),
+      /** @type {Locator} */ (nodes[index]),
+      found,
+    )
+  }
+}
+
+/**
  * Imports an element and its open shadow trees without invoking custom-element
  * constructors in the inert planning document.
  *
  * @param {Document} document
  * @param {Element} source
+ * @param {boolean} [hasOpenShadowRoot] Whether the source contains an open
+ * shadow root, when the caller knows. A source that does not change gives
+ * the same answer for each import.
  * @returns {Element}
  */
-export function importElementTree(document, source) {
+export function importElementTree(
+  document,
+  source,
+  hasOpenShadowRoot = containsOpenShadowRoot(source),
+) {
   const imported = /** @type {Element} */ (document.importNode(source, true))
 
   // importNode() already copies the light DOM. Pairing the two trees is only
   // needed to reattach open shadow roots, which most components never have.
-  if (containsOpenShadowRoot(source)) {
+  if (hasOpenShadowRoot) {
     copyOpenShadowTrees(document, source, imported)
   }
 

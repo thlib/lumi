@@ -327,23 +327,35 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
 
         sink[writtenText] = text
 
+        const first = element.firstChild
+        // The text node, when the element has only that node.
+        const only = first !== null
+          && first.nodeType === 3
+          && first.nextSibling === null
+          ? /** @type {Text} */ (first)
+          : null
+
         // Without a remembered value, the element has its source content.
-        // One read keeps the first update free of a redundant write.
-        if (written === undefined && element.textContent === text) {
+        // One read keeps the first update free of a redundant write. An
+        // element without a child node, or with one text node, gives its
+        // text without the `textContent` of the element.
+        if (
+          written === undefined
+          && (
+            first === null
+              ? ''
+              : only !== null
+                ? only.data
+                : element.textContent
+          ) === text
+        ) {
           return false
         }
 
         // Keep the text node when the element has only that node. An empty
         // value removes all child nodes, as `textContent` does.
-        const first = element.firstChild
-
-        if (
-          text !== ''
-          && first !== null
-          && first.nodeType === 3
-          && first.nextSibling === null
-        ) {
-          /** @type {Text} */ (first).data = text
+        if (text !== '' && only !== null) {
+          only.data = text
         } else {
           element.textContent = text
         }
@@ -444,10 +456,7 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
       }
       useDomValue(
         // The attribute value, or false when the attribute is absent.
-        element => {
-          return element.hasAttribute(name)
-            && (element.getAttribute(name) ?? '')
-        },
+        element => element.getAttribute(name) ?? false,
         (element, value) => {
           if (value === false) {
             element.removeAttribute(name)

@@ -1,22 +1,22 @@
 # SPA performance comparison
 
-Generated 2026-08-04T15:41:08.517Z on linux 6.6.87.2-microsoft-standard-WSL2, Node v26.5.1,
+Generated 2026-11-22T12:50:38.846Z on linux 7.0.0-43-generic, Node v24.14.1,
 Chromium 149.0.7827.55. Lower timing and size values are better.
 
 ## Results
 
-Load, FCP, and update timing cells show the median, with p95 in parentheses,
-across 5 cache-disabled samples.
+First render, FCP, and update timing cells show the median, with p95 in
+parentheses, across 5 cache-disabled samples.
 
-| Framework | Cold load ms | FCP ms | Route ms/update | Filter ms/update | Tasks >10 ms count / total ms | Initial DOM nodes | DOM node delta |
+| Framework | First render ms | FCP ms | Route ms/update | Filter ms/update | Tasks >10 ms count / total ms | Initial DOM nodes | DOM node delta |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Lumi native 0.1.0 | 33.0 (85.6) | 84.0 (176.0) | 0.484 (0.502) | 0.085 (0.086) | 1 / 26.0 | 218 | 0 |
-| Lumi build 0.1.0 | 28.7 (29.1) | 80.0 (84.0) | 0.484 (0.513) | 0.082 (0.085) | 1 / 25.0 | 208 | 0 |
-| Lumi data-attribute DSL 0.1.0 | 32.1 (34.2) | 84.0 (88.0) | 0.605 (0.652) | 0.193 (0.199) | 1 / 58.3 | 586 | 0 |
-| Vue 3.5.40 | 11.4 (12.1) | 84.0 (88.0) | 0.621 (0.661) | 0.076 (0.077) | 1 / 23.0 | 197 | 0 |
-| React 19.2.8 | 10.9 (11.7) | 92.0 (108.0) | 0.783 (1.041) | 0.135 (0.167) | 1 / 48.5 | 197 | 0 |
-| Lit 3.3.3 | 11.8 (13.5) | 88.0 (92.0) | 0.556 (0.610) | 0.084 (0.114) | 1 / 25.5 | 197 | 0 |
-| Angular 21.2.18 | 35.8 (40.0) | 88.0 (92.0) | 0.718 (0.805) | 1.635 (1.645) | 0 / 0.0 | 199 | 0 |
+| Lumi native 0.1.2 | 66.8 (69.4) | 176.0 (192.0) | 0.789 (0.842) | 0.116 (0.118) | 2 / 50.6 | 218 | 0 |
+| Lumi build 0.1.2 | 55.5 (60.6) | 164.0 (176.0) | 0.764 (0.860) | 0.116 (0.124) | 1 / 35.2 | 208 | 0 |
+| Lumi data-attribute DSL 0.1.2 | 62.7 (64.8) | 176.0 (188.0) | 1.168 (1.288) | 0.330 (0.350) | 1 / 105.5 | 586 | 0 |
+| Vue 3.5.40 | 68.5 (72.1) | 184.0 (188.0) | 1.519 (1.658) | 0.134 (0.168) | 2 / 55.2 | 197 | 0 |
+| React 19.2.8 | 103.2 (109.4) | 204.0 (216.0) | 1.779 (2.144) | 0.244 (0.300) | 1 / 88.5 | 197 | 0 |
+| Lit 3.3.3 | 78.2 (87.2) | 180.0 (188.0) | 1.304 (1.623) | 0.162 (0.202) | 1 / 49.4 | 197 | 0 |
+| Angular 21.2.18 | 75.6 (77.0) | 180.0 (188.0) | 1.711 (1.811) | 1.741 (1.780) | 0 / 0.0 | 199 | 0 |
 
 ## 20k-row filter
 
@@ -27,13 +27,13 @@ bound the workload's memory use.
 
 | Framework | Record filter ms/update | Relative to Lumi build |
 | --- | ---: | ---: |
-| Lumi native 0.1.0 | 12.5 (13.0) | 0.98× |
-| Lumi build 0.1.0 | 12.7 (13.3) | 1.00× |
-| Lumi data-attribute DSL 0.1.0 | 16.2 (17.0) | 1.27× |
-| Vue 3.5.40 | 17.1 (19.5) | 1.34× |
-| React 19.2.8 | 18.9 (19.3) | 1.48× |
-| Lit 3.3.3 | 519.6 (528.0) | 40.81× |
-| Angular 21.2.18 | 154.8 (156.1) | 12.15× |
+| Lumi native 0.1.2 | 14.2 (14.7) | 1.00× |
+| Lumi build 0.1.2 | 14.2 (14.4) | 1.00× |
+| Lumi data-attribute DSL 0.1.2 | 16.7 (16.8) | 1.17× |
+| Vue 3.5.40 | 37.9 (38.8) | 2.66× |
+| React 19.2.8 | 48.6 (48.8) | 3.42× |
+| Lit 3.3.3 | 1203.9 (1204.4) | 84.58× |
+| Angular 21.2.18 | 398.2 (398.2) | 27.98× |
 
 ## Initial asset footprint
 
@@ -43,9 +43,9 @@ compressed transfer, not the benchmark server's uncompressed transfer.
 
 | Framework | Files | Raw | Gzip |
 | --- | ---: | ---: | ---: |
-| Lumi native | 5 | 108.1 KiB | 27.9 KiB |
-| Lumi build | 3 | 96.7 KiB | 26.9 KiB |
-| Lumi data-attribute DSL | 3 | 117.0 KiB | 31.7 KiB |
+| Lumi native | 5 | 103.1 KiB | 27.5 KiB |
+| Lumi build | 3 | 91.8 KiB | 26.6 KiB |
+| Lumi data-attribute DSL | 3 | 112.1 KiB | 31.4 KiB |
 | Vue | 4 | 111.4 KiB | 39.9 KiB |
 | React | 4 | 239.5 KiB | 73.7 KiB |
 | Lit | 4 | 68.1 KiB | 21.8 KiB |
@@ -55,15 +55,15 @@ compressed transfer, not the benchmark server's uncompressed transfer.
 
 Values below 1.00× are lower than Lumi build; values above 1.00× are higher.
 
-| Framework | Cold load | Route update | Filter update | Gzip assets |
+| Framework | First render | Route update | Filter update | Gzip assets |
 | --- | ---: | ---: | ---: | ---: |
-| Lumi native | 1.15× | 1.00× | 1.03× | 1.04× |
+| Lumi native | 1.20× | 1.03× | 1.00× | 1.04× |
 | Lumi build | 1.00× | 1.00× | 1.00× | 1.00× |
-| Lumi data-attribute DSL | 1.12× | 1.25× | 2.35× | 1.18× |
-| Vue | 0.40× | 1.28× | 0.92× | 1.48× |
-| React | 0.38× | 1.62× | 1.64× | 2.74× |
-| Lit | 0.41× | 1.15× | 1.02× | 0.81× |
-| Angular | 1.25× | 1.48× | 19.85× | 2.01× |
+| Lumi data-attribute DSL | 1.13× | 1.53× | 2.84× | 1.18× |
+| Vue | 1.23× | 1.99× | 1.16× | 1.50× |
+| React | 1.86× | 2.33× | 2.11× | 2.77× |
+| Lit | 1.41× | 1.71× | 1.40× | 0.82× |
+| Angular | 1.36× | 2.24× | 15.01× | 2.03× |
 
 ## Stress validation
 
@@ -73,24 +73,24 @@ same overview state after warmup and after the complete stress run.
 
 | Framework | Route updates | Filter updates | DOM delta range | Median heap delta |
 | --- | ---: | ---: | ---: | ---: |
-| Lumi native | 1000 | 1500 | 0 to 0 | +255.9 KiB |
-| Lumi build | 1000 | 1500 | 0 to 0 | +254.6 KiB |
-| Lumi data-attribute DSL | 1000 | 1500 | 0 to 0 | +231.1 KiB |
-| Vue | 1000 | 1500 | 0 to 0 | +345.4 KiB |
-| React | 1000 | 1500 | 0 to 0 | +416.4 KiB |
-| Lit | 1000 | 1500 | 0 to 0 | +216.2 KiB |
-| Angular | 1000 | 1500 | 0 to 0 | +579.0 KiB |
+| Lumi native | 1000 | 1500 | 0 to 0 | +224.7 KiB |
+| Lumi build | 1000 | 1500 | 0 to 0 | +223.9 KiB |
+| Lumi data-attribute DSL | 1000 | 1500 | 0 to 0 | +231.6 KiB |
+| Vue | 1000 | 1500 | 0 to 0 | +343.7 KiB |
+| React | 1000 | 1500 | 0 to 0 | +421.2 KiB |
+| Lit | 1000 | 1500 | 0 to 0 | +213.9 KiB |
+| Angular | 1000 | 1500 | 0 to 0 | +579.7 KiB |
 
 ## Reading the result
 
-- React recorded the lowest median cold-load time
-  (10.9 ms).
+- Lumi build recorded the lowest median first-render time
+  (55.5 ms).
 - Lumi build recorded the lowest median route-update time
-  (0.484 ms/update).
-- Vue recorded the lowest median project-filter time
-  (0.076 ms/update).
+  (0.764 ms/update).
+- Lumi native recorded the lowest median project-filter time
+  (0.116 ms/update).
 - Lumi native recorded the lowest median 20k-row filter time
-  (12.5 ms/update).
+  (14.2 ms/update).
 - Lit requested the smallest initial compressed asset set
   (21.8 KiB).
 
@@ -118,8 +118,23 @@ application code splitting.
   heap stability measurements.
 - CSS transitions and animations are disabled; the viewport is 1440 × 1000
   with reduced motion enabled.
-- Cold load is `PerformanceNavigationTiming.loadEventEnd`. Update timings are
-  measured inside the page with `performance.now()`.
+- First render is the time from navigation start until the application puts
+  its first visible page heading into the document. A visible page heading is
+  a `main h1` element that has text and is not inside a `[hidden]`
+  element. Before the page scripts run, the harness installs a
+  `MutationObserver`. The observer records `performance.now()` when its
+  callback finds the first visible page heading. For each loading strategy,
+  the value includes the download, parsing, and execution of the application
+  code and the first render. The value does not include the paint. FCP shows
+  the first paint.
+- The report does not compare `DOMContentLoaded` or load event times. An
+  application that starts from a dynamic `import()` can render after the
+  load event. An application that starts in a `DOMContentLoaded` listener
+  renders before the load event. Because of this, these event times include
+  the first render for some applications and not for others. The JSON report
+  keeps `PerformanceNavigationTiming.domContentLoadedEventEnd` and
+  `loadEventEnd` as the raw `domContentLoadedMs` and `loadMs` values.
+- Update timings are measured inside the page with `performance.now()`.
 - Tasks >10 ms are complete Chromium renderer `RunTask`
   intervals captured through the DevTools timeline. Zero means that no
   individual main-thread task crossed the threshold, not that the run was

@@ -1,24 +1,35 @@
 // @ts-check
 
 /**
- * Package-internal DOM planning primitives. The supported package surface is
- * exported only from index.js.
+ * The package-internal DOM planner and its sinks. The supported package
+ * surface is exported only from index.js.
+ *
+ * Each selector resolves one time, when a component mounts. An update
+ * prepares one value for each target and then commits the values. Only the
+ * elements that a markup write creates get their selector matches in each
+ * update.
  *
  * @internal
  */
 
 import {
+  createLocator,
+  elementAtPath,
   elementPath,
+  locateElements,
   markCreated,
-  pairElementTrees,
   queryOwnedElements,
   tasksByDepth,
 } from './dom.js'
-import { connectCardinalityDomBindings } from './cardinality.js'
+import {
+  duplicateKey,
+  matchIntegerKeys,
+  stableOccurrences,
+} from './keyed.js'
 import {warn} from './internal/diagnostics.js'
 import { noValue } from './internal/no-value.js'
 import { projectionError } from './internal/projection-error.js'
-import {rootContext} from './internal/projection-context.js'
+import {itemContext, rootContext} from './internal/projection-context.js'
 import { isStructuralBinding } from './internal/structural.js'
 
 const domBindingDescriptor = Symbol('Lumi DOM binding descriptor')
@@ -32,8 +43,6 @@ const textValues = 'a string, number, or boolean'
 // The cache of a binding that never caches a value.
 /** @type {WeakMap<Element, CachedValue>} */
 const unusedValues = new WeakMap()
-// Marks a batch match that an earlier hoisted content operation planned.
-const unplannedMatch = Symbol('Lumi unplanned match')
 
 /**
  * @typedef {string | number | boolean} TextValue
@@ -76,7 +85,7 @@ const unplannedMatch = Symbol('Lumi unplanned match')
  * @property {boolean} structural Whether the binding replaces the complete
  * contents of its element.
  * @property {DomBindingRuntime<Data> | undefined} [scope] The repeat
- * declaration that owns this declaration. The repeat planner sets it.
+ * declaration that owns this declaration. The planner sets it.
  * @property {WeakMap<Element, CachedValue>} values The last value that a
  * property binding gave to each element. Other bindings do not use it.
  * @property {boolean} requiresTrustedHTML
@@ -84,35 +93,8 @@ const unplannedMatch = Symbol('Lumi unplanned match')
  * that the declaration has reported.
  * @property {Window | null} view
  * @property {(projected: unknown) => unknown} normalize
- * @property {(element: Element, value: unknown) => void} apply
- * @property {(element: Element, value: unknown) => boolean} changes
- */
-
-/**
- * The prepared values for consecutive selector matches of one declaration,
- * from the match at `start`. `count` is the number of matches when the
- * values were prepared. A value of `unplannedMatch` marks a match that an
- * earlier operation planned.
- *
- * @template Data
- * @typedef {object} DomOperation
- * @property {DomBindingRuntime<Data>} runtime
- * @property {number} start
- * @property {number} count
- * @property {ReadonlyArray<unknown>} values
- */
-
-/**
- * One committed write of a content property.
- *
- * @template Data
- * @typedef {object} ContentWrite
- * @property {DomBindingRuntime<Data>} runtime
- * @property {Element} element
- * @property {boolean} isRefined Whether a later operation changed a
- * descendant of the element.
- * @property {boolean} isSuperseded Whether a later content write replaced
- * the contents of the same element.
+ * @property {(element: Element, value: unknown) => Element | void} apply
+ * Writes a value. A property binding gives the element that has the value.
  */
 
 /**
@@ -133,7 +115,7 @@ export function createDomBinding(descriptor) {
 }
 
 /**
- * Returns Lumi's internal descriptor for a built-in scalar binding.
+ * Returns Lumi's internal descriptor for a built-in DOM binding.
  *
  * @template Data
  * @param {import('./types.js').Binding<Data>} binding
@@ -146,7 +128,7 @@ export function getDomBindingDescriptor(binding) {
 /**
  * Returns one built-in DOM declaration and every nested declaration owned by
  * an optional repeat binding list. Nested declarations retain their owning
- * repeat so the cardinality planner can resolve their selectors locally.
+ * repeat so the planner can resolve their selectors locally.
  *
  * @template Data
  * @param {ReadonlyArray<DomBindingDescriptor<Data>>} descriptors
@@ -179,7 +161,12 @@ export function flattenDomBindingDescriptors(
 }
 
 /**
- * Connects all built-in scalar declarations to one DOM-aware update planner.
+ * Connects all built-in DOM declarations of one component to the planner.
+ *
+ * Each selector resolves one time, in the component source. A repeat makes
+ * its occurrences from the source, and a markup write is planned in a copy
+ * of the source, so these declarations need an inert copy. All other
+ * components resolve their selectors in the mounted root.
  *
  * @template Data
  * @param {Element} root
@@ -188,34 +175,40 @@ export function flattenDomBindingDescriptors(
  * @returns {import('./types.js').ConnectedBinding<Data>}
  */
 export function connectDomBindings(root, descriptors, ownedSubtrees = []) {
-  const trustedTypes = descriptors.some(requiresTrustedHTML)
+  const trustedTypes = descriptors.some(writesMarkup)
     ? trustedTypesFactory(root)
     : null
   const runtimes = descriptors.map((descriptor, index) => {
     return createDomBindingRuntime(descriptor, index, root, trustedTypes)
   })
+  const needsCopy = descriptors.some(descriptor => {
+    return descriptor.kind === 'repeat' || writesMarkup(descriptor)
+  })
 
-  if (!descriptors.some(descriptor => descriptor.kind === 'repeat')) {
-    return connectScalarDomBindings(root, runtimes, ownedSubtrees)
-  }
-
-  return connectCardinalityDomBindings(
+  return connectPlanner(
     root,
-    /** @type {Element} */ (
-      root.ownerDocument.implementation.createHTMLDocument()
-        .importNode(root, true)
-    ),
+    // Import into a document without a browsing context or custom-element
+    // registry. Unlike cloneNode() in the live document, this cannot invoke
+    // custom-element constructors.
+    needsCopy
+      ? /** @type {Element} */ (
+        root.ownerDocument.implementation.createHTMLDocument()
+          .importNode(root, true)
+      )
+      : root,
     runtimes,
     ownedSubtrees.map(subtree => elementPath(root, subtree)),
   )
 }
 
 /**
- * Tells whether a declaration writes markup, which must be TrustedHTML.
+ * Tells whether a declaration writes markup. Markup must be TrustedHTML. A
+ * markup write can create elements that the selectors match, so the
+ * selectors resolve again after such a write.
  *
  * @param {{kind: string, name?: string}} descriptor
  */
-function requiresTrustedHTML(descriptor) {
+function writesMarkup(descriptor) {
   return descriptor.kind === 'property'
     && (descriptor.name === 'innerHTML' || descriptor.name === 'outerHTML')
 }
@@ -227,13 +220,7 @@ function requiresTrustedHTML(descriptor) {
  * `normalize` gives the value to write for a projected value, or `noValue`
  * when the projected value asks for no DOM operation.
  *
- * `apply` writes a value when the DOM does not have it. `changes` is a
- * read-only check that tells whether applying one value to the current
- * DOM can change the result of a later selector resolution. Any attribute,
- * class token, property, or inline style write can do that. A text write
- * changes only text when the element keeps one non-empty text node, so only
- * a write that changes the element's child nodes otherwise (for example the
- * result of `:empty`) is a change.
+ * `apply` writes a value when the DOM does not have it.
  *
  * @template Data
  * @param {DomBindingDescriptor<Data>} descriptor
@@ -251,17 +238,16 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
     index,
     structural: isStructuralBinding(descriptor),
     values: kind === 'property' ? new WeakMap() : unusedValues,
-    requiresTrustedHTML: requiresTrustedHTML(descriptor),
+    requiresTrustedHTML: writesMarkup(descriptor),
     warnings: null,
     view: root.ownerDocument.defaultView,
     normalize: projected => projected ?? noValue,
     apply: () => {},
-    changes: () => false,
   }
 
   /**
-   * Sets `apply` and `changes` for a binding whose current DOM value can be
-   * read and compared with the normalized value.
+   * Sets `apply` for a binding whose current DOM value can be read and
+   * compared with the normalized value.
    *
    * @param {(element: Element) => unknown} read
    * @param {(element: Element, value: any) => void} write
@@ -272,7 +258,6 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
         write(element, value)
       }
     }
-    runtime.changes = (element, value) => read(element) !== value
   }
 
   switch (kind) {
@@ -291,76 +276,15 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
       }
       break
     case 'text':
-      runtime.normalize = projected => {
-        return isTextValue(projected)
-          ? String(projected)
-          : ignore(runtime, projected, textValues)
-      }
-      runtime.apply = (element, value) => {
-        const text = /** @type {string} */ (value)
-        const sink = /** @type {TextSink} */ (element)
-        const written = sink[writtenText]
-
-        if (written === text) {
-          return
-        }
-
-        sink[writtenText] = text
-
-        const first = element.firstChild
-        // The text node, when the element has only that node.
-        const only = first !== null
-          && first.nodeType === 3
-          && first.nextSibling === null
-          ? /** @type {Text} */ (first)
-          : null
-
-        // Without a remembered value, the element has its source content.
-        // One read keeps the first update free of a redundant write. An
-        // element without a child node, or with one text node, gives its
-        // text without the `textContent` of the element.
-        if (
-          written === undefined
-          && (
-            first === null
-              ? ''
-              : only !== null
-                ? only.data
-                : element.textContent
-          ) === text
-        ) {
-          return
-        }
-
-        // Keep the text node when the element has only that node. An empty
-        // value removes all child nodes, as `textContent` does.
-        if (text !== '' && only !== null) {
-          only.data = text
-        } else {
-          element.textContent = text
-        }
-      }
-      runtime.changes = (element, value) => {
-        if (/** @type {TextSink} */ (element)[writtenText] === value) {
-          return false
-        }
-
-        const first = element.firstChild
-
-        if (
-          value !== ''
-          && first !== null
-          && first.nodeType === 3
-          && first.nextSibling === null
-          && /** @type {Text} */ (first).data !== ''
-        ) {
-          return false
-        }
-
-        return element.textContent !== value
-      }
+      runtime.normalize = projected => normalizeText(runtime, projected)
+      runtime.apply = applyText
       break
-    case 'property':
+    case 'property': {
+      // An outerHTML write replaces its element. The binding then owns
+      // the element that took the place of its target.
+      /** @type {WeakMap<Element, Element> | null} */
+      const replacements = name === 'outerHTML' ? new WeakMap() : null
+
       if (runtime.requiresTrustedHTML) {
         runtime.normalize = projected => {
           if (projected === null || projected === undefined) {
@@ -384,28 +308,66 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
           return projected
         }
       }
-      runtime.apply = (element, value) => {
-        if (runtime.changes(element, value)) {
-          setProperty(element, name, value)
+      runtime.apply = (target, value) => {
+        let element = replacements?.get(target) ?? target
+        const projectedValue = runtime.requiresTrustedHTML
+          ? String(value)
+          : value
+        const previous = runtime.values.get(element)
+
+        // The property is current when it holds the projected value, or
+        // the value that the browser kept after the last write.
+        const current = /** @type {any} */ (element)[name]
+
+        if (
+          !Object.is(current, projectedValue)
+          && (
+            previous === undefined
+            || !Object.is(previous.projectedValue, projectedValue)
+            || !Object.is(previous.domValue, current)
+          )
+        ) {
+          const before = element.previousSibling
+          const after = element.nextSibling
+          const parent = element.parentNode
+
+          if (!Reflect.set(element, name, value)) {
+            throw new TypeError(
+              `Lumi could not set property "${name}" on <${element.localName}>`,
+            )
+          }
 
           if (runtime.structural) {
             /** @type {TextSink} */ (element)[writtenText] = undefined
           }
+
+          if (replacements !== null && parent !== null) {
+            const first = before === null
+              ? parent.firstChild
+              : before.nextSibling
+
+            // Markup with more or fewer than one element leaves no element
+            // for the binding.
+            if (
+              first !== null
+              && first.nodeType === 1
+              && first.nextSibling === after
+            ) {
+              element = /** @type {Element} */ (first)
+              replacements.set(target, element)
+            }
+          }
         }
 
         runtime.values.set(element, {
-          projectedValue: projectedCacheValue(runtime, value),
+          projectedValue,
           domValue: /** @type {any} */ (element)[name],
         })
-      }
-      runtime.changes = (element, value) => {
-        return !isPropertyCurrent(
-          /** @type {any} */ (element)[name],
-          projectedCacheValue(runtime, value),
-          runtime.values.get(element),
-        )
+
+        return element
       }
       break
+    }
     case 'attribute': {
       // Decided once per declaration so the update path pays one boolean test.
       const isAria = /^aria-/i.test(name)
@@ -540,444 +502,6 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
 }
 
 /**
- * Connects the planner for a component without a repeat binding. Each update
- * resolves every selector again. Content writes that can remove or create
- * elements are planned first, in DOM ancestor order, so the selectors for
- * their descendants see the planned result. All other writes are planned in
- * declaration order: each declaration resolves its selector after the
- * earlier planned writes.
- *
- * @template Data
- * @param {Element} root
- * @param {ReadonlyArray<DomBindingRuntime<Data>>} runtimes
- * @param {ReadonlyArray<Element>} ownedSubtrees
- * @returns {import('./types.js').ConnectedBinding<Data>}
- */
-function connectScalarDomBindings(root, runtimes, ownedSubtrees) {
-  const contentRuntimes = runtimes.filter(runtime => runtime.structural)
-  const lastRuntime = runtimes[runtimes.length - 1]
-  /** @type {Document | null} */
-  let planningDocument = null
-
-  return {
-    prepare(data) {
-      const context = rootContext(data)
-      // The planning view is the live tree, which the plan only reads, until
-      // a prepared write can change the result of a later selector
-      // resolution. From then on, the view is an inert copy that receives
-      // the planned writes. The operations and the projection calls have
-      // the same order in the two views, and each projection runs one time.
-      let view = root
-      let owned = ownedSubtrees
-      /** @type {WeakMap<Element, Element> | null} */
-      let liveByPlanned = null
-      /**
-       * The matches of each declaration in the live view. Null in the copy,
-       * where a planned write can change the matches.
-       *
-       * @type {Array<Element[] | undefined> | null}
-       */
-      let liveMatches = []
-      // Tells whether a prepared write can change a later selector result.
-      let changesMatches = false
-      // The last declaration is resolved before its own writes, and no other
-      // declaration is resolved after it.
-      let isLastBatch = false
-      // False until a content task is planned or a write creates elements.
-      let hasPlannedContent = false
-      /** @type {Array<DomOperation<Data>>} */
-      const operations = []
-      /** @type {Map<DomBindingRuntime<Data>, WeakSet<Element>>} */
-      const hoistedByRuntime = new Map()
-      /** @type {WeakMap<Element, ReadonlySet<number>>} */
-      const createdBy = new WeakMap()
-
-      /** @param {DomBindingRuntime<Data>} runtime */
-      const matchesOf = runtime => {
-        const known = liveMatches?.[runtime.index]
-
-        if (known !== undefined) {
-          return known
-        }
-
-        const elements = queryOwnedElements(
-          view,
-          runtime.descriptor.selector,
-          owned,
-        )
-
-        if (liveMatches !== null) {
-          liveMatches[runtime.index] = elements
-        }
-
-        return elements
-      }
-
-      /**
-       * Tells whether a content task planned this match, or whether the
-       * declaration created the element. A declaration cannot select its
-       * own output again.
-       *
-       * @param {DomBindingRuntime<Data>} runtime
-       * @param {Element} element
-       */
-      const isPlanned = (runtime, element) => {
-        return hasPlannedContent
-          && (
-            hoistedByRuntime.get(runtime)?.has(element) === true
-            || createdBy.get(element)?.has(runtime.index) === true
-          )
-      }
-
-      /**
-       * @param {DomBindingRuntime<Data>} runtime
-       * @param {Element} element
-       */
-      const markHoisted = (runtime, element) => {
-        let hoisted = hoistedByRuntime.get(runtime)
-
-        if (hoisted === undefined) {
-          hoisted = new WeakSet()
-          hoistedByRuntime.set(runtime, hoisted)
-        }
-
-        hoisted.add(element)
-        hasPlannedContent = true
-      }
-
-      /**
-       * Plans one value for one match. In the live view, this only finds
-       * whether the write can change a later selector result. In the copy,
-       * this applies the write.
-       *
-       * @param {DomBindingRuntime<Data>} runtime
-       * @param {Element} element
-       * @param {unknown} value
-       */
-      const plan = (runtime, element, value) => {
-        if (value === noValue) {
-          return
-        }
-
-        const kind = runtime.descriptor.kind
-        const name = /** @type {string} */ (runtime.descriptor.name)
-
-        if (runtime.structural) {
-          assertDoesNotReplaceOwnedSubtree(element, owned)
-
-          if (name === 'outerHTML' && element === view) {
-            throw new TypeError(
-              'Lumi cannot replace a mounted component root with outerHTML',
-            )
-          }
-        }
-
-        if (liveByPlanned === null) {
-          changesMatches ||= !isLastBatch && runtime.changes(element, value)
-          return
-        }
-
-        if (kind !== 'property') {
-          runtime.apply(element, value)
-          return
-        }
-
-        const live = liveByPlanned.get(element)
-
-        if (
-          isPropertyCurrent(
-            /** @type {any} */ (element)[name],
-            projectedCacheValue(runtime, value),
-            live === undefined ? undefined : runtime.values.get(live),
-          )
-        ) {
-          return
-        }
-
-        const parent = element.parentNode
-        const previous = element.previousSibling
-        const next = element.nextSibling
-
-        setProperty(element, name, value)
-        // The commit forgets the remembered text of the element also.
-        ;/** @type {TextSink} */ (element)[writtenText] = undefined
-
-        const history = new Set(createdBy.get(element)).add(runtime.index)
-        hasPlannedContent = true
-
-        if (name === 'innerHTML' || name === 'innerText') {
-          markCreated(element.firstChild, null, createdBy, history)
-        } else if (name === 'outerHTML' && parent !== null) {
-          markCreated(
-            previous === null ? parent.firstChild : previous.nextSibling,
-            next,
-            createdBy,
-            history,
-          )
-        }
-      }
-
-      /**
-       * Moves the plan from the live view to an inert copy of the component.
-       */
-      const stage = () => {
-        // Import into a document without a browsing context or
-        // custom-element registry. Unlike cloneNode() in the live document,
-        // this cannot invoke custom-element constructors merely to prepare
-        // an update. Each update imports a new detached copy, so one
-        // document serves all updates.
-        planningDocument ??= root.ownerDocument.implementation
-          .createHTMLDocument()
-        const copy = /** @type {Element} */ (
-          planningDocument.importNode(root, true)
-        )
-        /** @type {WeakMap<Element, Element>} */
-        const lives = new WeakMap()
-        /** @type {WeakMap<Element, Element>} */
-        const plannedByLive = new WeakMap()
-        pairElementTrees(root, copy, (live, planned) => {
-          lives.set(planned, live)
-          plannedByLive.set(live, planned)
-
-          // The commit does not write a remembered text again, so the copy
-          // must remember the same text.
-          const written = /** @type {TextSink} */ (live)[writtenText]
-
-          if (written !== undefined) {
-            /** @type {TextSink} */ (planned)[writtenText] = written
-          }
-        })
-
-        /** @param {Element | undefined} live */
-        const plannedElement = live => {
-          const planned = live === undefined
-            ? undefined
-            : plannedByLive.get(live)
-
-          if (planned === undefined) {
-            throw new Error('Lumi lost a DOM target while planning')
-          }
-
-          return planned
-        }
-
-        const matches = liveMatches ?? []
-        liveMatches = null
-        liveByPlanned = lives
-        view = copy
-        owned = ownedSubtrees.map(live => plannedElement(live))
-
-        // The operations were resolved in the unchanged live view, which
-        // equals the copy until the last of them. Replay them in the same
-        // order.
-        for (const {runtime, start, values} of operations) {
-          const elements = matches[runtime.index] ?? []
-
-          for (let index = 0; index < values.length; index += 1) {
-            const value = values[index]
-
-            if (value !== unplannedMatch) {
-              const element = plannedElement(elements[start + index])
-
-              if (runtime.structural) {
-                markHoisted(runtime, element)
-              }
-
-              plan(runtime, element, value)
-            }
-          }
-        }
-      }
-
-      // The matches where a content write can remove or create elements.
-      const contentTasks = () => {
-        return tasksByDepth(
-          view,
-          contentRuntimes,
-          matchesOf,
-          (runtime, element) => {
-            // A text write to an element without element children changes
-            // only text, so it keeps its declaration order.
-            const name = runtime.descriptor.name
-
-            return (
-              (name !== undefined && name !== 'textContent')
-              || element.firstElementChild !== null
-            ) && !isPlanned(runtime, element)
-          },
-        )
-      }
-
-      // In the live view, no task changes the tasks that follow it. In the
-      // copy, each task can remove or create the targets of other tasks.
-      for (let tasks = contentTasks(), next = 0; next < tasks.length;) {
-        const {runtime, element, matchIndex, count} = /** @type {typeof tasks[0]} */ (
-          tasks[next]
-        )
-        const value = projectValue(runtime, context, element, matchIndex)
-
-        operations.push({ runtime, start: matchIndex, count, values: [value] })
-        markHoisted(runtime, element)
-        plan(runtime, element, value)
-
-        if (changesMatches && liveByPlanned === null) {
-          stage()
-        }
-
-        if (liveByPlanned === null) {
-          next += 1
-        } else {
-          tasks = contentTasks()
-          next = 0
-        }
-      }
-
-      for (const runtime of runtimes) {
-        const elements = matchesOf(runtime)
-        let planned = false
-        const values = elements.map((element, matchIndex) => {
-          if (isPlanned(runtime, element)) {
-            return unplannedMatch
-          }
-
-          planned = true
-          return projectValue(runtime, context, element, matchIndex)
-        })
-
-        if (!planned) {
-          continue
-        }
-
-        operations.push({ runtime, start: 0, count: elements.length, values })
-        isLastBatch = runtime === lastRuntime
-
-        for (let index = 0; index < elements.length; index += 1) {
-          if (values[index] !== unplannedMatch) {
-            plan(
-              runtime,
-              /** @type {Element} */ (elements[index]),
-              values[index],
-            )
-          }
-        }
-
-        if (changesMatches && liveByPlanned === null) {
-          stage()
-        }
-      }
-
-      return {
-        commit() {
-          // A content property can establish content that the rules for
-          // descendants refine. Its cache then gets the final refined DOM,
-          // not the intermediate write, so the next update does not rebuild
-          // a subtree that is still correct. A later content write to the
-          // same element supersedes the earlier write.
-          /** @type {Array<ContentWrite<Data>>} */
-          const contentWrites = []
-
-          for (const {runtime, start, count, values} of operations) {
-            const selector = runtime.descriptor.selector
-            const elements = queryOwnedElements(
-              root,
-              selector,
-              ownedSubtrees,
-            )
-
-            if (elements.length !== count) {
-              throw new Error(
-                `Lumi DOM changed while committing selector "${selector}"`,
-              )
-            }
-
-            for (let index = 0; index < values.length; index += 1) {
-              const value = values[index]
-
-              if (value !== unplannedMatch && value !== noValue) {
-                const element = /** @type {Element} */ (
-                  elements[start + index]
-                )
-
-                for (const write of contentWrites) {
-                  if (write.element === element) {
-                    write.isSuperseded ||= runtime.structural
-                  } else {
-                    write.isRefined ||= write.element.contains(element)
-                  }
-                }
-
-                if (
-                  runtime.structural
-                  && runtime.descriptor.kind === 'property'
-                  && runtime.descriptor.name !== 'outerHTML'
-                ) {
-                  contentWrites.push({
-                    runtime,
-                    element,
-                    isRefined: false,
-                    isSuperseded: false,
-                  })
-                }
-
-                runtime.apply(element, value)
-              }
-            }
-          }
-
-          for (const write of contentWrites) {
-            if (write.isRefined && !write.isSuperseded) {
-              /** @type {CachedValue} */ (
-                write.runtime.values.get(write.element)
-              ).domValue = /** @type {any} */ (write.element)[
-                /** @type {string} */ (write.runtime.descriptor.name)
-              ]
-            }
-          }
-        },
-      }
-    },
-
-    destroy() {
-      planningDocument = null
-    },
-  }
-}
-
-/**
- * Keeps the authenticated TrustedHTML object intact for the native setter,
- * while comparing its immutable string data with the DOM's serialized value.
- *
- * @template Data
- * @param {DomBindingRuntime<Data>} runtime
- * @param {unknown} value
- * @returns {unknown}
- */
-function projectedCacheValue(runtime, value) {
-  return runtime.requiresTrustedHTML ? String(value) : value
-}
-
-/**
- * @template Data
- * @param {DomBindingRuntime<Data>} runtime
- * @param {import('./types.js').ProjectionContext<Data, Data>} context
- * @param {Element} element
- * @param {number} matchIndex
- * @returns {unknown}
- */
-function projectValue(runtime, context, element, matchIndex) {
-  const descriptor = runtime.descriptor
-  let projected
-
-  try {
-    projected = descriptor.project(context, element)
-  } catch (error) {
-    throw projectionError(descriptor, matchIndex, error)
-  }
-
-  return runtime.normalize(projected)
-}
-
-/**
  * The key of the text that a `text` binding last gave to an element. A `text`
  * binding compares its projection with this value and does not read the live
  * DOM. The element holds the value, not the binding, so overlapping
@@ -990,47 +514,70 @@ const writtenText = Symbol('lumi.text')
 /** @typedef {Element & {[writtenText]?: string | undefined}} TextSink */
 
 /**
+ * Gives the text to write for the projected value of a `text` binding, or
+ * `noValue` for a value that is not text.
+ *
+ * @param {{descriptor: {kind: string, selector: string}}} runtime
+ * @param {unknown} projected
+ * @returns {string | typeof noValue}
+ */
+function normalizeText(runtime, projected) {
+  return typeof projected === 'string'
+    ? projected
+    : isTextValue(projected)
+      ? String(projected)
+      : ignore(/** @type {DomBindingRuntime<any>} */ (runtime), projected, textValues)
+}
+
+/**
+ * Writes the value of a `text` binding. All text bindings use this one
+ * function, so the call that writes a value sees few different functions.
+ *
  * @param {Element} element
- * @param {string} name
  * @param {unknown} value
  */
-function setProperty(element, name, value) {
-  if (!Reflect.set(element, name, value)) {
-    throw new TypeError(
-      `Lumi could not set property "${name}" on <${element.localName}>`,
-    )
+function applyText(element, value) {
+  const text = /** @type {string} */ (value)
+  const sink = /** @type {TextSink} */ (element)
+  const written = sink[writtenText]
+
+  if (written === text) {
+    return
   }
-}
 
-/**
- * Returns whether a property already holds the projected value, either
- * directly or as the value that the browser kept after the previous write.
- *
- * @param {unknown} current
- * @param {unknown} projectedValue
- * @param {CachedValue | undefined} previous
- * @returns {boolean}
- */
-function isPropertyCurrent(current, projectedValue, previous) {
-  return Object.is(current, projectedValue)
-    || (
-      previous !== undefined
-      && Object.is(previous.projectedValue, projectedValue)
-      && Object.is(previous.domValue, current)
-    )
-}
+  sink[writtenText] = text
 
-/**
- * @param {Element} target
- * @param {ReadonlyArray<Element>} ownedSubtrees
- */
-function assertDoesNotReplaceOwnedSubtree(target, ownedSubtrees) {
-  for (const owned of ownedSubtrees) {
-    if (target.contains(owned)) {
-      throw new Error(
-        'Lumi content binding cannot replace a child subtree',
-      )
-    }
+  const first = element.firstChild
+  // The text node, when the element has only that node.
+  const only = first !== null
+    && first.nodeType === 3
+    && first.nextSibling === null
+    ? /** @type {Text} */ (first)
+    : null
+
+  // Without a remembered value, the element has its source content.
+  // One read keeps the first update free of a redundant write. An
+  // element without a child node, or with one text node, gives its
+  // text without the `textContent` of the element.
+  if (
+    written === undefined
+    && (
+      first === null
+        ? ''
+        : only !== null
+          ? only.data
+          : element.textContent
+    ) === text
+  ) {
+    return
+  }
+
+  // Keep the text node when the element has only that node. An empty
+  // value removes all child nodes, as `textContent` does.
+  if (text !== '' && only !== null) {
+    only.data = text
+  } else {
+    element.textContent = text
   }
 }
 
@@ -1119,4 +666,1401 @@ function isTextValue(value) {
   return typeof value === 'string'
     || typeof value === 'number'
     || typeof value === 'boolean'
+}
+
+/**
+ * @typedef {object} Runtime
+ * @property {{
+ *   kind: 'repeat' | 'text' | 'property' | 'attribute' | 'class' | 'style',
+ *   selector: string,
+ *   project: (input: unknown, el: Element) => unknown,
+ *   key?: ((input: unknown) => unknown) | undefined,
+ *   name?: string,
+ *   scope?: Runtime['descriptor']
+ * }} descriptor
+ * @property {number} index
+ * @property {Runtime | undefined} [scope] The repeat declaration that owns
+ * this declaration. A declaration at the component boundary has none.
+ * @property {WeakMap<Element, {
+ *   projectedValue: unknown,
+ *   domValue: unknown
+ * }>} values
+ * @property {(projected: unknown) => unknown} normalize
+ * @property {(element: Element, value: unknown) => Element | void} apply
+ */
+
+/**
+ * @typedef {object} SinkSpec
+ * @property {Runtime} runtime
+ * @property {Element} target
+ * @property {number} matchIndex
+ * @property {number[]} path
+ */
+
+/**
+ * @typedef {object} ScopeSpec
+ * @property {SinkSpec[]} sinks
+ * @property {RegionSpec[]} regions
+ * @property {import('./dom.js').Locator} locator Finds the sink elements,
+ * then the repeat targets, below the element of the scope.
+ */
+
+/**
+ * @typedef {object} RegionSpec
+ * @property {Runtime} runtime
+ * @property {Element} target
+ * @property {number} matchIndex
+ * @property {number[]} path
+ * @property {SinkSpec[]} ownSinks
+ * @property {ScopeSpec} scope
+ * @property {ReadonlyArray<unknown> | null} acceptedKeys The keys of the
+ * last item list that passed the duplicate check.
+ * @property {boolean} keepsContexts Whether a plan keeps the context of each
+ * occurrence. Only dynamic planning reads the contexts.
+ */
+
+/**
+ * The plan of the component boundary: one prepared value for each sink
+ * spec and one plan for each region spec, at the same index.
+ *
+ * @typedef {object} ScopePlan
+ * @property {ReadonlyArray<unknown>} sinks
+ * @property {ReadonlyArray<RegionPlan>} regions
+ */
+
+/**
+ * The plan of all occurrences of one region. A plan holds no object for
+ * each occurrence or each sink: the values of all occurrences are in one
+ * array, so an update creates few objects.
+ *
+ * @typedef {object} RegionPlan
+ * @property {RegionSpec} spec
+ * @property {number} count The number of occurrences.
+ * @property {ReadonlyArray<unknown> | null} keys The key of each occurrence,
+ * or null for a repeat without a key projection.
+ * @property {ReadonlyArray<import('./types.js').ProjectionContext<unknown, unknown>> | null} contexts
+ * The context of each occurrence, when the spec keeps contexts.
+ * @property {ReadonlyArray<unknown>} values The prepared values. Each
+ * occurrence has the values of the own sinks, then the values of the sinks
+ * in its scope.
+ * @property {ReadonlyArray<RegionPlan>} regions The plans of the nested
+ * regions: for each occurrence, one plan for each region in its scope.
+ * @property {boolean} isNoop Whether the projection asked for no operation.
+ */
+
+/**
+ * @typedef {(runtime: Runtime, element: Element, value: unknown) => void} ApplyValue
+ */
+
+/**
+ * @typedef {object} DynamicOperation
+ * @property {Runtime} runtime
+ * @property {number} matchIndex
+ * @property {number} matchCount
+ * @property {unknown} value
+ */
+
+/**
+ * Creates the planner of one component.
+ *
+ * Each selector resolves one time, in the blueprint. The plan of an update
+ * holds one value for each target, and the commit writes the values to the
+ * mounted elements at the same positions. Only the elements that a markup
+ * write creates get their selector matches in each update.
+ *
+ * The renderer knows only ordinary JavaScript values. Projection syntax and
+ * data lookup conventions remain application concerns.
+ *
+ * @param {Element} root
+ * @param {Element} blueprintRoot
+ * @param {ReadonlyArray<Runtime>} runtimes
+ * @param {ReadonlyArray<number[]>} ownedSubtreePaths
+ */
+function connectPlanner(
+  root,
+  blueprintRoot,
+  runtimes,
+  ownedSubtreePaths,
+) {
+  const runtimeByDescriptor = new Map(
+    runtimes.map(runtime => [runtime.descriptor, runtime]),
+  )
+
+  // A declaration in the binding list of a repeat resolves its selector in
+  // the occurrences of that repeat only.
+  for (const runtime of runtimes) {
+    const owner = runtime.descriptor.scope
+
+    if (owner !== undefined) {
+      runtime.scope = runtimeByDescriptor.get(owner)
+    }
+  }
+
+  const needsDynamicPlanning = runtimes.some(runtime => {
+    return writesMarkup(runtime.descriptor)
+  })
+  const scope = compileScope(
+    blueprintRoot,
+    runtimes,
+    ownedSubtreePaths.map(path => elementAtPath(blueprintRoot, path)),
+    needsDynamicPlanning,
+  )
+  /** @type {ScopeState | null} */
+  let state = null
+  // The markup writes of one commit: each runtime, then its element.
+  /** @type {Array<Runtime | Element>} */
+  const markupWrites = []
+
+  /**
+   * Writes one prepared value and records a markup write.
+   *
+   * @type {ApplyValue}
+   */
+  const applyMarkup = (runtime, target, value) => {
+    if (value !== noValue) {
+      const element = runtime.apply(target, value)
+
+      if (element !== undefined && writesMarkup(runtime.descriptor)) {
+        markupWrites.push(runtime, element)
+      }
+    }
+  }
+  const apply = needsDynamicPlanning ? applyMarkup : applyLive
+
+  return {
+    prepare(/** @type {unknown} */ data) {
+      const plan = prepareScope(scope, rootContext(data))
+      const dynamicOperations = needsDynamicPlanning
+        ? prepareDynamicOperations(
+          blueprintRoot,
+          scope,
+          plan,
+          runtimes,
+          ownedSubtreePaths,
+          data,
+        )
+        : []
+      return {
+        commit() {
+          if (state === null) {
+            state = new ScopeState(root)
+
+            if (blueprintRoot === root) {
+              // The selectors resolved in the mounted root, so the targets
+              // are the mounted elements.
+              state.sinks = scope.sinks.map(sink => sink.target)
+            } else {
+              state.connect(scope)
+            }
+          }
+
+          markupWrites.length = 0
+          state.apply(scope, apply, plan.sinks, 0, plan.regions, 0)
+
+          if (needsDynamicPlanning) {
+            commitDynamicOperations(
+              root,
+              dynamicOperations,
+              ownedSubtreePaths,
+              apply,
+            )
+
+            // A markup write can establish content that the rules for its
+            // descendants refine. The cache gets the final content, so the
+            // next update does not rebuild unchanged markup and discard
+            // persistent descendant nodes.
+            for (let index = 0; index < markupWrites.length; index += 2) {
+              const runtime = /** @type {Runtime} */ (markupWrites[index])
+              const element = /** @type {Element} */ (markupWrites[index + 1])
+              const cached = runtime.values.get(element)
+
+              if (cached !== undefined) {
+                cached.domValue = /** @type {any} */ (element)[
+                  /** @type {string} */ (runtime.descriptor.name)
+                ]
+              }
+            }
+          }
+        },
+      }
+    },
+
+    destroy() {
+      state?.destroy()
+      state = null
+    },
+  }
+}
+
+/**
+ * Writes one prepared value to its element.
+ *
+ * @param {Runtime} runtime
+ * @param {Element} element
+ * @param {unknown} value
+ */
+function applyLive(runtime, element, value) {
+  if (value !== noValue) {
+    // Text is the most frequent binding. The call through `runtime.apply`
+    // sees the functions of all bindings on the page, so the engine cannot
+    // inline it. This direct call stays fast.
+    if (runtime.apply === applyText) {
+      applyText(element, value)
+    } else {
+      runtime.apply(element, value)
+    }
+  }
+}
+
+/**
+ * Compiles static template locations into nested positional regions.
+ *
+ * @param {Element} root
+ * @param {ReadonlyArray<Runtime>} runtimes
+ * @param {ReadonlyArray<Element>} ownedSubtrees
+ * @param {boolean} keepsContexts
+ * @returns {ScopeSpec}
+ */
+function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
+  /** @type {Map<Element, RegionSpec>} */
+  const regionByTarget = new Map()
+  /** @returns {ScopeSpec} */
+  const createScope = () => {
+    return { sinks: [], regions: [], locator: createLocator([]) }
+  }
+  const rootScope = createScope()
+
+  for (const runtime of runtimes) {
+    if (runtime.descriptor.kind !== 'repeat') {
+      continue
+    }
+
+    const targets = queryRuntimeElements(root, runtime, ownedSubtrees)
+
+    if (targets.length === 0) {
+      throw new TypeError(
+        `Lumi repeat selector "${runtime.descriptor.selector}" must match `
+        + 'the component source',
+      )
+    }
+
+    for (let matchIndex = 0; matchIndex < targets.length; matchIndex += 1) {
+      const target = /** @type {Element} */ (targets[matchIndex])
+
+      if (target === root) {
+        throw new TypeError(
+          'Lumi cannot repeat a mounted component root',
+        )
+      }
+
+      if (ownedSubtrees.some(owned => target.contains(owned))) {
+        throw new Error(
+          'Lumi repeat cannot replace a child subtree',
+        )
+      }
+
+      // The last repeat declaration owns the number of occurrences at
+      // this template location.
+      regionByTarget.set(target, {
+        runtime,
+        target,
+        matchIndex,
+        path: [],
+        ownSinks: [],
+        scope: createScope(),
+        acceptedKeys: null,
+        keepsContexts,
+      })
+    }
+  }
+
+  // The regions of each scope are in document order.
+  const regions = [...regionByTarget.values()].sort((left, right) => {
+    const following = 4
+    return left.target.compareDocumentPosition(right.target) & following
+      ? -1
+      : 1
+  })
+
+  /**
+   * Finds the region whose occurrences contain a target. A declaration in
+   * the binding list of a repeat must be in a region of that repeat.
+   *
+   * @param {Runtime} runtime
+   * @param {Element} target
+   * @param {boolean} strict
+   */
+  const parentRegion = (runtime, target, strict) => {
+    const parent = nearestRegion(target, regions, strict, runtime.scope)
+
+    if (runtime.scope !== undefined && parent === null) {
+      throw new Error('Lumi repeat binding escaped its owning repeat')
+    }
+
+    return parent
+  }
+
+  for (const region of regions) {
+    const parent = parentRegion(region.runtime, region.target, true)
+
+    region.path = elementPath(parent?.target ?? root, region.target)
+    ;(parent?.scope ?? rootScope).regions.push(region)
+  }
+
+  // The sinks of each scope are in declaration order.
+  for (const runtime of runtimes) {
+    if (runtime.descriptor.kind === 'repeat') {
+      continue
+    }
+
+    const targets = queryRuntimeElements(root, runtime, ownedSubtrees)
+
+    for (let matchIndex = 0; matchIndex < targets.length; matchIndex += 1) {
+      const target = /** @type {Element} */ (targets[matchIndex])
+      const parent = parentRegion(runtime, target, false)
+
+      if (
+        runtime.scope !== undefined
+        && nearestRegion(target, regions, false) !== parent
+      ) {
+        throw new Error(
+          'Lumi repeat binding crossed a repeat it does not own',
+        )
+      }
+
+      if (isStructuralBinding(runtime.descriptor)) {
+        if (ownedSubtrees.some(owned => target.contains(owned))) {
+          throw new Error(
+            'Lumi content binding cannot replace a child subtree',
+          )
+        }
+
+        if (runtime.descriptor.name === 'outerHTML' && target === root) {
+          throw new TypeError(
+            'Lumi cannot replace a mounted component root with outerHTML',
+          )
+        }
+      }
+
+      const sink = {
+        runtime,
+        target,
+        matchIndex,
+        path: elementPath(parent?.target ?? root, target),
+      }
+      const scope = parent?.scope ?? rootScope
+
+      if (parent !== null && sink.path.length === 0) {
+        parent.ownSinks.push(sink)
+        continue
+      }
+
+      // Array regions cannot safely live below another rule that replaces
+      // their complete containing subtree.
+      if (
+        isStructuralBinding(runtime.descriptor)
+        && scope.regions.some(region => target.contains(region.target))
+      ) {
+        throw new Error(
+          'Lumi repeat cannot overlap a content-owning binding',
+        )
+      }
+
+      scope.sinks.push(sink)
+    }
+  }
+
+  for (const scope of [rootScope, ...regions.map(region => region.scope)]) {
+    // A markup write goes before the other bindings, in ancestor order, so
+    // that markup that is equal to the current content replaces no element
+    // that an earlier declaration changed. The sort is stable.
+    scope.sinks.sort((left, right) => markupDepth(left) - markupDepth(right))
+    scope.locator = createLocator(
+      [...scope.sinks, ...scope.regions].map(spec => spec.path),
+    )
+  }
+
+  return rootScope
+}
+
+/**
+ * @param {Element} target
+ * @param {ReadonlyArray<RegionSpec>} regions
+ * @param {boolean} strict
+ * @param {Runtime} [runtime] The repeat declaration that must own the
+ * region.
+ * @returns {RegionSpec | null}
+ */
+function nearestRegion(target, regions, strict, runtime) {
+  /** @type {RegionSpec | null} */
+  let nearest = null
+
+  for (const candidate of regions) {
+    if (
+      (runtime !== undefined && candidate.runtime !== runtime)
+      ||
+      (strict && candidate.target === target)
+      || !candidate.target.contains(target)
+    ) {
+      continue
+    }
+
+    if (
+      nearest === null
+      || nearest.target.contains(candidate.target)
+    ) {
+      nearest = candidate
+    }
+  }
+
+  return nearest
+}
+
+/**
+ * The sort position of a sink: its depth for a markup write, and a position
+ * after all markup writes for each other sink.
+ *
+ * @param {SinkSpec} sink
+ */
+function markupDepth(sink) {
+  return writesMarkup(sink.runtime.descriptor) ? sink.path.length : 1e9
+}
+
+/**
+ * @param {ScopeSpec} scope
+ * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
+ * @returns {ScopePlan}
+ */
+function prepareScope(scope, context) {
+  return {
+    sinks: prepareSinks(
+      scope.sinks,
+      context,
+      new Array(scope.sinks.length),
+      0,
+    ),
+    regions: scope.regions.map(spec => prepareRegion(spec, context)),
+  }
+}
+
+/** @type {unknown[]} */
+const noValues = []
+
+/** @type {RegionPlan[]} */
+const noRegionPlans = []
+
+/**
+ * Prepares one value for each sink spec, in the order of the specs, from
+ * the position `offset` of `values`.
+ *
+ * @param {ReadonlyArray<SinkSpec>} specs
+ * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
+ * @param {unknown[]} values
+ * @param {number} offset
+ * @returns {unknown[]}
+ */
+function prepareSinks(specs, context, values, offset) {
+  for (let index = 0; index < specs.length; index += 1) {
+    const spec = /** @type {SinkSpec} */ (specs[index])
+    const runtime = spec.runtime
+    const projected = projectValue(
+      runtime,
+      spec.target,
+      spec.matchIndex,
+      context,
+    )
+    // A direct call for text, as in applyLive().
+    values[offset + index] = runtime.apply === applyText
+      ? normalizeText(runtime, projected)
+      : runtime.normalize(projected)
+  }
+
+  return values
+}
+
+/**
+ * Compares two repeat keys with the equality rules of a `Map`.
+ *
+ * @param {unknown} left
+ * @param {unknown} right
+ */
+function sameKey(left, right) {
+  return left === right || (left !== left && right !== right)
+}
+
+/**
+ * @param {RegionSpec} spec
+ * @param {ReadonlyArray<unknown>} keys
+ * @param {number} count The number of keys to examine
+ */
+function rejectDuplicateKey(spec, keys, count) {
+  const index = duplicateKey(keys, count)
+
+  if (index !== -1) {
+    const firstIndex = keys.findIndex(key => sameKey(key, keys[index]))
+
+    throw new TypeError(
+      `Lumi repeat key for "${spec.runtime.descriptor.selector}" `
+      + `is duplicated at item positions ${firstIndex + 1} `
+      + `and ${index + 1}`,
+    )
+  }
+}
+
+/**
+ * @param {RegionSpec} spec
+ * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
+ * @returns {RegionPlan}
+ */
+function prepareRegion(spec, context) {
+  const resolved = spec.runtime.normalize(
+    projectValue(spec.runtime, spec.target, spec.matchIndex, context),
+  )
+
+  if (resolved === noValue) {
+    return {
+      spec,
+      count: 0,
+      keys: null,
+      contexts: null,
+      values: noValues,
+      regions: noRegionPlans,
+      isNoop: true,
+    }
+  }
+
+  const entries = /** @type {unknown[]} */ (resolved)
+  const length = entries.length
+  const ownSinks = spec.ownSinks
+  const sinks = spec.scope.sinks
+  const nested = spec.scope.regions
+  const ownCount = ownSinks.length
+  const valueCount = ownCount + sinks.length
+  const nestedCount = nested.length
+  // An empty array is never written, so all plans can share one.
+  /** @type {unknown[]} */
+  const values = valueCount * length === 0
+    ? noValues
+    : new Array(valueCount * length)
+  /** @type {RegionPlan[]} */
+  const regions = nestedCount * length === 0
+    ? noRegionPlans
+    : new Array(nestedCount * length)
+  const contexts = spec.keepsContexts ? new Array(length) : null
+  const project = spec.runtime.descriptor.key
+  // Keys that are equal to the accepted keys, position for position, are
+  // unique. The key list starts at the first key that is different, so an
+  // update with the same keys builds no list and makes no check.
+  const acceptedKeys = spec.acceptedKeys
+  /** @type {unknown[] | null} */
+  let keys = null
+  // The number of keys in the list.
+  let keyCount = 0
+
+  try {
+    for (let index = 0; index < length; index += 1) {
+      const occurrenceContext = itemContext(context, entries[index], index)
+
+      if (contexts !== null) {
+        contexts[index] = occurrenceContext
+      }
+
+      if (project !== undefined) {
+        // The key projection does not get an occurrence element, because
+        // reconciliation has not selected the element.
+        let key
+
+        try {
+          key = project(occurrenceContext)
+        } catch (error) {
+          throw projectionError(
+            spec.runtime.descriptor,
+            spec.matchIndex,
+            error,
+            index,
+          )
+        }
+
+        if (
+          keys === null
+          && (
+            acceptedKeys === null
+            || index >= acceptedKeys.length
+            || !sameKey(acceptedKeys[index], key)
+          )
+        ) {
+          keys = new Array(length)
+
+          for (let earlier = 0; earlier < index; earlier += 1) {
+            keys[earlier] = /** @type {ReadonlyArray<unknown>} */ (
+              acceptedKeys
+            )[earlier]
+          }
+        }
+
+        if (keys !== null) {
+          keys[index] = key
+          keyCount = index + 1
+        }
+      }
+
+      const offset = index * valueCount
+      prepareSinks(ownSinks, occurrenceContext, values, offset)
+      prepareSinks(sinks, occurrenceContext, values, offset + ownCount)
+
+      for (let region = 0; region < nestedCount; region += 1) {
+        regions[index * nestedCount + region] = prepareRegion(
+          /** @type {RegionSpec} */ (nested[region]),
+          occurrenceContext,
+        )
+      }
+    }
+  } catch (error) {
+    // One check of all keys comes after the projections. A duplicate key
+    // comes before a projection that failed later, so its error has priority.
+    if (keys !== null) {
+      rejectDuplicateKey(spec, keys, keyCount)
+    }
+    throw error
+  }
+
+  if (keys !== null) {
+    rejectDuplicateKey(spec, keys, keyCount)
+  }
+
+  /** @type {ReadonlyArray<unknown> | null} */
+  let planKeys = null
+
+  if (project !== undefined) {
+    // Without a different key, the accepted array itself is the key list.
+    // The commit sees the same array again and compares no keys.
+    planKeys = spec.acceptedKeys = keys
+      ?? (
+        acceptedKeys === null || acceptedKeys.length === length
+          ? acceptedKeys ?? []
+          : acceptedKeys.slice(0, length)
+      )
+  }
+
+  return {
+    spec,
+    count: length,
+    keys: planKeys,
+    contexts,
+    values,
+    regions,
+    isNoop: false,
+  }
+}
+
+/**
+ * Evaluates one projection with its repeat context.
+ *
+ * @param {Runtime} runtime
+ * @param {Element} element
+ * @param {number} matchIndex
+ * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
+ * @returns {unknown}
+ */
+function projectValue(runtime, element, matchIndex, context) {
+  try {
+    return runtime.descriptor.project(context, element)
+  } catch (error) {
+    throw projectionError(runtime.descriptor, matchIndex, error)
+  }
+}
+
+/**
+ * Markup writes are uncommon. When a component has one, this applies the
+ * plan of the static scope to an inert copy of the source, then finds the
+ * selector matches that the static scope does not own. A component without
+ * a markup write does not do this work.
+ *
+ * @param {Element} blueprintRoot
+ * @param {ScopeSpec} scope
+ * @param {ScopePlan} plan
+ * @param {ReadonlyArray<Runtime>} runtimes
+ * @param {ReadonlyArray<number[]>} ownedSubtreePaths
+ * @param {unknown} data
+ * @returns {DynamicOperation[]}
+ */
+function prepareDynamicOperations(
+  blueprintRoot,
+  scope,
+  plan,
+  runtimes,
+  ownedSubtreePaths,
+  data,
+) {
+  const planningRoot = /** @type {Element} */ (
+    blueprintRoot.ownerDocument.importNode(blueprintRoot, true)
+  )
+  const ownedSubtrees = ownedSubtreePaths.map(path => {
+    return elementAtPath(planningRoot, path)
+  })
+  // The targets that each declaration has planned.
+  /** @type {Map<Runtime, WeakSet<Element>>} */
+  const handledByRuntime = new Map(
+    runtimes.map(runtime => [runtime, new WeakSet()]),
+  )
+  /** @type {WeakMap<Element, import('./types.js').ProjectionContext<unknown, unknown>>} */
+  const contextByElement = new WeakMap()
+  /** @type {WeakMap<Element, ReadonlySet<number>>} */
+  const createdBy = new WeakMap()
+  /** @type {DynamicOperation[]} */
+  const operations = []
+
+  contextByElement.set(planningRoot, rootContext(data))
+
+  /**
+   * Applies one value to the copy. A markup write marks the elements
+   * that it creates, so that the declaration cannot select its own output.
+   *
+   * @param {Runtime} runtime
+   * @param {Element} element
+   * @param {unknown} value
+   */
+  const applyPlanned = (runtime, element, value) => {
+    handledByRuntime.get(runtime)?.add(element)
+
+    if (value !== noValue) {
+      const before = element.previousSibling
+      const after = element.nextSibling
+      const parent = element.parentNode
+
+      runtime.apply(element, value)
+
+      if (writesMarkup(runtime.descriptor)) {
+        const history = new Set(createdBy.get(element)).add(runtime.index)
+
+        // An outerHTML write replaces the element. The created elements
+        // are between its two siblings.
+        if (runtime.descriptor.name === 'innerHTML') {
+          markCreated(element.firstChild, null, createdBy, history)
+        } else if (parent !== null) {
+          markCreated(
+            before === null ? parent.firstChild : before.nextSibling,
+            after,
+            createdBy,
+            history,
+          )
+        }
+      }
+    }
+  }
+
+  const planningState = new ScopeState(planningRoot)
+  planningState.connect(scope)
+  planningState.apply(scope, applyPlanned, plan.sinks, 0, plan.regions, 0)
+  trackOccurrences(
+    planningState.regions,
+    plan.regions,
+    0,
+    handledByRuntime,
+    contextByElement,
+  )
+
+  /** @param {Runtime} runtime */
+  const matchesOf = runtime => {
+    return queryRuntimeElements(planningRoot, runtime, ownedSubtrees)
+  }
+
+  /**
+   * Prepares the value for one target that the static scope does not own.
+   *
+   * @param {Runtime} runtime
+   * @param {Element} element
+   * @param {number} matchIndex
+   * @param {number} matchCount
+   */
+  const prepare = (runtime, element, matchIndex, matchCount) => {
+    const projected = projectValue(
+      runtime,
+      element,
+      matchIndex,
+      findContext(element, contextByElement),
+    )
+
+    if (
+      runtime.descriptor.kind === 'property'
+      && runtime.descriptor.name === 'outerHTML'
+    ) {
+      throw new TypeError(
+        'Lumi outerHTML binding targets created during array planning '
+        + 'must exist in the component source',
+      )
+    }
+
+    const value = runtime.normalize(projected)
+    operations.push({ runtime, matchIndex, matchCount, value })
+    return value
+  }
+
+  const structuralRuntimes = runtimes.filter(isStructuralRuntime)
+
+  // Each content write can remove or create the targets of other tasks, so
+  // the tasks are listed again after each write.
+  while (true) {
+    const task = tasksByDepth(
+      planningRoot,
+      structuralRuntimes,
+      matchesOf,
+      (runtime, element) => {
+        return handledByRuntime.get(runtime)?.has(element) !== true
+          && createdBy.get(element)?.has(runtime.index) !== true
+      },
+    )[0]
+
+    if (task === undefined) {
+      break
+    }
+
+    const { runtime, element } = task
+    applyPlanned(
+      runtime,
+      element,
+      prepare(runtime, element, task.matchIndex, task.count),
+    )
+  }
+
+  for (const runtime of runtimes) {
+    if (isStructuralRuntime(runtime)) {
+      continue
+    }
+
+    const elements = matchesOf(runtime)
+    const handled = handledByRuntime.get(runtime)
+
+    for (let matchIndex = 0; matchIndex < elements.length; matchIndex += 1) {
+      const element = /** @type {Element} */ (elements[matchIndex])
+
+      if (handled?.has(element) !== true) {
+        prepare(runtime, element, matchIndex, elements.length)
+      }
+    }
+  }
+
+  return operations
+}
+
+/**
+ * Applies the values for the targets that the static scope does not own.
+ *
+ * @param {Element} root
+ * @param {ReadonlyArray<DynamicOperation>} operations
+ * @param {ReadonlyArray<number[]>} ownedSubtreePaths
+ * @param {ApplyValue} apply
+ */
+function commitDynamicOperations(root, operations, ownedSubtreePaths, apply) {
+  const ownedSubtrees = ownedSubtreePaths.map(path => {
+    return elementAtPath(root, path)
+  })
+
+  for (const { runtime, matchIndex, matchCount, value } of operations) {
+    const elements = queryRuntimeElements(root, runtime, ownedSubtrees)
+    const element = elements[matchIndex]
+
+    if (elements.length !== matchCount || element === undefined) {
+      throw new Error(
+        'Lumi DOM changed while committing selector '
+        + `"${runtime.descriptor.selector}"`,
+      )
+    }
+
+    apply(runtime, element, value)
+  }
+}
+
+/**
+ * @param {Runtime} runtime
+ */
+function isStructuralRuntime(runtime) {
+  return runtime.descriptor.kind === 'repeat'
+    || isStructuralBinding(runtime.descriptor)
+}
+
+/**
+ * @param {Element} el
+ * @param {WeakMap<Element, import('./types.js').ProjectionContext<unknown, unknown>>} contextByElement
+ */
+function findContext(el, contextByElement) {
+  let current = /** @type {Element | null} */ (el)
+
+  while (current !== null) {
+    const context = contextByElement.get(current)
+
+    if (context !== undefined) {
+      return context
+    }
+
+    current = current.parentElement
+  }
+
+  throw new Error('Lumi lost a dynamic projection context')
+}
+
+/**
+ * Records the context of each occurrence after the plan of the static scope
+ * is applied to the inert copy. Only a component with a markup write does
+ * this traversal.
+ *
+ * @param {ReadonlyArray<RegionState>} states The regions of one scope.
+ * @param {ReadonlyArray<RegionPlan>} plans
+ * @param {number} offset The position of the plan of the first region.
+ * @param {Map<Runtime, WeakSet<Element>>} handledByRuntime
+ * @param {WeakMap<Element, import('./types.js').ProjectionContext<unknown, unknown>>} contextByElement
+ */
+function trackOccurrences(
+  states,
+  plans,
+  offset,
+  handledByRuntime,
+  contextByElement,
+) {
+  for (let region = 0; region < states.length; region += 1) {
+    const plan = /** @type {RegionPlan} */ (plans[offset + region])
+    const occurrences = /** @type {RegionState} */ (states[region]).occurrences
+    const nestedCount = plan.spec.scope.regions.length
+
+    // After the plan is applied, a region has one occurrence for each
+    // planned occurrence.
+    for (let index = 0; index < plan.count; index += 1) {
+      const occurrence = /** @type {ScopeState} */ (occurrences[index])
+
+      handledByRuntime.get(plan.spec.runtime)?.add(occurrence.element)
+      contextByElement.set(
+        occurrence.element,
+        /** @type {import('./types.js').ProjectionContext<unknown, unknown>} */ (
+          plan.contexts?.[index]
+        ),
+      )
+      trackOccurrences(
+        occurrence.regions,
+        plan.regions,
+        index * nestedCount,
+        handledByRuntime,
+        contextByElement,
+      )
+    }
+  }
+}
+
+/** @type {Element[]} */
+const noElements = []
+
+/** @type {RegionState[]} */
+const noRegionStates = []
+
+/**
+ * The state of one scope: the component boundary, or one occurrence of a
+ * repeat. One object holds the element and its targets, so each occurrence
+ * needs few objects.
+ */
+class ScopeState {
+  /** @param {Element} element */
+  constructor(element) {
+    this.element = element
+    // Null until the scope gets its first values.
+    /** @type {Element[] | null} */
+    this.sinks = null
+    /** @type {RegionState[]} */
+    this.regions = noRegionStates
+  }
+
+  /**
+   * Finds the sink elements and the repeat targets in one walk.
+   *
+   * @param {ScopeSpec} spec
+   */
+  connect(spec) {
+    const sinkCount = spec.sinks.length
+    const regionCount = spec.regions.length
+
+    if (sinkCount + regionCount === 0) {
+      this.sinks = noElements
+      return
+    }
+
+    /** @type {Element[]} */
+    const found = new Array(sinkCount + regionCount)
+    locateElements(this.element, spec.locator, found)
+
+    if (regionCount > 0) {
+      this.regions = spec.regions.map((region, index) => {
+        return new RegionState(
+          /** @type {Element} */ (found[sinkCount + index]),
+          region,
+        )
+      })
+      // The first occurrence of a region can go away. Do not keep it here.
+      found.length = sinkCount
+    }
+
+    this.sinks = found
+  }
+
+  /**
+   * Applies the values of a connected scope.
+   *
+   * @param {ScopeSpec} spec
+   * @param {ApplyValue} apply
+   * @param {ReadonlyArray<unknown>} values
+   * @param {number} offset The position of the value of the first sink.
+   * @param {ReadonlyArray<RegionPlan>} plans
+   * @param {number} planOffset The position of the plan of the first region.
+   */
+  apply(spec, apply, values, offset, plans, planOffset) {
+    const specs = spec.sinks
+    const sinks = /** @type {Element[]} */ (this.sinks)
+
+    for (let index = 0; index < specs.length; index += 1) {
+      apply(
+        /** @type {SinkSpec} */ (specs[index]).runtime,
+        /** @type {Element} */ (sinks[index]),
+        values[offset + index],
+      )
+    }
+
+    const regions = this.regions
+
+    for (let index = 0; index < regions.length; index += 1) {
+      /** @type {RegionState} */ (regions[index]).apply(
+        /** @type {RegionPlan} */ (plans[planOffset + index]),
+        apply,
+      )
+    }
+  }
+
+  destroy() {
+    for (const region of this.regions) {
+      region.destroy()
+    }
+  }
+
+  /** Removes an occurrence. */
+  remove() {
+    this.destroy()
+    this.element.remove()
+  }
+}
+
+class RegionState {
+  /**
+   * @param {Element} target
+   * @param {RegionSpec} spec
+   */
+  constructor(target, spec) {
+    this.spec = spec
+    this.anchor = target.ownerDocument.createComment('lumi')
+    target.after(this.anchor)
+    this.occurrences = [new ScopeState(target)]
+    // The key of each occurrence. Null until the first keyed plan: then the
+    // one occurrence is the source element, which has no key.
+    /** @type {ReadonlyArray<unknown> | null} */
+    this.keys = null
+  }
+
+  /**
+   * @param {RegionPlan} plan
+   * @param {ApplyValue} apply
+   */
+  apply(plan, apply) {
+    if (plan.isNoop) {
+      return
+    }
+
+    if (plan.keys === null) {
+      this.applyPositional(plan.count)
+    } else {
+      this.applyKeyed(plan.keys)
+    }
+
+    const spec = this.spec
+    const scope = spec.scope
+    const ownSinks = spec.ownSinks
+    const ownCount = ownSinks.length
+    const valueCount = ownCount + scope.sinks.length
+    const nestedCount = scope.regions.length
+    const occurrences = this.occurrences
+    const values = plan.values
+
+    for (let index = 0; index < plan.count; index += 1) {
+      const occurrence = /** @type {ScopeState} */ (occurrences[index])
+      const offset = index * valueCount
+
+      if (occurrence.sinks === null) {
+        occurrence.connect(scope)
+      }
+
+      for (let sink = 0; sink < ownCount; sink += 1) {
+        apply(
+          /** @type {SinkSpec} */ (ownSinks[sink]).runtime,
+          occurrence.element,
+          values[offset + sink],
+        )
+      }
+
+      occurrence.apply(
+        scope,
+        apply,
+        values,
+        offset + ownCount,
+        plan.regions,
+        index * nestedCount,
+      )
+    }
+  }
+
+  /** @param {number} count */
+  applyPositional(count) {
+    const occurrences = this.occurrences
+
+    while (occurrences.length < count) {
+      occurrences.push(this.createOccurrence())
+    }
+
+    while (occurrences.length > count) {
+      occurrences.pop()?.remove()
+    }
+  }
+
+  /**
+   * Reconciles keyed occurrences with the fewest DOM operations: one removal
+   * for each removed key, one insertion at the final position for each new
+   * key, and moves only for surviving occurrences outside the longest run
+   * that is already in the new relative order. The data is authoritative:
+   * if other code reordered the elements, this restores the projected order.
+   *
+   * @param {ReadonlyArray<unknown>} keys
+   */
+  applyKeyed(keys) {
+    const previous = this.occurrences
+    const previousKeys = this.keys
+    const count = keys.length
+
+    // With the same keys in the same order, no occurrence is new, removed,
+    // or reordered. Only the check against the live DOM order remains.
+    if (
+      previousKeys !== null
+      && (previousKeys === keys || hasSameKeys(previousKeys, keys))
+    ) {
+      this.placeInOrder(previous, null)
+      return
+    }
+
+    const matched = previousKeys === null
+      ? null
+      : matchIntegerKeys(previousKeys, keys)
+
+    if (matched !== null) {
+      const {sources, flags, ordered} = matched
+      /** @type {ScopeState[]} */
+      const next = new Array(count)
+
+      for (let index = 0; index < count; index += 1) {
+        const source = /** @type {number} */ (sources[index])
+
+        next[index] = source === -1
+          ? this.detachedOccurrence()
+          : /** @type {ScopeState} */ (previous[source])
+      }
+      for (let index = 0; index < previous.length; index += 1) {
+        if (flags[count + index] === 0) {
+          previous[index]?.remove()
+        }
+      }
+
+      this.placeInOrder(next, ordered ? null : flags)
+      this.occurrences = next
+      this.keys = keys
+      return
+    }
+
+    /** @type {Map<unknown, number>} */
+    const available = new Map()
+    let pristineIndex = -1
+
+    if (previousKeys === null) {
+      pristineIndex = previous.length - 1
+    } else {
+      for (let index = 0; index < previous.length; index += 1) {
+        available.set(previousKeys[index], index)
+      }
+    }
+
+    /** @type {ScopeState[]} */
+    const next = new Array(count)
+    // The previous index of each occurrence, or -1 for a new occurrence.
+    const sources = new Int32Array(count)
+    // Old indexes of survivors, in new order, are increasing until the first
+    // reorder. Only a reorder needs the longest-run computation.
+    let lastSource = -1
+    let ordered = true
+
+    for (let index = 0; index < count; index += 1) {
+      const key = keys[index]
+      let source = available.get(key)
+
+      if (source !== undefined) {
+        available.delete(key)
+      } else if (pristineIndex !== -1) {
+        source = pristineIndex
+        pristineIndex = -1
+      }
+
+      if (source === undefined) {
+        next[index] = this.detachedOccurrence()
+        sources[index] = -1
+      } else {
+        next[index] = /** @type {ScopeState} */ (previous[source])
+        sources[index] = source
+
+        if (source < lastSource) {
+          ordered = false
+        }
+        lastSource = source
+      }
+    }
+
+    if (pristineIndex !== -1) {
+      previous[pristineIndex]?.remove()
+    }
+    for (const source of available.values()) {
+      previous[source]?.remove()
+    }
+
+    this.placeInOrder(next, ordered ? null : stableOccurrences(sources))
+    this.occurrences = next
+    this.keys = keys
+  }
+
+  /**
+   * Makes the live DOM order match the order of the occurrences.
+   *
+   * @param {ReadonlyArray<ScopeState>} next
+   * @param {Uint8Array | null} stable 1 at each index that must not move in
+   * the first walk, or null when no occurrence changed its relative order.
+   */
+  placeInOrder(next, stable) {
+    const parent = this.anchor.parentNode
+
+    if (parent === null) {
+      throw new Error('Lumi array binding anchor lost its parent')
+    }
+
+    let reference = /** @type {Node} */ (this.anchor)
+
+    // Without a reorder, every element is checked against the live DOM here,
+    // so this one walk also repairs changes that other code made. A new
+    // occurrence is detached, so its next sibling never matches: it gets one
+    // insertion at its final position.
+    for (let index = next.length - 1; index >= 0; index -= 1) {
+      const element = /** @type {ScopeState} */ (next[index]).element
+
+      if (
+        (stable === null || stable[index] === 0)
+        && element.nextSibling !== reference
+      ) {
+        // moveBefore keeps the state of an element that is already in the
+        // parent, but it rejects a new element and one that other code
+        // took out of the parent. Those elements are inserted.
+        if (element.parentNode === parent) {
+          parent.moveBefore(element, reference)
+        } else {
+          parent.insertBefore(element, reference)
+        }
+      }
+      reference = element
+    }
+
+    // The longest run comes from the remembered order. Other code can
+    // reorder the elements, so a second walk reads the live DOM and moves
+    // only on a mismatch; without outside changes it moves nothing. The first
+    // walk cannot do this check for a stable element, because its next
+    // sibling can correctly be a lower-index element that has not moved yet.
+    if (stable !== null) {
+      this.placeInOrder(next, null)
+    }
+  }
+
+  /** @returns {ScopeState} */
+  createOccurrence() {
+    const occurrence = this.detachedOccurrence()
+    this.anchor.parentNode?.insertBefore(occurrence.element, this.anchor)
+    return occurrence
+  }
+
+  /** @returns {ScopeState} */
+  detachedOccurrence() {
+    return new ScopeState(
+      /** @type {Element} */ (
+        this.anchor.ownerDocument.importNode(this.spec.target, true)
+      ),
+    )
+  }
+
+  destroy() {
+    for (const occurrence of this.occurrences) {
+      occurrence.remove()
+    }
+    this.occurrences = []
+    this.anchor.remove()
+  }
+}
+
+/**
+ * Tells whether two key lists have the same keys in the same order.
+ *
+ * @param {ReadonlyArray<unknown>} left
+ * @param {ReadonlyArray<unknown>} right
+ */
+function hasSameKeys(left, right) {
+  const length = left.length
+
+  if (right.length !== length) {
+    return false
+  }
+
+  for (let index = 0; index < length; index += 1) {
+    if (!sameKey(left[index], right[index])) {
+      return false
+    }
+  }
+
+  return true
+}
+
+/**
+ * Resolves a declaration against its component boundary or, when it belongs
+ * to a repeat binding list, against occurrences of that owning repeat only.
+ *
+ * @param {Element} root
+ * @param {Runtime} runtime
+ * @param {ReadonlyArray<Element>} ownedSubtrees
+ * @returns {Element[]}
+ */
+function queryRuntimeElements(root, runtime, ownedSubtrees) {
+  const selector = runtime.descriptor.selector
+
+  if (runtime.scope === undefined) {
+    return queryOwnedElements(root, selector, ownedSubtrees)
+  }
+
+  const elements = new Set()
+
+  for (const scopeElement of queryRuntimeElements(
+    root,
+    runtime.scope,
+    ownedSubtrees,
+  )) {
+    for (const element of queryOwnedElements(
+      scopeElement,
+      selector,
+      ownedSubtrees,
+    )) {
+      elements.add(element)
+    }
+  }
+
+  return [...elements]
 }

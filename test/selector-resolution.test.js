@@ -54,13 +54,17 @@ function mountRow(
 }
 
 /**
- * The writer is declared before the reader, so the reader's selector must
- * see the writer's prepared result in the same update.
+ * Each selector resolves one time, in the component source. A write of a
+ * binding does not change the elements that a different binding matched.
+ *
+ * `closed` is a source that the reader does not match. `open` is a source
+ * that the reader matches.
  */
 const writers = [
   {
     name: 'classToggle',
-    markup: '<section><p class="row"><span class="label">default</span></p></section>',
+    closed: '<section><p class="row"><span class="label">default</span></p></section>',
+    open: '<section><p class="row open"><span class="label">default</span></p></section>',
     writer: classToggle('.row', 'open', (
       /** @type {{data: RowData}} */ { data },
     ) => data.open),
@@ -68,7 +72,8 @@ const writers = [
   },
   {
     name: 'attr',
-    markup: '<section><p class="row"><span class="label">default</span></p></section>',
+    closed: '<section><p class="row"><span class="label">default</span></p></section>',
+    open: '<section><p class="row" data-open><span class="label">default</span></p></section>',
     writer: attr('.row', 'data-open', (
       /** @type {{data: RowData}} */ { data },
     ) => data.open),
@@ -76,7 +81,8 @@ const writers = [
   },
   {
     name: 'prop',
-    markup: '<section><p class="row" hidden><span class="label">default</span></p></section>',
+    closed: '<section><p class="row" hidden><span class="label">default</span></p></section>',
+    open: '<section><p class="row"><span class="label">default</span></p></section>',
     writer: prop('.row', (
       /** @type {{data: RowData}} */ { data },
     ) => !data.open, 'hidden'),
@@ -84,7 +90,8 @@ const writers = [
   },
   {
     name: 'style',
-    markup: '<section><p class="row"><span class="label">default</span></p></section>',
+    closed: '<section><p class="row"><span class="label">default</span></p></section>',
+    open: '<section><p class="row" style="display: block"><span class="label">default</span></p></section>',
     writer: style('.row', 'display', (
       /** @type {{data: RowData}} */ { data },
     ) => data.open ? 'block' : ''),
@@ -92,9 +99,25 @@ const writers = [
   },
 ]
 
-for (const { name, markup, writer, reader } of writers) {
-  test(`a ${name} write changes which elements a later selector matches`, () => {
-    const row = mountRow(markup, [
+for (const { name, closed, open, writer, reader } of writers) {
+  test(`a ${name} write gives a later selector no new match`, () => {
+    const row = mountRow(closed, [
+      writer,
+      text(reader, ({ data }) => data.label),
+    ])
+
+    // The reader has no match in the source, so its projection does not
+    // run, also after the writer makes the selector match.
+    row.mounted.update({ open: true, label: 'first' })
+    assert.equal(row.textOf('.label'), 'default')
+
+    row.mounted.update({ open: true, label: 'second' })
+    assert.equal(row.textOf('.label'), 'default')
+    row.mounted.unmount()
+  })
+
+  test(`a ${name} write keeps the matches of a later selector`, () => {
+    const row = mountRow(open, [
       writer,
       text(reader, ({ data }) => data.label),
     ])
@@ -106,10 +129,11 @@ for (const { name, markup, writer, reader } of writers) {
     row.mounted.update({ open: true, label: 'first' })
     assert.equal(row.mutations(), 0)
 
-    // The reader no longer matches, so its projection does not run and the
-    // label keeps its previous value.
-    row.mounted.update({ open: false, label: 'gone' })
-    assert.equal(row.textOf('.label'), 'first')
+    // The selector does not match the element now, but the binding keeps
+    // the element that it matched in the source.
+    row.mounted.update({ open: false, label: 'closed' })
+    assert.equal(row.mounted.root.querySelector(reader), null)
+    assert.equal(row.textOf('.label'), 'closed')
 
     row.mounted.update({ open: true, label: 'back' })
     assert.equal(row.textOf('.label'), 'back')
@@ -117,12 +141,12 @@ for (const { name, markup, writer, reader } of writers) {
   })
 }
 
-test('a projection failure after a selector-visible write changes no DOM', () => {
+test('a projection failure after an earlier write changes no DOM', () => {
   const row = mountRow(
     '<section><p class="row"><span class="label">default</span></p></section>',
     [
       classToggle('.row', 'open', ({ data }) => data.open),
-      text('.row.open .label', ({ data }) => {
+      text('.row .label', ({ data }) => {
         if (data.fail === true) {
           throw new Error('projection failed')
         }
@@ -145,7 +169,7 @@ test('a projection failure after a selector-visible write changes no DOM', () =>
   row.mounted.unmount()
 })
 
-test('each projection runs once for each match when planning moves to the inert copy', () => {
+test('each projection runs once for each source match, in declaration order', () => {
   /** @type {string[]} */
   const calls = []
   const row = mountRow(
@@ -155,7 +179,7 @@ test('each projection runs once for each match when planning moves to the inert 
         calls.push('writer')
         return data.open
       }),
-      text('.row.open .label', ({ data }) => {
+      text('.row .label', ({ data }) => {
         calls.push('reader')
         return data.label
       }),
@@ -164,42 +188,51 @@ test('each projection runs once for each match when planning moves to the inert 
 
   row.mounted.update({ open: true, label: 'first' })
   assert.deepEqual(calls, ['writer', 'reader', 'reader'])
+
+  row.mounted.update({ open: false, label: 'second' })
+  assert.deepEqual(
+    calls,
+    ['writer', 'reader', 'reader', 'writer', 'reader', 'reader'],
+  )
   row.mounted.unmount()
 })
 
-test('a text write that empties an element changes a later :empty selector', () => {
+test('a text write does not change the matches of a later :empty selector', () => {
   const { window } = new JSDOM()
   installMoveBefore(window)
   const document = window.document
   const template = document.createElement('template')
-  template.innerHTML = '<section><span class="count"></span><span class="hint">default</span></section>'
+  template.innerHTML = '<section><span class="count"></span><span class="hint">default</span><span class="count">0</span><span class="hint">default</span></section>'
   const mounted = component({
     source: template,
     bindings: [
       text('.count', ({ data }) => /** @type {{count: string}} */ (data).count),
-      text('.count:empty + .hint', () => 'none'),
+      text('.count:empty + .hint', ({ data }) => {
+        return `hint ${/** @type {{count: string}} */ (data).count}`
+      }),
     ],
   }).mount(document.body)
-  const hint = () => mounted.root.querySelector('.hint')?.textContent
+  const hints = () => Array.from(
+    mounted.root.querySelectorAll('.hint'),
+    hint => hint.textContent,
+  )
 
+  // Only the first count is empty in the source.
   mounted.update({ count: '3' })
-  assert.equal(hint(), 'default')
+  assert.deepEqual(hints(), ['hint 3', 'default'])
 
   mounted.update({ count: '' })
-  assert.equal(hint(), 'none')
-
-  mounted.update({ count: '4' })
-  assert.equal(hint(), 'none')
+  assert.deepEqual(hints(), ['hint ', 'default'])
   mounted.unmount()
 })
 
-test('content that replaces elements is still planned before a later selector', () => {
+test('a text write that removes elements keeps the other targets', () => {
   const row = mountRow(
     '<section><h1 class="title"><b>old</b></h1><p class="row"><span class="label">default</span></p></section>',
     [
       text('.title', ({ data }) => data.label),
       classToggle('.row', 'open', ({ data }) => data.open),
-      text('.row.open .label', ({ data }) => data.label),
+      text('.row .label', ({ data }) => data.label),
     ],
   )
 
@@ -214,22 +247,29 @@ test('content that replaces elements is still planned before a later selector', 
   row.mounted.unmount()
 })
 
-test('staged structural dependencies keep the declaration order of other writes', () => {
+test('an element that other code adds is not a target', () => {
   const row = mountRow(
-    '<section><h1 class="title">old <b class="name">x</b></h1><p class="row"><span class="label">default</span></p></section>',
-    [
-      text('.title .name', ({ data }) => data.label),
-      classToggle('.row', 'open', ({ data }) => data.open),
-      text('.row.open .label', ({ data }) => data.label),
-    ],
+    '<section><p class="row"><span class="label">default</span></p></section>',
+    [text('.label', ({ data }) => data.label)],
   )
+  const added = row.mounted.root.ownerDocument.createElement('span')
+  added.className = 'label'
+  added.textContent = 'foreign'
 
   row.mounted.update({ open: true, label: 'first' })
-  assert.equal(row.textOf('.title .name'), 'first')
-  assert.equal(row.textOf('.label'), 'first')
+  row.mounted.root.append(added)
+  row.mounted.update({ open: true, label: 'second' })
 
-  row.mounted.update({ open: false, label: 'second' })
-  assert.equal(row.textOf('.title .name'), 'second')
-  assert.equal(row.textOf('.label'), 'first')
+  assert.equal(row.textOf('.row .label'), 'second')
+  assert.equal(added.textContent, 'foreign')
+
+  // The binding keeps a target that other code moved or removed.
+  const label = /** @type {Element} */ (
+    row.mounted.root.querySelector('.row .label')
+  )
+  label.remove()
+  row.mounted.update({ open: true, label: 'third' })
+  assert.equal(label.textContent, 'third')
+  assert.equal(added.textContent, 'foreign')
   row.mounted.unmount()
 })

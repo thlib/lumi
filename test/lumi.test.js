@@ -660,6 +660,98 @@ test('renders inside a shadow root that the author owns', () => {
   assert.equal(shadow.querySelector('section'), null)
 })
 
+test('mounts on a shadow root', () => {
+  const { document, window } = createDocument()
+  /** @type {string[]} */
+  const handled = []
+  const template = createTemplate(document, `
+    <section>
+      <h2 class="title"></h2>
+      <ul><li class="item"><button type="button"></button></li></ul>
+    </section>
+  `)
+  const view = component({
+    source: template,
+    bindings: [
+      text('.title', ({data}) => {
+        return /** @type {{title: string}} */ (data).title
+      }),
+      repeat(
+        '.item',
+        ({data}) => /** @type {{items: string[]}} */ (data).items,
+        ({item}) => item,
+        [text('button', ({item}) => /** @type {string} */ (item))],
+      ),
+      on('button', 'click', (_event, element) => {
+        handled.push(element.textContent ?? '')
+      }),
+    ],
+  })
+
+  for (const mode of /** @type {const} */ (['open', 'closed'])) {
+    const host = document.createElement('div')
+    const shadow = host.attachShadow({ mode })
+    shadow.innerHTML = '<p>Before</p>'
+    document.body.append(host)
+
+    const mounted = view.mount(shadow)
+
+    // The component root replaces the contents of the shadow root.
+    assert.strictEqual(mounted.root.parentNode, shadow)
+    assert.equal(shadow.childNodes.length, 1)
+
+    mounted.update({ title: mode, items: ['Ada', 'Grace'] })
+
+    assert.equal(shadow.querySelector('.title')?.textContent, mode)
+    assert.deepEqual(
+      Array.from(
+        shadow.querySelectorAll('button'),
+        button => button.textContent,
+      ),
+      ['Ada', 'Grace'],
+    )
+    assert.equal(document.querySelector('.title'), null)
+
+    // The component root is in the shadow tree, so an event that is not
+    // composed reaches the component.
+    handled.length = 0
+    shadow.querySelectorAll('button')[1]?.dispatchEvent(
+      new window.Event('click', { bubbles: true }),
+    )
+    shadow.querySelector('button')?.click()
+    assert.deepEqual(handled, ['Grace', 'Ada'])
+
+    mounted.unmount()
+    assert.equal(shadow.childNodes.length, 0)
+  }
+
+  // A mount that fails puts back the contents of the shadow root.
+  const host = document.createElement('div')
+  const shadow = host.attachShadow({ mode: 'open' })
+  shadow.innerHTML = '<style>p { margin: 0 }</style><p>Before</p>'
+
+  assert.throws(
+    () => component({
+      source: template,
+      bindings: [repeat('.missing', () => [])],
+    }).mount(shadow),
+    /must match the component source/,
+  )
+  assert.equal(shadow.innerHTML, '<style>p { margin: 0 }</style><p>Before</p>')
+
+  // A fragment that is not a shadow root is not a mount target.
+  assert.throws(
+    () => view.mount(
+      /** @type {ShadowRoot} */ (document.createDocumentFragment()),
+    ),
+    /mount target must be a DOM element or a shadow root/,
+  )
+  assert.throws(
+    () => view.mount(/** @type {ShadowRoot} */ (template.content)),
+    /mount target/,
+  )
+})
+
 test('classToggle updates one token without repeated DOMTokenList work', () => {
   const { document } = createDocument()
   const template = createTemplate(
@@ -1566,7 +1658,7 @@ test('resolves structurally created bindings inside repeat occurrences', () => {
   )
 })
 
-test('treats descendants removed by parent text as zero selector matches', () => {
+test('a parent text write removes a descendant target', () => {
   const { document } = createDocument()
   const template = createTemplate(document, `
     <article class="person"><span class="name">Initial</span></article>
@@ -1586,7 +1678,13 @@ test('treats descendants removed by parent text as zero selector matches', () =>
 
   assert.equal(mounted.root.textContent, 'Ada')
   assert.equal(mounted.root.querySelector('.name'), null)
-  assert.equal(descendantProjectionCount, 0)
+  // The descendant matched in the source, so its projection runs. The
+  // parent then removes the element.
+  assert.equal(descendantProjectionCount, 1)
+
+  mounted.update({})
+  assert.equal(mounted.root.textContent, 'Ada')
+  assert.equal(mounted.root.querySelector('.name'), null)
 })
 
 test('uses the last declaration for duplicate and overlapping scalar sinks', () => {
@@ -2235,28 +2333,45 @@ test('rejects parent content writes that would replace a child subtree', () => {
     document,
     '<section class="shell"><div class="profile-slot"></div></section>',
   )
-  const mounted = component({
-    source: parentTemplate,
-    bindings: [
-      prop(
-        '.shell',
-        () => trustedHTML(document, '<p>Replacement</p>'),
-        'innerHTML',
-      ),
-      child(
-        '.profile-slot',
-        component({ source: childTemplate }),
-        data => data,
-      ),
-    ],
-  }).mount(document.createElement('div'))
-  const childRoot = mounted.root.querySelector('.name')
+  const target = document.createElement('div')
+  target.innerHTML = '<p>Before</p>'
+
+  // The mount finds the conflict, so no update can remove the child.
+  assert.throws(
+    () => component({
+      source: parentTemplate,
+      bindings: [
+        prop(
+          '.shell',
+          () => trustedHTML(document, '<p>Replacement</p>'),
+          'innerHTML',
+        ),
+        child(
+          '.profile-slot',
+          component({ source: childTemplate }),
+          data => data,
+        ),
+      ],
+    }).mount(target),
+    /content binding cannot replace a child subtree/,
+  )
+  assert.equal(target.innerHTML, '<p>Before</p>')
 
   assert.throws(
-    () => mounted.update({}),
-    /cannot replace a child subtree/,
+    () => component({
+      source: parentTemplate,
+      bindings: [
+        child(
+          '.profile-slot',
+          component({ source: childTemplate }),
+          data => data,
+        ),
+        text('.profile-slot', () => 'Replacement'),
+      ],
+    }).mount(target),
+    /content binding cannot replace a child subtree/,
   )
-  assert.strictEqual(mounted.root.querySelector('.name'), childRoot)
+  assert.equal(target.innerHTML, '<p>Before</p>')
 })
 
 test('accepts genuine TrustedHTML for innerHTML property bindings', () => {
@@ -2349,6 +2464,107 @@ test('accepts genuine TrustedHTML for a non-root outerHTML binding', () => {
     mounted.root.querySelector('.replacement')?.textContent,
     'Trusted',
   )
+})
+
+test('an outerHTML binding keeps the element that replaced its target', () => {
+  const { document } = createDocument()
+  const template = createTemplate(
+    document,
+    '<section><p class="slot">Initial</p><i class="after"></i></section>',
+  )
+  const mounted = component({
+    source: template,
+    bindings: [
+      // The replacement does not match the selector of the binding.
+      prop(
+        '.slot',
+        data => trustedHTML(
+          document,
+          `<article><b class="name"></b>${data.value}</article>`,
+        ),
+        'outerHTML',
+      ),
+      // The markup creates this target, so the selector resolves after the
+      // write.
+      textData('.name', data => data.value.toUpperCase()),
+    ],
+  }).mount(document.createElement('div'))
+
+  mounted.update({ value: 'a' })
+  assert.equal(
+    mounted.root.innerHTML,
+    '<article><b class="name">A</b>a</article><i class="after"></i>',
+  )
+  const article = mounted.root.querySelector('article')
+
+  // Unchanged markup replaces no element.
+  mounted.update({ value: 'a' })
+  assert.strictEqual(mounted.root.querySelector('article'), article)
+
+  mounted.update({ value: 'b' })
+  assert.equal(
+    mounted.root.innerHTML,
+    '<article><b class="name">B</b>b</article><i class="after"></i>',
+  )
+  assert.notStrictEqual(mounted.root.querySelector('article'), article)
+})
+
+test('an outerHTML binding in a repeat follows each occurrence', () => {
+  const { document } = createDocument()
+  const template = createTemplate(
+    document,
+    '<ul><li class="row"><p class="slot">Initial</p></li></ul>',
+  )
+  const mounted = component({
+    source: template,
+    bindings: [
+      repeat('.row', ({data}) => /** @type {string[]} */ (data), [
+        contextualProp(
+          '.slot',
+          ({item}) => trustedHTML(
+            document,
+            `<p class="slot"><b class="name"></b>${item}</p>`,
+          ),
+          'outerHTML',
+        ),
+        text('.name', ({item}) => /** @type {string} */ (item).toUpperCase()),
+      ]),
+    ],
+  }).mount(document.createElement('div'))
+  const rows = () => Array.from(
+    mounted.root.querySelectorAll('.row'),
+    row => row.innerHTML,
+  )
+
+  mounted.update(['a', 'b'])
+  assert.deepEqual(rows(), [
+    '<p class="slot"><b class="name">A</b>a</p>',
+    '<p class="slot"><b class="name">B</b>b</p>',
+  ])
+  const second = mounted.root.querySelectorAll('.slot')[1]
+
+  // The same position gets new markup. The other occurrence stays.
+  mounted.update(['c', 'b'])
+  assert.deepEqual(rows(), [
+    '<p class="slot"><b class="name">C</b>c</p>',
+    '<p class="slot"><b class="name">B</b>b</p>',
+  ])
+  assert.strictEqual(mounted.root.querySelectorAll('.slot')[1], second)
+})
+
+test('an invalid selector fails the mount', () => {
+  const { document } = createDocument()
+  const target = document.createElement('div')
+  target.innerHTML = '<p>Before</p>'
+
+  assert.throws(
+    () => component({
+      source: createTemplate(document, '<section><p></p></section>'),
+      bindings: [textData('p[', () => 'value')],
+    }).mount(target),
+    /selector/,
+  )
+  assert.equal(target.innerHTML, '<p>Before</p>')
 })
 
 test('repeat works without the Trusted Types API or an HTML property sink', () => {
@@ -2944,24 +3160,22 @@ test('rejects invalid component sources and stale renders', () => {
     /unmounted/,
   )
 
-  const outerHtml = component({
-    source: missingTargetTemplate,
-    bindings: [
-      prop(
-        'p',
-        () => trustedHTML(document, '<p>Replacement</p>'),
-        'outerHTML',
-      ),
-    ],
-  }).mount(target)
-  const outerRoot = outerHtml.root
+  target.innerHTML = '<p>Before</p>'
   assert.throws(
-    () => outerHtml.update({}),
+    () => component({
+      source: missingTargetTemplate,
+      bindings: [
+        prop(
+          'p',
+          () => trustedHTML(document, '<p>Replacement</p>'),
+          'outerHTML',
+        ),
+      ],
+    }).mount(target),
     /cannot replace a mounted component root/,
   )
-  assert.strictEqual(outerHtml.root, outerRoot)
-  assert.equal(target.firstElementChild, outerRoot)
-  outerHtml.unmount()
+  assert.equal(target.innerHTML, '<p>Before</p>')
+  target.replaceChildren()
 
   assert.throws(
     () => render({}, {

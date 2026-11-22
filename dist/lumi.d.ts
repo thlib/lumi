@@ -58,7 +58,7 @@ export type ComponentOptions<Data> = {
 }
 
 export type Component<Data> = {
-  mount: (target: Element | null) => MountedComponent<Data>
+  mount: (target: Element | ShadowRoot | null) => MountedComponent<Data>
 }
 
 export type MountedComponent<Data> = {

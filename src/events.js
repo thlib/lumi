@@ -163,9 +163,6 @@ export function connectEventBindings(root, descriptors, ownedSubtrees = []) {
   let isConnected = true
   /** @type {Map<unknown, ListenerGroup>} */
   const groupsByKey = new Map()
-  // The one target of each component listener.
-  /** @type {ReadonlySet<EventTarget>} */
-  const componentTargets = new Set([root])
 
   for (const descriptor of descriptors) {
     // Validate every selector while connecting, including when it currently
@@ -199,10 +196,10 @@ export function connectEventBindings(root, descriptors, ownedSubtrees = []) {
     group.runtimes.push(runtime)
   }
 
-  // Component listeners are installed before element listeners.
-  const groups = [...groupsByKey.values()].sort((left, right) => {
-    return +(left.descriptor.at === 'elements')
-      - +(right.descriptor.at === 'elements')
+  const groups = [...groupsByKey.values()]
+  // Only the listeners on matching elements follow the committed DOM.
+  const elementGroups = groups.filter(group => {
+    return group.descriptor.at === 'elements'
   })
 
   /**
@@ -275,27 +272,24 @@ export function connectEventBindings(root, descriptors, ownedSubtrees = []) {
   }
 
   /**
-   * Keeps managed listeners aligned with the committed DOM. Reconciliation
-   * runs after mount and after every successful commit.
+   * Keeps the listeners on matching elements aligned with the committed DOM.
+   * Reconciliation runs after mount and after every successful commit.
    */
   function reconcile() {
     if (!isConnected) {
       return
     }
 
-    for (const group of groups) {
+    for (const group of elementGroups) {
       // A consumed group released its listeners and receives no new ones.
       if (!isActive(group)) {
         continue
       }
 
-      const { type, capture, passive, at, selector } = group.descriptor
+      const { type, capture, passive, selector } = group.descriptor
       const current = group.targets
-      // A component listener stays on the component root. An event from a
-      // shadow tree reaches the root only when the event is composed.
-      const next = at === 'elements'
-        ? new Set(queryOwnedElements(root, selector, ownedSubtrees))
-        : componentTargets
+      /** @type {Set<EventTarget>} */
+      const next = new Set(queryOwnedElements(root, selector, ownedSubtrees))
 
       for (const target of current) {
         if (!next.has(target)) {
@@ -313,13 +307,28 @@ export function connectEventBindings(root, descriptors, ownedSubtrees = []) {
     }
   }
 
+  // A component listener stays on the component root for its lifetime, so
+  // an update does no work for it. An event from a shadow tree reaches the
+  // root only when the event is composed. Component listeners are installed
+  // before element listeners.
+  for (const group of groups) {
+    const { type, capture, passive, at } = group.descriptor
+
+    if (at === 'component') {
+      root.addEventListener(type, group.listen, { capture, passive })
+      group.targets.add(root)
+    }
+  }
+
   reconcile()
+
+  // Event declarations project no data. Listener membership follows the
+  // committed DOM, so a failed preparation cannot change it.
+  const prepared = { commit: reconcile }
 
   return {
     prepare() {
-      // Event declarations project no data. Listener membership follows the
-      // committed DOM, so a failed preparation cannot change it.
-      return { commit: reconcile }
+      return prepared
     },
 
     destroy() {

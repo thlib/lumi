@@ -270,3 +270,86 @@ test('a component renders inside a shadow root that the author owns', async ({
     outside: true,
   })
 })
+
+test('a component mounts on a shadow root', async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const { component, on, repeat, text } = /** @type {typeof import('../../src/index.js')} */ (
+      await import(String('/src/index.js'))
+    )
+    const template = document.createElement('template')
+    template.innerHTML = `
+      <section>
+        <h2 class="title"></h2>
+        <ul><li><button type="button"></button></li></ul>
+      </section>
+    `
+    /** @type {string[]} */
+    const handled = []
+    const view = component({
+      source: template,
+      bindings: [
+        text('.title', ({data}) => {
+          return /** @type {{title: string}} */ (data).title
+        }),
+        repeat(
+          'li',
+          ({data}) => /** @type {{items: string[]}} */ (data).items,
+          ({item}) => item,
+          [text('button', ({item}) => /** @type {string} */ (item))],
+        ),
+        on('button', 'click', (_nativeEvent, element) => {
+          handled.push(element.textContent ?? '')
+        }),
+      ],
+    })
+    const styles = new CSSStyleSheet()
+    styles.replaceSync('h2 { color: rgb(1, 2, 3) }')
+
+    class RootView extends HTMLElement {
+      constructor() {
+        super()
+        // A closed shadow root is available only to its author.
+        this.shadow = this.attachShadow({ mode: 'closed' })
+        // A mount replaces the child nodes of its target. An adopted style
+        // sheet is not a child node, so it stays.
+        this.shadow.adoptedStyleSheets = [styles]
+        this.mounted = view.mount(this.shadow)
+      }
+    }
+
+    customElements.define('root-view', RootView)
+    const host = /** @type {RootView} */ (document.createElement('root-view'))
+    document.querySelector('#test-root')?.append(host)
+    host.mounted.update({ title: 'Team', items: ['Ada', 'Grace'] })
+
+    const title = /** @type {Element} */ (host.shadow.querySelector('.title'))
+    const buttons = host.shadow.querySelectorAll('button')
+    buttons[1]?.click()
+    // The component root is in the shadow tree, so an event that is not
+    // composed reaches the component.
+    buttons[0]?.dispatchEvent(new Event('click', { bubbles: true }))
+
+    const before = {
+      rootParent: host.mounted.root.parentNode === host.shadow,
+      title: title.textContent,
+      color: getComputedStyle(title).color,
+      buttons: Array.from(buttons, button => button.textContent),
+      handled: [...handled],
+      outside: document.querySelector('.title') === null,
+    }
+
+    host.mounted.unmount()
+
+    return { ...before, childNodesAfterUnmount: host.shadow.childNodes.length }
+  })
+
+  expect(result).toEqual({
+    rootParent: true,
+    title: 'Team',
+    color: 'rgb(1, 2, 3)',
+    buttons: ['Ada', 'Grace'],
+    handled: ['Grace', 'Ada'],
+    outside: true,
+    childNodesAfterUnmount: 0,
+  })
+})

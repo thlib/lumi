@@ -286,6 +286,45 @@ test('shares one native listener across compatible component bindings', () => {
   ])
 })
 
+test('a component listener stays on the component root across updates', () => {
+  const { document, window } = createDocument()
+  const template = createTemplate(document, `
+    <ul><li class="item"><button type="button">Item</button></li></ul>
+  `)
+  /** @type {Array<string | null>} */
+  const handled = []
+  const mounted = component({
+    source: template,
+    bindings: [
+      repeat('.item', ({data}) => /** @type {string[]} */ (data)),
+      text('button', ({item}) => /** @type {string} */ (item)),
+      on('button', 'click', (_event, element) => {
+        handled.push(element.textContent)
+      }),
+    ],
+  }).mount(document.createElement('div'))
+
+  // The listener is on the root from the mount, so an update adds and
+  // removes no listener.
+  const { added, removed } = recordListeners(window, () => {
+    mounted.update(['Ada'])
+    mounted.update(['Ada', 'Grace'])
+    mounted.update([])
+    mounted.update(['Edsger'])
+  })
+
+  assert.deepEqual(added, [])
+  assert.deepEqual(removed, [])
+
+  mounted.root.querySelector('button')?.dispatchEvent(
+    nativeEvent(window, 'click'),
+  )
+  assert.deepEqual(handled, ['Edsger'])
+
+  const unmounted = recordListeners(window, () => mounted.unmount())
+  assert.deepEqual(unmounted.removed, [{ type: 'click' }])
+})
+
 test('keeps routing elements created by later updates', () => {
   const { document, window } = createDocument()
   const template = createTemplate(document, `

@@ -1,6 +1,6 @@
 // @ts-check
 
-import { assertElement, cloneSourceRoot } from './dom.js'
+import { assertMountTarget, cloneSourceRoot } from './dom.js'
 import { connectEventBindings, getEventBindingDescriptor } from './events.js'
 import {
   connectDomBindings,
@@ -52,7 +52,7 @@ export function component(options) {
 
   return Object.freeze({
     mount(target) {
-      assertElement(target, 'mount target')
+      assertMountTarget(target)
       const root = cloneSourceRoot(options.source)
       const previousChildren = Array.from(target.childNodes)
       target.replaceChildren(root)

@@ -153,8 +153,8 @@ component. The mounted component owns the target contents for its lifetime. If
 connecting a binding fails, Lumi removes the clone and restores the preceding
 target contents.
 
-The target and an element or template source may be direct `querySelector`
-results. A clear error is thrown if either is missing or the source does not
+The target is an element or a shadow root. The target and an element or
+template source may be direct `querySelector` results. A clear error is thrown if either is missing or the source does not
 provide exactly one root element. A connected and a detached element have the
 same source semantics: `mount` clones them and does not adopt them.
 
@@ -162,14 +162,14 @@ same source semantics: `mount` clones them and does not adopt them.
 
 `update` is synchronous and has separate preparation and commit phases.
 
-Preparation evaluates every built-in scalar projection, recursively prepares
-child components, and calculates the necessary DOM work. When content rules
-have structural dependencies, the component DOM is imported into an inert
-document where those dependencies can be resolved. Independent leaf rules use
-the live DOM only as a read-only preparation view. Preparation does not mutate
-live DOM or construct another instance of a live custom element. If any
-projection or validation fails, the prepared work is discarded, the mounted
-component tree remains unchanged, and a later update is still permitted.
+Preparation evaluates every built-in projection, recursively prepares child
+components, and calculates the necessary DOM work. When a component has a
+markup binding (`innerHTML` or `outerHTML`), preparation also applies the
+planned values to an inert copy of the component source. That copy shows the
+elements that the markup creates. Preparation does not mutate live DOM or
+construct another instance of a live custom element. If any projection or
+validation fails, the prepared work is discarded, the mounted component tree
+remains unchanged, and a later update is still permitted.
 
 Commit begins only after the complete active component tree prepares
 successfully. Each binding compares its projected value with the corresponding
@@ -198,9 +198,33 @@ unmount throws.
 
 ## Scalar bindings
 
-Each scalar binding resolves every matching element during each update. The
-component root itself also participates in selector matching. A selector with
-no matches is a no-op: its projection does not run and the update continues.
+Each binding resolves its selector one time, when the component mounts. The
+selector resolves in the component source, before an update writes to it. The
+binding then owns the elements that it matched, for the life of the mounted
+component. The component root itself also participates in selector matching.
+A selector with no matches is a no-op: its projection does not run and the
+update continues. A selector that is not valid fails the mount.
+
+A later change of the DOM does not change the matches. An element that other
+code adds is not a target. A selector also cannot follow state that an update
+writes:
+
+```js
+classToggle('.row', 'open', ({data}) => data.open)
+// This matches only a row that has the class `open` in the source.
+text('.row.open .label', ({data}) => data.label)
+```
+
+Use a selector that does not depend on state, and put the condition in the
+projection. A nullish result keeps the current DOM state:
+
+```js
+text('.row .label', ({data}) => data.open ? data.label : null)
+```
+
+Markup is the exception. An `innerHTML` or `outerHTML` binding can create
+elements. In each update, the selectors of the component resolve again for
+the elements that the markup created.
 
 Resolution stops at each shadow root, as a native selector does. The contents
 of a shadow root belong to the element that attached it. A binding or a
@@ -208,27 +232,39 @@ of a shadow root belong to the element that attached it. A binding or a
 closed. The light DOM children of a shadow host stay in the component tree,
 and bindings match them. This includes slotted content.
 
-To render the contents of a shadow root that you own, mount a component on an
-element in that shadow root. The selectors of the component then resolve in
-the shadow tree, and the styles of the shadow root apply to the component:
+To render the contents of a shadow root that you own, mount a component on
+that shadow root, or on an element in it. The selectors of the component then
+resolve in the shadow tree, and the styles of the shadow root apply to the
+component:
 
 ```js
+const styles = new CSSStyleSheet()
+styles.replaceSync('h2 { margin: 0 }')
+
 class TeamCard extends HTMLElement {
   constructor() {
     super()
     const shadow = this.attachShadow({mode: 'open'})
-    shadow.innerHTML = '<style>h2 { margin: 0 }</style><div></div>'
-    this.view = teamCard.mount(shadow.lastElementChild)
+    shadow.adoptedStyleSheets = [styles]
+    this.view = teamCard.mount(shadow)
   }
 }
 ```
 
-Content-owning rules (`text` and structural properties) are planned in DOM
-ancestor order, independent of declaration order. Descendant selectors are
-then resolved against the parent rule's
-planned result. This lets a parent create content that a descendant rule
-updates in the same render, and naturally skips a descendant removed by its
-parent:
+A mount replaces the child nodes of its target, which includes a `<style>`
+element in a shadow root. An adopted style sheet is not a child node, so it
+stays. To keep other child nodes of a shadow root, mount the component on an
+element in the shadow root:
+
+```js
+shadow.innerHTML = '<style>h2 { margin: 0 }</style><div></div>'
+this.view = teamCard.mount(shadow.lastElementChild)
+```
+
+A `text` binding and the properties `innerHTML`, `outerHTML`, `textContent`,
+and `innerText` replace the contents of their element. A descendant that
+such a write removes stays a target of its bindings, but it is not in the
+document, so a write to it has no visible effect:
 
 ```js
 text('.person', () => 'Ada')
@@ -236,16 +272,24 @@ text('.person .name', () => 'Lovelace')
 ```
 
 Here the first rule removes `.name` through native `textContent` semantics.
-The second selector consequently has no matches and performs no update.
-Structural property names currently recognized by the planner are
-`innerHTML`, `outerHTML`, `textContent`, and `innerText`.
+The projection of the second rule runs, and its value goes to the removed
+element.
 
-The projection runs once for each match in the prepared DOM view and
-receives that matching element as its second argument. For independent rules
-this may be the read-only live match; for structural dependencies it is an
-inert planning counterpart. Projection code may inspect stable template
-metadata such as `data-*` attributes, but should not retain the element,
-depend on its identity, or mutate it.
+A markup write is applied before the other bindings, and an ancestor before
+a descendant, independent of declaration order. Thus markup that is equal to
+the current content replaces no element, and a rule for a descendant can
+update the content that a parent created in the same render.
+
+An `outerHTML` binding replaces its target. The binding then owns the element
+that took the place of the target. Markup that does not have exactly one
+element leaves the binding without an element.
+
+The projection runs once for each target and receives an element as its
+second argument. In a component without `repeat` and without a markup
+binding, this is the mounted element. In other components, it is the
+corresponding element of an inert copy of the component source. Projection
+code may inspect stable template metadata such as `data-*` attributes, but
+should not retain the element, depend on its identity, or mutate it.
 
 In TypeScript, a bare HTML, SVG, or MathML tag selector gives the projection
 the corresponding native element type. Complex selectors safely fall back to
@@ -321,10 +365,9 @@ ordinary strings. Safe sanitization requires knowledge of the application's
 trust and resource context. Applications must validate untrusted URLs before
 including them in a render snapshot.
 
-Every scalar projection receives `(data, element)`. The second argument is the
-matching element in the prepared DOM view for that update. Applications can
-inspect it to inject their own metadata conventions; HTML attribute
-interpretation is not built in.
+Every scalar projection receives the context and an element. Applications
+can inspect the element to inject their own metadata conventions; HTML
+attribute interpretation is not built in.
 
 ## `on(selector, type, handler, options?)`
 
@@ -700,14 +743,14 @@ the browser reflects one into the other, such as `disabled`. If a component
 deliberately binds both, they are replayed in declaration order and native DOM
 reflection determines the result.
 
-Content rules are the exception to ordinary declaration ordering: an ancestor
-content rule is prepared and committed before rules selecting its descendants.
-Rules at the same element retain declaration order. Selectors are re-resolved
-against the prepared parent result before descendant projections run.
+Markup writes are the exception to ordinary declaration ordering: a markup
+write is prepared and committed before the other rules, and an ancestor
+before a descendant. Markup writes at the same element retain declaration
+order. The selectors then resolve for the elements that the markup created.
 
 Parent rules do not select inside a subtree owned by `child`.
 Writing content on that container or one of its ancestors would detach a live
-nested component, so the update is rejected during preparation.
+nested component, so the mount is rejected.
 
 Unbound state remains under browser or application ownership. Imperative code
 should not write a property or subtree already owned by a binding.
@@ -725,6 +768,7 @@ An error is thrown when:
 - A `child` container selector does not match within the component root.
   Unmatched scalar selectors are no-ops.
 - A child container already contains an element.
+- A binding selector is not a valid selector.
 - A parent content rule would replace a child subtree.
 - A property binding attempts to replace its mounted component root through
   `outerHTML`.

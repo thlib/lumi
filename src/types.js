@@ -118,7 +118,7 @@
  *
  * @template Data
  * @typedef {object} Component
- * @property {(target: Element | null) => MountedComponent<Data>} mount
+ * @property {(target: Element | ShadowRoot | null) => MountedComponent<Data>} mount
  */
 
 /**

@@ -34,7 +34,7 @@ export function findElement(root, selector) {
 /**
  * Returns every matching element inside a component boundary in tree order.
  * The component root participates because querySelectorAll() searches only
- * descendants. An empty result is valid for scalar bindings.
+ * descendants. An empty result is valid.
  *
  * The search stops at each shadow boundary, as a native selector does. The
  * contents of a shadow root belong to the element that attached it.
@@ -277,31 +277,6 @@ export function locateElements(element, {slots, steps, nodes}, found) {
 }
 
 /**
- * Visits two element trees side by side: first the two elements, then their
- * children. When the trees differ, only the children at the same positions
- * are visited.
- *
- * @param {Element} left
- * @param {Element} right
- * @param {(left: Element, right: Element) => void} visit
- */
-export function pairElementTrees(left, right, visit) {
-  visit(left, right)
-
-  const leftChildren = left.children
-  const rightChildren = right.children
-  const length = Math.min(leftChildren.length, rightChildren.length)
-
-  for (let index = 0; index < length; index += 1) {
-    pairElementTrees(
-      /** @type {Element} */ (leftChildren[index]),
-      /** @type {Element} */ (rightChildren[index]),
-      visit,
-    )
-  }
-}
-
-/**
  * Marks the elements that a planned write created, from `node` to the
  * sibling before `end`, with their descendants. A declaration in the
  * history cannot select these elements again.
@@ -367,15 +342,20 @@ export function cloneSourceRoot(source) {
 }
 
 /**
- * Rejects values that cannot serve as a component or mount boundary.
+ * Rejects a value that cannot contain a mounted component. A mount target
+ * is an element or a shadow root.
  *
- * @param {Element | null} element
- * @param {string} role
- * @returns {asserts element is Element}
- * @throws {TypeError} When the value is not a DOM element.
+ * @param {Element | ShadowRoot | null} target
+ * @returns {asserts target is Element | ShadowRoot}
+ * @throws {TypeError} When the value is not an element or a shadow root.
  */
-export function assertElement(element, role) {
-  if (element === null || typeof element !== 'object' || element.nodeType !== 1) {
-    throw new TypeError(`Lumi ${role} must be a DOM element`)
+export function assertMountTarget(target) {
+  const type = target?.nodeType
+
+  // Only a shadow root is a fragment with a host.
+  if (type !== 1 && !(type === 11 && 'host' in /** @type {Node} */ (target))) {
+    throw new TypeError(
+      'Lumi mount target must be a DOM element or a shadow root',
+    )
   }
 }

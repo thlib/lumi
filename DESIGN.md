@@ -278,30 +278,28 @@ mount multiple independent roots.
 Mounting happens once. The parsed DOM source is cloned, replaces the mount
 target's existing contents, and has its bindings connected to that component
 boundary.
-Scalar selectors are resolved again for each explicit update, so structural
-rules may create or remove later scalar targets without leaving stale
-references to detached nodes.
+Selectors are resolved one time, at mount, in the component source. A rule
+owns the elements that it matched, so an update does no selector work for
+them. Only the elements that a markup write (`innerHTML` or `outerHTML`)
+creates get their selector matches in each update.
 
 Each explicit `update(data)` call proceeds as follows:
 
 1. Receives the complete data snapshot from the application.
-2. Identifies structural dependencies between the current selector matches.
-   Independent leaf rules use the live DOM only as a read-only preparation
-   view.
-3. When dependencies exist, imports the component tree into an inert document
-   that cannot construct another instance of a live custom element, applies
-   content-owning rules in ancestor order, and resolves descendant selectors
-   against the result.
-4. Runs every matching projection and validates structural data without
-   mutating the live DOM. An unmatched scalar selector is a no-op.
-5. Recursively prepares the active component tree.
-6. Discards the complete plan without live DOM changes if preparation fails.
-7. Replays the prepared DOM operations on persistent live nodes, compares
-   projected values with owned DOM state or its safely cached representation,
-   and writes only differences.
-8. Reconciles positional or explicitly keyed structural regions and nested
+2. Runs the projection for each target and validates structural data without
+   mutating the live DOM. A selector without a match at mount is a no-op.
+3. When the component has a markup rule, applies the prepared values to an
+   inert copy of the component source, which cannot construct another
+   instance of a live custom element, and resolves the selectors for the
+   elements that the markup creates.
+4. Recursively prepares the active component tree.
+5. Discards the complete plan without live DOM changes if preparation fails.
+6. Writes the prepared values to persistent live nodes, compares projected
+   values with owned DOM state or its safely cached representation, and
+   writes only differences.
+7. Reconciles positional or explicitly keyed structural regions and nested
    child components.
-9. Retains projected values needed to avoid redundant DOM writes.
+8. Retains projected values needed to avoid redundant DOM writes.
 
 This separation makes projection and validation failures recoverable: the
 previous live component tree remains authoritative and a later update may be
@@ -503,12 +501,11 @@ token, one style property, or a child subtree. Different sinks on the same
 element are independent. If multiple built-in rules reach the same sink, they
 run deterministically and the last declaration wins.
 
-Content sinks also define DOM dependencies. An ancestor content write is
-prepared before rules for its descendants are resolved, regardless of
-declaration order. The descendant selector sees the prepared parent result. If
-that result removed the descendant, the selector has no matches and does
-nothing. If it created matching descendants, their projections run in the same
-update.
+Markup sinks also define DOM dependencies. A markup write is prepared before
+the other rules, and an ancestor before a descendant, regardless of
+declaration order. If the markup created matching descendants, their
+projections run in the same update. A descendant that a content write removed
+stays a target of its rules, but a write to it has no visible effect.
 
 This overlap rule does not grant imperative or opaque custom code shared
 ownership. A custom binding's writes are not visible to the DOM planner, and
@@ -544,7 +541,7 @@ Lumi stops at each shadow root, as native selectors and native event
 retargeting do. The contents of a shadow root belong to the element that
 attached it. A selector does not match an element in a shadow root, and Lumi
 adds no listener there. An author who owns a shadow root mounts a component
-in it.
+on it, or on an element in it.
 
 `{at: 'elements'}` instead maintains native listeners on every matching
 element and reconciles that set after each successful update. It is the

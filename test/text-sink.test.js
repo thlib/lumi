@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {JSDOM} from 'jsdom'
-import {classToggle, component, prop, repeat, text} from '../src/index.js'
+import {component, prop, repeat, text} from '../src/index.js'
 import {installMoveBefore} from '../src/shims/move-before.js'
 
 /**
@@ -182,15 +182,14 @@ test('a foreign element in a text sink does not fault the component', () => {
   mounted.update({v: 'a', w: 'w', late: 'x'})
   const late = document.createElement('i')
   late.className = 'late'
+  late.textContent = 'foreign'
   span.append(late)
 
-  mounted.update({v: 'a', w: 'w', late: 'x'})
-  assert.equal(late.textContent, 'x')
-
-  // The empty value changes child nodes, so Lumi plans this update in an
-  // inert copy. The plan and the commit must agree about the foreign element.
+  // The selectors resolved in the source, so the foreign element is not a
+  // target. An unchanged projection does not write, so the element stays.
   mounted.update({v: 'a', w: '', late: 'y'})
-  assert.equal(late.textContent, 'y')
+  assert.equal(late.textContent, 'foreign')
+  assert.strictEqual(late.parentNode, span)
 
   mounted.update({v: 'b', w: '', late: 'y'})
   assert.equal(span.textContent, 'b')
@@ -240,7 +239,7 @@ test('text wins after an earlier content property for the same element', () => {
   assert.equal(span.textContent, 'T')
 })
 
-test('the plan writes a remembered text again after a content property', () => {
+test('text writes a remembered value again after a content property', () => {
   const {document} = createDocument()
   /** @type {Options<{property: string, text: string}>} */
   const options = {
@@ -248,7 +247,6 @@ test('the plan writes a remembered text again after a content property', () => {
     bindings: [
       prop('.v', ({data}) => data.property, 'textContent'),
       text('.v', ({data}) => data.text),
-      classToggle('.v:not(:empty)', 'filled', () => true),
     ],
   }
   const mounted = component(options).mount(document.body)
@@ -256,13 +254,14 @@ test('the plan writes a remembered text again after a content property', () => {
 
   mounted.update({property: 'P', text: ''})
   assert.equal(span.textContent, '')
-  assert.equal(span.classList.contains('filled'), false)
 
-  // The property write makes the commit write the same text again. The plan
-  // must do the same, so the last selector sees an empty element.
+  // The property write changes the text in each update, so the text
+  // binding writes the same value again.
   mounted.update({property: 'P', text: ''})
   assert.equal(span.textContent, '')
-  assert.equal(span.classList.contains('filled'), false)
+
+  mounted.update({property: 'P', text: 'T'})
+  assert.equal(span.textContent, 'T')
 })
 
 test('a repeated text sink updates only the changed occurrence', () => {

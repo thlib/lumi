@@ -3,6 +3,7 @@
 import {performance} from 'node:perf_hooks'
 import {JSDOM} from 'jsdom'
 import {component, on, repeat, text} from '../src/index.js'
+import {installMoveBefore} from '../src/shims/move-before.js'
 
 const SAMPLE_COUNT = 7
 
@@ -21,6 +22,7 @@ const SAMPLE_COUNT = 7
  */
 function createDocument() {
   const {window} = new JSDOM()
+  installMoveBefore(window)
 
   return {
     document: window.document,

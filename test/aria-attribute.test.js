@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {JSDOM} from 'jsdom'
 import {attr, component, repeat} from '../src/index.js'
+import {installMoveBefore} from '../src/shims/move-before.js'
 
 /** @typedef {{value: any, items?: any}} Data */
 
@@ -12,6 +13,7 @@ import {attr, component, repeat} from '../src/index.js'
  */
 function setup(markup) {
   const {window} = new JSDOM()
+  installMoveBefore(window)
   const template = window.document.createElement('template')
   template.innerHTML = markup
   /** @type {string[]} */

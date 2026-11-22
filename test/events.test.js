@@ -4,12 +4,14 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { JSDOM } from 'jsdom'
 import { child, component, on, repeat, text } from '../src/index.js'
+import { installMoveBefore } from '../src/shims/move-before.js'
 
 /**
  * @returns {{ document: Document, window: import('jsdom').DOMWindow }}
  */
 function createDocument() {
   const { window } = new JSDOM('<!doctype html><body></body>')
+  installMoveBefore(window)
   return { document: window.document, window }
 }
 

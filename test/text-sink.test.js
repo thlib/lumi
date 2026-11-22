@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {JSDOM} from 'jsdom'
 import {classToggle, component, prop, repeat, text} from '../src/index.js'
+import {installMoveBefore} from '../src/shims/move-before.js'
 
 /**
  * @template Data
@@ -17,6 +18,7 @@ import {classToggle, component, prop, repeat, text} from '../src/index.js'
  */
 function createDocument() {
   const {window} = new JSDOM()
+  installMoveBefore(window)
   return {document: window.document, window}
 }
 

@@ -4,12 +4,14 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {JSDOM} from 'jsdom'
 import {component, repeat, text} from '../src/index.js'
+import {installMoveBefore} from '../src/shims/move-before.js'
 
 /**
  * @returns {{document: Document, window: import('jsdom').DOMWindow}}
  */
 function createDocument() {
   const {window} = new JSDOM()
+  installMoveBefore(window)
   return {document: window.document, window}
 }
 
@@ -387,7 +389,7 @@ test('keeps focus on an element that stays in the ordered run', () => {
   assert.strictEqual(document.activeElement, input)
 })
 
-test('prefers moveBefore for existing keys when the parent has it', () => {
+test('moves existing keys with moveBefore and inserts new keys', () => {
   const {document} = createDocument()
   const fixture = mountKeyedList(document, letters)
   const prototype = Object.getPrototypeOf(fixture.list)
@@ -444,10 +446,9 @@ test('prefers moveBefore for existing keys when the parent has it', () => {
   }
 })
 
-test('uses insertBefore for moves when moveBefore is unavailable', () => {
+test('the moveBefore shim moves an element with insertBefore', () => {
   const {document} = createDocument()
   const fixture = mountKeyedList(document, letters)
-  assert.equal(Reflect.get(fixture.list, 'moveBefore'), undefined)
   /** @type {Node[]} */
   const inserted = []
   const insertBefore = fixture.list.insertBefore
@@ -469,6 +470,20 @@ test('uses insertBefore for moves when moveBefore is unavailable', () => {
   measure(document, fixture, ['F', 'A', 'B', 'C', 'D', 'E'])
   assert.deepEqual(inserted, [f])
   assert.deepEqual(order(fixture.list), ['F', 'A', 'B', 'C', 'D', 'E'])
+})
+
+test('the moveBefore shim keeps a moveBefore that the window has', () => {
+  const {window} = new JSDOM()
+  const native = () => {}
+  Reflect.set(window.Element.prototype, 'moveBefore', native)
+
+  installMoveBefore(window)
+
+  assert.strictEqual(Reflect.get(window.Element.prototype, 'moveBefore'), native)
+  assert.equal(
+    typeof Reflect.get(window.DocumentFragment.prototype, 'moveBefore'),
+    'function',
+  )
 })
 
 test('reorders nested keyed repeats and keeps their elements', () => {

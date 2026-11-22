@@ -25,6 +25,10 @@ The supported module is `@thlibjs/lumi`. It exports:
 `component()` returns a definition with `mount()`. A mounted component exposes
 only `root`, `update()`, and `unmount()`.
 
+The package also exports browser shims, for example
+`@thlibjs/lumi/shims/move-before.js`. Refer to
+[Browser requirements](#browser-requirements).
+
 Other source and declaration modules, renderer descriptors, preparation
 objects, and connected-binding lifecycle shapes are package internals. They
 exist to implement the public functions and may change without becoming Lumi
@@ -534,7 +538,10 @@ repeat(
 ```
 
 When the key order changes, Lumi moves the fewest possible elements: the
-largest group of elements already in the new order does not move.
+largest group of elements already in the new order does not move. Lumi moves
+an element with `moveBefore()`. Refer to
+[Browser requirements](#browser-requirements) for a browser that does not
+have it.
 
 The key projection receives the new occurrence context. It does not receive
 an element because Lumi must compute the key before it selects an existing
@@ -729,9 +736,34 @@ Selector syntax errors remain native `DOMException`s from the browser.
 
 ## Browser requirements
 
-The current implementation targets modern browsers with native support for ES
-modules, `<template>`, Shadow DOM, selectors, `importNode`, `classList`,
-`addEventListener`, `Map`, `Set`, and `Reflect`.
+Lumi targets current browsers with native support for ES modules,
+`<template>`, Shadow DOM, selectors, `importNode`, `classList`,
+`addEventListener`, `Map`, `Set`, `Reflect`, and `moveBefore()`.
 
-Compatibility shims are not included in the first implementation. They can be
-added below the public API without changing component definitions.
+Lumi calls browser APIs directly. It has no fallback code for a browser that
+does not have an API. For such a browser, the application loads a shim before
+the first update.
+
+| API | Lumi uses it to | Shim |
+| --- | --- | --- |
+| `moveBefore()` | Move a repeated element to a new position | `@thlibjs/lumi/shims/move-before.js` |
+
+Load a shim only when the browser needs it:
+
+```js
+if (!('moveBefore' in Element.prototype)) {
+  await import('@thlibjs/lumi/shims/move-before.js')
+}
+```
+
+Without a build step, import `src/shims/move-before.js` from the CDN, from the
+same package version as the bundle.
+
+At the time of this release, Safari does not have `moveBefore()`. Lumi moves
+an element when the order of the keys in a keyed repeat changes, and when
+other code changed the order of repeated elements. Without the shim, such an
+update throws a `TypeError` in a browser that does not have `moveBefore()`.
+
+The shim moves the element with `insertBefore()`. The browser then resets the
+state that `moveBefore()` keeps, for example focus, a loaded iframe, and a CSS
+animation.

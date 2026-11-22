@@ -1049,13 +1049,11 @@ class RegionState {
         (stable === null || stable[index] === 0)
         && element.nextSibling !== reference
       ) {
-        // An element already in the parent moves with moveBefore when the
-        // browser provides it. A new element, or one that other code took
-        // out of the parent, is inserted.
-        const move = /** @type {any} */ (parent).moveBefore
-
-        if (element.parentNode === parent && typeof move === 'function') {
-          move.call(parent, element, reference)
+        // moveBefore keeps the state of an element that is already in the
+        // parent, but it rejects a new element and one that other code
+        // took out of the parent. Those elements are inserted.
+        if (element.parentNode === parent) {
+          parent.moveBefore(element, reference)
         } else {
           parent.insertBefore(element, reference)
         }

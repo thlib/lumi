@@ -16,12 +16,14 @@ import {
   text,
 } from '../src/index.js'
 import * as publicApi from '../src/index.js'
+import { installMoveBefore } from '../src/shims/move-before.js'
 
 /**
  * @returns {{ document: Document, window: import('jsdom').DOMWindow }}
  */
 function createDocument() {
   const { window } = new JSDOM()
+  installMoveBefore(window)
   installTestTrustedTypes(window)
   return { document: window.document, window }
 }

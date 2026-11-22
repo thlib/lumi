@@ -30,7 +30,11 @@
       "import": "./src/index.js",
       "default": "./src/index.js"
     },
-    "./dist/lumi.js": "./dist/lumi.js"
+    "./dist/lumi.js": "./dist/lumi.js",
+    "./shims/move-before.js": {
+      "types": "./src/shims/move-before.d.ts",
+      "default": "./src/shims/move-before.js"
+    }
   },
   "types": "./dist/lumi.d.ts",
   "jsdelivr": "./dist/lumi.js",

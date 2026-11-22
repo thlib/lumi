@@ -52,6 +52,10 @@ with gzip. One request replaces the module graph. Its source map resolves to
 the published source, so developer tools show the original code. Use a fixed
 version because an unpinned CDN URL follows the latest release.
 
+Lumi has no fallback code for a browser that does not have an API that Lumi
+uses. Safari needs a shim for `moveBefore()`. Refer to
+[Browser requirements](API.md#browser-requirements).
+
 ## The idea
 
 * **Modern browsers provide far more than they used to.** Many capabilities that once required libraries, preprocessors, or framework abstractions are now built into HTML, CSS, JavaScript, and browser APIs.

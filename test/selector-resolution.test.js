@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { JSDOM } from 'jsdom'
+import { installMoveBefore } from '../src/shims/move-before.js'
 import {
   attr,
   classToggle,
@@ -25,6 +26,7 @@ function mountRow(
   bindings,
 ) {
   const { window } = new JSDOM()
+  installMoveBefore(window)
   const document = window.document
   const template = document.createElement('template')
   template.innerHTML = markup
@@ -167,6 +169,7 @@ test('each projection runs once for each match when planning moves to the inert 
 
 test('a text write that empties an element changes a later :empty selector', () => {
   const { window } = new JSDOM()
+  installMoveBefore(window)
   const document = window.document
   const template = document.createElement('template')
   template.innerHTML = '<section><span class="count"></span><span class="hint">default</span></section>'

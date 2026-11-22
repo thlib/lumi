@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { JSDOM } from 'jsdom'
 import {text} from '../src/index.js'
+import {installMoveBefore} from '../src/shims/move-before.js'
 import {
   define,
   emailValidationMessage,
@@ -98,6 +99,7 @@ test('disconnects SPA routing before unmount and permits reconnection', async ()
 
 test('keeps only the active SPA page connected to the document', () => {
   const window = new JSDOM().window
+  installMoveBefore(window)
   const {document} = window
   /** @type {Record<string, number>} */
   const presentationCount = {}

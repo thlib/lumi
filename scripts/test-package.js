@@ -62,6 +62,11 @@ try {
     'the browser bundle sourcemap is missing from the package',
   )
 
+  assert.ok(
+    packedPaths.includes('src/shims/move-before.js'),
+    'the moveBefore shim is missing from the package',
+  )
+
   writeFileSync(join(temporary, 'package.json'), JSON.stringify({
     private: true,
     type: 'module',
@@ -103,6 +108,9 @@ try {
       Object.keys(lumi).sort(),
       'the browser bundle does not expose the package export surface',
     )
+
+    const shim = await import('@thlibjs/lumi/shims/move-before.js')
+    assert.equal(typeof shim.installMoveBefore, 'function')
 
     await assert.rejects(
       import('@thlibjs/lumi/types'),

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {JSDOM} from 'jsdom'
 import {component, repeat, text} from '../src/index.js'
+import {installMoveBefore} from '../src/shims/move-before.js'
 
 /**
  * @template Data
@@ -16,7 +17,9 @@ import {component, repeat, text} from '../src/index.js'
  * @param {string} markup
  */
 function createSource(markup) {
-  const {document} = new JSDOM().window
+  const {window} = new JSDOM()
+  installMoveBefore(window)
+  const {document} = window
   const template = document.createElement('template')
   template.innerHTML = markup
   return {document, template}

@@ -16,6 +16,11 @@ import {
   queryOwnedElements,
   tasksByDepth,
 } from './dom.js'
+import {
+  duplicateKey,
+  matchIntegerKeys,
+  stableOccurrences,
+} from './keyed.js'
 import { noValue } from './internal/no-value.js'
 import { projectionError } from './internal/projection-error.js'
 import {itemContext, rootContext} from './internal/projection-context.js'
@@ -460,6 +465,25 @@ function sameKey(left, right) {
 
 /**
  * @param {RegionSpec} spec
+ * @param {ReadonlyArray<unknown>} keys
+ * @param {number} count The number of keys to examine
+ */
+function rejectDuplicateKey(spec, keys, count) {
+  const index = duplicateKey(keys, count)
+
+  if (index !== -1) {
+    const firstIndex = keys.findIndex(key => sameKey(key, keys[index]))
+
+    throw new TypeError(
+      `Lumi repeat key for "${spec.runtime.descriptor.selector}" `
+      + `is duplicated at item positions ${firstIndex + 1} `
+      + `and ${index + 1}`,
+    )
+  }
+}
+
+/**
+ * @param {RegionSpec} spec
  * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
  * @returns {RegionPlan}
  */
@@ -500,82 +524,83 @@ function prepareRegion(spec, context) {
   const contexts = spec.keepsContexts ? new Array(length) : null
   const project = spec.runtime.descriptor.key
   // Keys that are equal to the accepted keys, position for position, are
-  // unique. The explicit check starts at the first key that is different, so
-  // an update with the same keys builds no lookup.
+  // unique. The key list starts at the first key that is different, so an
+  // update with the same keys builds no list and makes no check.
   const acceptedKeys = spec.acceptedKeys
   /** @type {unknown[] | null} */
   let keys = null
-  /** @type {Map<unknown, number> | null} */
-  let indexesByKey = null
+  // The number of keys in the list.
+  let keyCount = 0
 
-  for (let index = 0; index < length; index += 1) {
-    const occurrenceContext = itemContext(context, entries[index], index)
+  try {
+    for (let index = 0; index < length; index += 1) {
+      const occurrenceContext = itemContext(context, entries[index], index)
 
-    if (contexts !== null) {
-      contexts[index] = occurrenceContext
-    }
-
-    if (project !== undefined) {
-      // The key projection does not get an occurrence element, because
-      // reconciliation has not selected the element.
-      let key
-
-      try {
-        key = project(occurrenceContext)
-      } catch (error) {
-        throw projectionError(
-          spec.runtime.descriptor,
-          spec.matchIndex,
-          error,
-          index,
-        )
+      if (contexts !== null) {
+        contexts[index] = occurrenceContext
       }
 
-      if (
-        indexesByKey === null
-        && (
-          acceptedKeys === null
-          || index >= acceptedKeys.length
-          || !sameKey(acceptedKeys[index], key)
-        )
-      ) {
-        indexesByKey = new Map()
-        keys = new Array(length)
+      if (project !== undefined) {
+        // The key projection does not get an occurrence element, because
+        // reconciliation has not selected the element.
+        let key
 
-        for (let earlier = 0; earlier < index; earlier += 1) {
-          const acceptedKey = /** @type {ReadonlyArray<unknown>} */ (
-            acceptedKeys
-          )[earlier]
-          keys[earlier] = acceptedKey
-          indexesByKey.set(acceptedKey, earlier)
-        }
-      }
-
-      if (indexesByKey !== null && keys !== null) {
-        const firstIndex = indexesByKey.get(key)
-
-        if (firstIndex !== undefined) {
-          throw new TypeError(
-            `Lumi repeat key for "${spec.runtime.descriptor.selector}" `
-            + `is duplicated at item positions ${firstIndex + 1} `
-            + `and ${index + 1}`,
+        try {
+          key = project(occurrenceContext)
+        } catch (error) {
+          throw projectionError(
+            spec.runtime.descriptor,
+            spec.matchIndex,
+            error,
+            index,
           )
         }
-        indexesByKey.set(key, index)
-        keys[index] = key
+
+        if (
+          keys === null
+          && (
+            acceptedKeys === null
+            || index >= acceptedKeys.length
+            || !sameKey(acceptedKeys[index], key)
+          )
+        ) {
+          keys = new Array(length)
+
+          for (let earlier = 0; earlier < index; earlier += 1) {
+            keys[earlier] = /** @type {ReadonlyArray<unknown>} */ (
+              acceptedKeys
+            )[earlier]
+          }
+        }
+
+        if (keys !== null) {
+          keys[index] = key
+          keyCount = index + 1
+        }
+      }
+
+      const offset = index * valueCount
+      prepareSinks(ownSinks, occurrenceContext, values, offset)
+      prepareSinks(sinks, occurrenceContext, values, offset + ownCount)
+
+      for (let region = 0; region < nestedCount; region += 1) {
+        regions[index * nestedCount + region] = prepareRegion(
+          /** @type {RegionSpec} */ (nested[region]),
+          occurrenceContext,
+        )
       }
     }
-
-    const offset = index * valueCount
-    prepareSinks(ownSinks, occurrenceContext, values, offset)
-    prepareSinks(sinks, occurrenceContext, values, offset + ownCount)
-
-    for (let region = 0; region < nestedCount; region += 1) {
-      regions[index * nestedCount + region] = prepareRegion(
-        /** @type {RegionSpec} */ (nested[region]),
-        occurrenceContext,
-      )
+  } catch (error) {
+    // One check of all keys comes after the projections. A duplicate key
+    // comes before a projection that failed later, so its error has priority.
+    if (keys !== null) {
+      rejectDuplicateKey(spec, keys, keyCount)
     }
+    throw error
+  }
+
+  if (keys !== null) {
+    rejectDuplicateKey(spec, keys, keyCount)
   }
 
   /** @type {ReadonlyArray<unknown> | null} */
@@ -1112,6 +1137,34 @@ class RegionState {
       return
     }
 
+    const matched = previousKeys === null
+      ? null
+      : matchIntegerKeys(previousKeys, keys)
+
+    if (matched !== null) {
+      const {sources, flags, ordered} = matched
+      /** @type {ScopeState[]} */
+      const next = new Array(count)
+
+      for (let index = 0; index < count; index += 1) {
+        const source = /** @type {number} */ (sources[index])
+
+        next[index] = source === -1
+          ? this.detachedOccurrence()
+          : /** @type {ScopeState} */ (previous[source])
+      }
+      for (let index = 0; index < previous.length; index += 1) {
+        if (flags[count + index] === 0) {
+          previous[index]?.remove()
+        }
+      }
+
+      this.placeInOrder(next, ordered ? null : flags)
+      this.occurrences = next
+      this.keys = keys
+      return
+    }
+
     /** @type {Map<unknown, number>} */
     const available = new Map()
     let pristineIndex = -1
@@ -1127,8 +1180,7 @@ class RegionState {
     /** @type {ScopeState[]} */
     const next = new Array(count)
     // The previous index of each occurrence, or -1 for a new occurrence.
-    /** @type {number[]} */
-    const sources = new Array(count)
+    const sources = new Int32Array(count)
     // Old indexes of survivors, in new order, are increasing until the first
     // reorder. Only a reorder needs the longest-run computation.
     let lastSource = -1
@@ -1265,65 +1317,6 @@ function hasSameKeys(left, right) {
   }
 
   return true
-}
-
-/**
- * Marks the surviving occurrences that stay in place during a keyed reorder:
- * the longest run of survivors whose previous DOM order is already the new
- * relative order. Every other survivor moves once. The computation is
- * O(n log n) and does not recurse.
- *
- * @param {ReadonlyArray<number>} sources The previous index of each
- * occurrence in the new order, or -1 for a new occurrence.
- * @returns {Uint8Array} 1 at each index that must not move
- */
-function stableOccurrences(sources) {
-  const length = sources.length
-  // tails[k] is the index that ends the best run of length k + 1.
-  const tails = new Int32Array(length)
-  const predecessors = new Int32Array(length)
-  let longest = 0
-
-  for (let index = 0; index < length; index += 1) {
-    const source = /** @type {number} */ (sources[index])
-
-    if (source === -1) {
-      continue
-    }
-
-    let low = 0
-    let high = longest
-
-    while (low < high) {
-      const middle = (low + high) >>> 1
-      const tail = /** @type {number} */ (tails[middle])
-
-      if (/** @type {number} */ (sources[tail]) < source) {
-        low = middle + 1
-      } else {
-        high = middle
-      }
-    }
-
-    predecessors[index] = low > 0
-      ? /** @type {number} */ (tails[low - 1])
-      : -1
-    tails[low] = index
-
-    if (low === longest) {
-      longest += 1
-    }
-  }
-
-  const stable = new Uint8Array(length)
-  let index = longest > 0 ? /** @type {number} */ (tails[longest - 1]) : -1
-
-  while (index !== -1) {
-    stable[index] = 1
-    index = /** @type {number} */ (predecessors[index])
-  }
-
-  return stable
 }
 
 /**

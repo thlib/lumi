@@ -244,14 +244,14 @@ test('each target of a random repeated tree gets its value', () => {
   }
 })
 
-test('a repeated element gets its targets in light DOM and shadow DOM', () => {
+test('a repeated element with a shadow root gets its light DOM targets', () => {
   const {document, window} = createDocument()
 
   class ShadowCard extends window.HTMLElement {
     constructor() {
       super()
       const shadow = this.attachShadow({mode: 'open'})
-      shadow.innerHTML = '<b class="first"></b><p><i class="second"></i></p>'
+      shadow.innerHTML = '<b class="first">Private</b><p><slot></slot></p>'
     }
   }
 
@@ -262,7 +262,7 @@ test('a repeated element gets its targets in light DOM and shadow DOM', () => {
     source: createTemplate(document, `
       <ul>
         <li class="row">
-          <shadow-card><span class="light"></span></shadow-card>
+          <shadow-card><span class="light"></span><b class="first"></b></shadow-card>
           <em class="after"></em>
         </li>
       </ul>
@@ -273,7 +273,6 @@ test('a repeated element gets its targets in light DOM and shadow DOM', () => {
         ({data}) => /** @type {string[]} */ (data),
         ({item}) => item,
         [
-          text('.second', ({item}) => `${item} second`),
           text('.after', ({item}) => `${item} after`),
           text('.light', ({item}) => `${item} light`),
           attr('shadow-card', 'data-key', ({item}) => /** @type {string} */ (item)),
@@ -290,23 +289,23 @@ test('a repeated element gets its targets in light DOM and shadow DOM', () => {
     assert.deepEqual(
       rows.map(row => {
         const card = row.querySelector('shadow-card')
-        const shadow = card?.shadowRoot
 
         return [
           card?.getAttribute('data-key'),
-          shadow?.querySelector('.first')?.textContent,
-          shadow?.querySelector('.second')?.textContent,
+          row.querySelector('.first')?.textContent,
           row.querySelector('.light')?.textContent,
           row.querySelector('.after')?.textContent,
+          // Each occurrence has the shadow root that its element attached.
+          card?.shadowRoot?.querySelector('.first')?.textContent,
         ]
       }),
       keys.map(key => {
         return [
           key,
           `${key} first`,
-          `${key} second`,
           `${key} light`,
           `${key} after`,
+          'Private',
         ]
       }),
     )

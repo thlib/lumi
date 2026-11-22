@@ -351,28 +351,36 @@ test('renders scalar bindings into persistent native DOM', () => {
   assert.equal(/** @type {HTMLElement} */ (root).style.color, '')
 })
 
-test('renders scalar bindings through open shadow roots', () => {
+test('scalar bindings stop at an open shadow root', () => {
   const { document, window } = createDocument()
+  let constructions = 0
 
   class ShadowCounter extends window.HTMLElement {
     constructor() {
       super()
+      constructions += 1
       const shadow = this.attachShadow({ mode: 'open' })
       shadow.innerHTML = `
-        <section class="counter">
-          <output class="value">Default</output>
+        <section class="panel">
+          <output class="value">Private</output>
+          <slot></slot>
         </section>
       `
     }
   }
 
   window.customElements.define('shadow-counter', ShadowCounter)
-  const template = createTemplate(document, '<shadow-counter></shadow-counter>')
   const mounted = component({
-    source: template,
+    source: createTemplate(document, `
+      <section>
+        <shadow-counter><b class="value">Slotted</b></shadow-counter>
+        <div class="panel"></div>
+      </section>
+    `),
     bindings: [
+      // This write changes the later matches, so the plan uses a copy.
       prop(
-        '.counter',
+        '.panel',
         () => trustedHTML(
           document,
           '<output class="value">Planned</output>',
@@ -385,6 +393,23 @@ test('renders scalar bindings through open shadow roots', () => {
       style('.value', 'color', data => data.color),
     ],
   }).mount(document.body)
+  const shadow = /** @type {ShadowRoot} */ (
+    mounted.root.querySelector('shadow-counter')?.shadowRoot
+  )
+  const privateMarkup = shadow.innerHTML
+  const values = () => {
+    return Array.from(mounted.root.querySelectorAll('.value'), element => {
+      const output = /** @type {HTMLElement} */ (element)
+
+      return [
+        output.localName,
+        output.textContent,
+        output.title,
+        output.classList.contains('active'),
+        output.style.color,
+      ]
+    })
+  }
 
   mounted.update({
     count: 2,
@@ -393,15 +418,14 @@ test('renders scalar bindings through open shadow roots', () => {
     color: 'rebeccapurple',
   })
 
-  const shadow = mounted.root.shadowRoot
-  const output = /** @type {HTMLOutputElement | null} */ (
-    shadow?.querySelector('.value') ?? null
-  )
+  // Slotted content stays in the tree of the component.
+  assert.deepEqual(values(), [
+    ['b', '2', 'Current count', true, 'rebeccapurple'],
+    ['output', '2', 'Current count', true, 'rebeccapurple'],
+  ])
+  assert.equal(shadow.innerHTML, privateMarkup)
 
-  assert.equal(output?.textContent, '2')
-  assert.equal(output?.title, 'Current count')
-  assert.equal(output?.classList.contains('active'), true)
-  assert.equal(output?.style.color, 'rebeccapurple')
+  const output = mounted.root.querySelector('output')
 
   mounted.update({
     count: 3,
@@ -410,11 +434,230 @@ test('renders scalar bindings through open shadow roots', () => {
     color: '',
   })
 
-  assert.strictEqual(shadow?.querySelector('.value'), output)
-  assert.equal(output?.textContent, '3')
-  assert.equal(output?.title, 'Updated')
-  assert.equal(output?.classList.contains('active'), false)
-  assert.equal(output?.style.color, '')
+  assert.strictEqual(mounted.root.querySelector('output'), output)
+  assert.deepEqual(values(), [
+    ['b', '3', 'Updated', false, ''],
+    ['output', '3', 'Updated', false, ''],
+  ])
+  assert.equal(shadow.innerHTML, privateMarkup)
+  // The copy for the plan does not construct the custom element again.
+  assert.equal(constructions, 1)
+})
+
+test('a repeat stops at an open shadow root', () => {
+  const { document, window } = createDocument()
+
+  class ShadowList extends window.HTMLElement {
+    constructor() {
+      super()
+      const shadow = this.attachShadow({ mode: 'open' })
+      shadow.innerHTML = '<ul><li class="item">Private</li></ul>'
+    }
+  }
+
+  window.customElements.define('shadow-list', ShadowList)
+  const mounted = render(
+    /** @type {{ items: string[] }} */ ({ items: [] }),
+    {
+      target: document.body,
+      source: createTemplate(document, `
+        <section>
+          <shadow-list></shadow-list>
+          <ul><li class="item">Default</li></ul>
+        </section>
+      `),
+      bindings: [
+        repeat('.item', ({data}) => data.items),
+        text('.item', ({item}) => item),
+      ],
+    },
+  )
+  const shadow = mounted.root.querySelector('shadow-list')?.shadowRoot
+  const privateItems = () => {
+    return Array.from(
+      shadow?.querySelectorAll('.item') ?? [],
+      element => element.textContent,
+    )
+  }
+  const items = () => {
+    return Array.from(
+      mounted.root.querySelectorAll('.item'),
+      element => element.textContent,
+    )
+  }
+
+  assert.deepEqual(items(), [])
+  assert.deepEqual(privateItems(), ['Private'])
+
+  mounted.update({ items: ['Ada', 'Grace'] })
+  const first = mounted.root.querySelector('.item')
+
+  assert.deepEqual(items(), ['Ada', 'Grace'])
+
+  mounted.update({ items: ['Linus'] })
+
+  assert.strictEqual(mounted.root.querySelector('.item'), first)
+  assert.deepEqual(items(), ['Linus'])
+  assert.deepEqual(privateItems(), ['Private'])
+})
+
+test('a child component does not mount into a shadow root', () => {
+  const { document, window } = createDocument()
+
+  class ShadowHost extends window.HTMLElement {
+    constructor() {
+      super()
+      const shadow = this.attachShadow({ mode: 'open' })
+      shadow.innerHTML = '<div class="child-slot"></div>'
+    }
+  }
+
+  window.customElements.define('shadow-host', ShadowHost)
+  const childComponent = component({
+    source: createTemplate(document, '<output class="child-value"></output>'),
+    bindings: [textData('.child-value', data => data)],
+  })
+  const target = document.createElement('div')
+  target.innerHTML = '<p>Before</p>'
+  document.body.append(target)
+
+  assert.throws(
+    () => component({
+      source: createTemplate(document, '<shadow-host></shadow-host>'),
+      bindings: [child('.child-slot', childComponent, data => data)],
+    }).mount(target),
+    /selector "\.child-slot" did not match/,
+  )
+  assert.equal(target.innerHTML, '<p>Before</p>')
+})
+
+test('ignores an open shadow root attached between updates', () => {
+  const { document } = createDocument()
+  const mounted = component({
+    source: createTemplate(
+      document,
+      '<section><div class="host"></div><output class="value"></output></section>',
+    ),
+    bindings: [textData('.value', data => data.value)],
+  }).mount(document.body)
+
+  mounted.update({ value: 'Before shadow' })
+
+  const host = /** @type {HTMLElement} */ (
+    mounted.root.querySelector('.host')
+  )
+  const shadow = host.attachShadow({ mode: 'open' })
+  const output = document.createElement('output')
+  output.className = 'value'
+  output.textContent = 'Private'
+  shadow.append(output)
+
+  mounted.update({ value: 'After shadow' })
+
+  assert.equal(output.textContent, 'Private')
+  assert.equal(
+    mounted.root.querySelector('.value')?.textContent,
+    'After shadow',
+  )
+})
+
+test('a property write that attaches a shadow root keeps the matches', () => {
+  const { document, window } = createDocument()
+
+  class ShadowMaker extends window.HTMLElement {
+    /** @param {boolean} active */
+    set active(active) {
+      if (active && this.shadowRoot === null) {
+        const shadow = this.attachShadow({ mode: 'open' })
+        shadow.innerHTML = '<output class="value">Created</output>'
+      }
+    }
+  }
+
+  window.customElements.define('shadow-maker', ShadowMaker)
+  const mounted = component({
+    source: createTemplate(document, `
+      <section>
+        <shadow-maker></shadow-maker>
+        <output class="value">Default</output>
+      </section>
+    `),
+    bindings: [
+      prop('shadow-maker', () => true, 'active'),
+      textData('.value', () => 'Updated'),
+    ],
+  }).mount(document.body)
+
+  mounted.update({})
+
+  assert.equal(mounted.root.querySelector('.value')?.textContent, 'Updated')
+  assert.equal(
+    mounted.root.querySelector('shadow-maker')?.shadowRoot
+      ?.querySelector('.value')?.textContent,
+    'Created',
+  )
+})
+
+test('renders inside a shadow root that the author owns', () => {
+  const { document, window } = createDocument()
+  /** @type {string[]} */
+  const handled = []
+  const view = component({
+    source: createTemplate(document, `
+      <section>
+        <h2 class="title"></h2>
+        <ul><li class="item"><button type="button"></button></li></ul>
+      </section>
+    `),
+    bindings: [
+      text('.title', ({data}) => {
+        return /** @type {{title: string}} */ (data).title
+      }),
+      repeat(
+        '.item',
+        ({data}) => /** @type {{items: string[]}} */ (data).items,
+        ({item}) => item,
+        [text('button', ({item}) => /** @type {string} */ (item))],
+      ),
+      on('button', 'click', (_event, element) => {
+        handled.push(element.textContent ?? '')
+      }),
+    ],
+  })
+
+  class OwnedView extends window.HTMLElement {
+    constructor() {
+      super()
+      const shadow = this.attachShadow({ mode: 'open' })
+      shadow.innerHTML = '<style>h2 { margin: 0 }</style><div></div>'
+      this.mounted = view.mount(shadow.lastElementChild)
+    }
+  }
+
+  window.customElements.define('owned-view', OwnedView)
+  const host = /** @type {OwnedView} */ (document.createElement('owned-view'))
+  const shadow = /** @type {ShadowRoot} */ (host.shadowRoot)
+  document.body.append(host)
+
+  host.mounted.update({ title: 'Team', items: ['Ada', 'Grace'] })
+
+  assert.equal(shadow.querySelector('.title')?.textContent, 'Team')
+  assert.deepEqual(
+    Array.from(shadow.querySelectorAll('button'), button => button.textContent),
+    ['Ada', 'Grace'],
+  )
+  assert.notEqual(shadow.querySelector('style'), null)
+  assert.equal(document.querySelector('.title'), null)
+
+  // The component root is in the shadow tree, so an event that is not
+  // composed reaches the component.
+  shadow.querySelectorAll('button')[1]?.dispatchEvent(
+    new window.Event('click', { bubbles: true }),
+  )
+  assert.deepEqual(handled, ['Grace'])
+
+  host.mounted.unmount()
+  assert.equal(shadow.querySelector('section'), null)
 })
 
 test('classToggle updates one token without repeated DOMTokenList work', () => {
@@ -499,199 +742,6 @@ test('style uses CSSOM methods for custom properties', () => {
 
   mounted.update({tone: ''})
   assert.equal(control.style.getPropertyValue('--tone'), '')
-})
-
-test('repeats targets inside open shadow roots', () => {
-  const { document, window } = createDocument()
-
-  class ShadowList extends window.HTMLElement {
-    constructor() {
-      super()
-      const shadow = this.attachShadow({ mode: 'open' })
-      shadow.innerHTML = '<ul><li class="item">Default</li></ul>'
-    }
-  }
-
-  window.customElements.define('shadow-list', ShadowList)
-  const mounted = render(
-    /** @type {{ items: string[] }} */ ({ items: [] }),
-    {
-      target: document.body,
-      source: createTemplate(document, '<shadow-list></shadow-list>'),
-      bindings: [
-        repeat('.item', ({data}) => data.items),
-        text('.item', ({item}) => item),
-      ],
-    },
-  )
-  const shadow = mounted.root.shadowRoot
-
-  assert.equal(shadow?.querySelectorAll('.item').length, 0)
-
-  mounted.update({ items: ['Ada', 'Grace'] })
-  const items = shadow?.querySelectorAll('.item')
-  const first = items?.[0]
-
-  assert.deepEqual(
-    Array.from(items ?? [], element => element.textContent),
-    ['Ada', 'Grace'],
-  )
-
-  mounted.update({ items: ['Linus'] })
-
-  assert.strictEqual(shadow?.querySelector('.item'), first)
-  assert.equal(first?.textContent, 'Linus')
-})
-
-test('mounts child components into open shadow roots', () => {
-  const { document, window } = createDocument()
-
-  class ShadowHost extends window.HTMLElement {
-    constructor() {
-      super()
-      const shadow = this.attachShadow({ mode: 'open' })
-      shadow.innerHTML = `
-        <div class="child-slot"></div>
-        <output class="parent-value">Default</output>
-      `
-    }
-  }
-
-  class ShadowChild extends window.HTMLElement {
-    constructor() {
-      super()
-      const shadow = this.attachShadow({ mode: 'open' })
-      shadow.innerHTML = '<output class="child-value">Default</output>'
-    }
-  }
-
-  window.customElements.define('shadow-host', ShadowHost)
-  window.customElements.define('shadow-child', ShadowChild)
-  const childComponent = component({
-    source: createTemplate(document, '<shadow-child></shadow-child>'),
-    bindings: [textData('.child-value', data => data)],
-  })
-  const mounted = component({
-    source: createTemplate(document, '<shadow-host></shadow-host>'),
-    bindings: [
-      child('.child-slot', childComponent, data => data.child),
-      textData('.parent-value', data => data.parent),
-      textData('.child-value', () => 'Parent must not reach this'),
-    ],
-  }).mount(document.body)
-
-  mounted.update({ parent: 'Parent', child: 'Child' })
-
-  assert.equal(
-    mounted.root.shadowRoot?.querySelector('.parent-value')?.textContent,
-    'Parent',
-  )
-  assert.equal(
-    mounted.root.shadowRoot
-      ?.querySelector('shadow-child')
-      ?.shadowRoot
-      ?.querySelector('.child-value')
-      ?.textContent,
-    'Child',
-  )
-})
-
-test('discovers an open shadow root attached between updates', () => {
-  const { document } = createDocument()
-  const mounted = component({
-    source: createTemplate(
-      document,
-      '<section><div class="host"></div></section>',
-    ),
-    bindings: [textData('.value', data => data.value)],
-  }).mount(document.body)
-
-  mounted.update({ value: 'Before shadow' })
-
-  const host = /** @type {HTMLElement} */ (
-    mounted.root.querySelector('.host')
-  )
-  const shadow = host.attachShadow({ mode: 'open' })
-  const output = document.createElement('output')
-  output.className = 'value'
-  shadow.append(output)
-
-  mounted.update({ value: 'After shadow' })
-
-  assert.equal(output.textContent, 'After shadow')
-})
-
-test('rechecks shadow topology after a live setter changes it', () => {
-  const { document, window } = createDocument()
-
-  class ShadowMaker extends window.HTMLElement {
-    /** @param {boolean} active */
-    set active(active) {
-      if (active && this.shadowRoot === null) {
-        const shadow = this.attachShadow({ mode: 'open' })
-        shadow.innerHTML = '<output class="value">Created</output>'
-      }
-    }
-  }
-
-  window.customElements.define('shadow-maker', ShadowMaker)
-  const mounted = component({
-    source: createTemplate(document, `
-      <section>
-        <shadow-maker></shadow-maker>
-        <output class="value">Default</output>
-      </section>
-    `),
-    bindings: [
-      prop('shadow-maker', () => true, 'active'),
-      textData('.value', () => 'Updated'),
-    ],
-  }).mount(document.body)
-
-  assert.throws(
-    () => mounted.update({}),
-    /DOM changed while committing selector "\.value"/,
-  )
-})
-
-test('checks light DOM shadow topology once per update phase', () => {
-  const { document } = createDocument()
-  const mounted = component({
-    source: createTemplate(document, `
-      <section>
-        <output class="first">Default</output>
-        <output class="second">Default</output>
-      </section>
-    `),
-    bindings: [
-      textData('.first', data => data.first),
-      textData('.second', data => data.second),
-    ],
-  }).mount(document.body)
-  const nativeCreateTreeWalker = document.createTreeWalker
-  let topologyChecks = 0
-
-  /** @param {Node} scope @param {number} [whatToShow] */
-  document.createTreeWalker = function createTreeWalker(scope, whatToShow) {
-    if (scope === mounted.root) {
-      topologyChecks += 1
-    }
-
-    return nativeCreateTreeWalker.call(this, scope, whatToShow)
-  }
-
-  mounted.update({ first: 'First', second: 'Second' })
-  topologyChecks = 0
-  // Text writes cannot introduce a shadow host, so committing them does not
-  // cost another topology check.
-  mounted.update({ first: 'Changed', second: 'Also changed' })
-
-  assert.equal(topologyChecks, 2)
-  assert.equal(mounted.root.querySelector('.first')?.textContent, 'Changed')
-  assert.equal(
-    mounted.root.querySelector('.second')?.textContent,
-    'Also changed',
-  )
 })
 
 test('passes the planned matching element to scalar projections', () => {

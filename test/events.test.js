@@ -443,51 +443,11 @@ test('does not match DOM owned by a nested component', () => {
   assert.deepEqual(handled, ['container', 'Parent'])
 })
 
-test('routes events inside open shadow roots exactly once', () => {
-  const { document, window } = createDocument()
-  const template = createTemplate(document, '<section><div class="host"></div></section>')
-  /** @type {string[]} */
-  const handled = []
-  const mounted = component({
-    source: template,
-    bindings: [
-      on('.action', 'click', (_event, element) => {
-        handled.push(element.localName)
-      }),
-    ],
-  }).mount(document.createElement('div'))
-  const host = /** @type {HTMLDivElement} */ (
-    mounted.root.querySelector('.host')
-  )
-  const shadow = host.attachShadow({ mode: 'open' })
-  shadow.innerHTML = '<button class="action" type="button"><span>Run</span></button>'
-
-  // Shadow routing points are reconciled with the committed DOM.
-  mounted.update({})
-
-  const button = /** @type {HTMLButtonElement} */ (
-    shadow.querySelector('.action')
-  )
-  button.querySelector('span')?.dispatchEvent(nativeEvent(window, 'click'))
-
-  assert.deepEqual(handled, ['button'])
-
-  // A non-composed event never leaves the shadow tree, and the router Lumi
-  // maintains inside that tree still routes it.
-  button.dispatchEvent(nativeEvent(window, 'click', { composed: false }))
-  assert.deepEqual(handled, ['button', 'button'])
-
-  mounted.unmount()
-  button.dispatchEvent(nativeEvent(window, 'click'))
-  assert.deepEqual(handled, ['button', 'button'])
-})
-
-test('shares current DOM topology with routed event reconciliation', () => {
+test('component events from a shadow tree match the component tree only', () => {
   const { document, window } = createDocument()
   const template = createTemplate(document, `
     <section>
-      <output class="value"></output>
-      <div class="host"></div>
+      <div class="host"><button class="action slotted" type="button">Slotted</button></div>
     </section>
   `)
   /** @type {string[]} */
@@ -495,31 +455,51 @@ test('shares current DOM topology with routed event reconciliation', () => {
   const mounted = component({
     source: template,
     bindings: [
-      text('.value', ({data}) => /** @type {string} */ (data)),
-      on('.action', 'click', () => {
-        handled.push('action')
+      on('.action', 'click', (_event, element) => {
+        handled.push(element.className)
+      }),
+      on('.host', 'click', (_event, element) => {
+        handled.push(element.className)
       }),
     ],
-  }).mount(document.createElement('div'))
+  }).mount(document.body)
   const host = /** @type {HTMLDivElement} */ (
     mounted.root.querySelector('.host')
   )
   const shadow = host.attachShadow({ mode: 'open' })
-  shadow.innerHTML = '<button class="action" type="button">Run</button>'
-  const button = /** @type {HTMLButtonElement} */ (
+  shadow.innerHTML = `
+    <button class="action private" type="button"><span>Run</span></button>
+    <slot></slot>
+  `
+
+  // Lumi adds no listener in a shadow root.
+  const { added } = recordListeners(window, () => mounted.update({}))
+  assert.deepEqual(added, [])
+
+  const privateButton = /** @type {HTMLButtonElement} */ (
     shadow.querySelector('.action')
   )
 
-  mounted.update('First')
-  button.dispatchEvent(nativeEvent(window, 'click', { composed: false }))
-  assert.deepEqual(handled, ['action'])
+  // A composed event leaves the shadow tree. The component sees the host,
+  // not the private button.
+  privateButton.querySelector('span')?.dispatchEvent(
+    nativeEvent(window, 'click'),
+  )
+  assert.deepEqual(handled, ['host'])
 
-  // Removing a host between updates must remove the listener from its now
-  // detached shadow boundary even when DOM and event planning share topology.
-  host.remove()
-  mounted.update('Second')
-  button.dispatchEvent(nativeEvent(window, 'click', { composed: false }))
-  assert.deepEqual(handled, ['action'])
+  // An event that is not composed stays in the shadow tree.
+  privateButton.dispatchEvent(nativeEvent(window, 'click', { composed: false }))
+  assert.deepEqual(handled, ['host'])
+
+  // Slotted content is in the tree of the component.
+  mounted.root.querySelector('.slotted')?.dispatchEvent(
+    nativeEvent(window, 'click'),
+  )
+  assert.deepEqual(handled, ['host', 'action slotted', 'host'])
+
+  mounted.unmount()
+  privateButton.dispatchEvent(nativeEvent(window, 'click'))
+  assert.deepEqual(handled, ['host', 'action slotted', 'host'])
 })
 
 test('maintains element listeners on every matching element', () => {

@@ -20,7 +20,7 @@
  * of its descendants.
  */
 export function findElement(root, selector) {
-  const element = queryElements(root, selector)[0] ?? null
+  const element = root.matches(selector) ? root : root.querySelector(selector)
 
   if (element === null) {
     throw new Error(
@@ -36,230 +36,19 @@ export function findElement(root, selector) {
  * The component root participates because querySelectorAll() searches only
  * descendants. An empty result is valid for scalar bindings.
  *
+ * The search stops at each shadow boundary, as a native selector does. The
+ * contents of a shadow root belong to the element that attached it.
+ *
  * @param {Element} root
  * @param {string} selector
  * @returns {Element[]}
  */
 export function queryElements(root, selector) {
-  return createElementQuery(root).find(selector)
-}
+  /** @type {Element[]} */
+  const elements = root.matches(selector) ? [root] : []
 
-/**
- * Reuses one shadow-topology check while resolving several selectors against
- * the same read-only component view.
- *
- * @param {Element} root
- * @returns {{
- *   find: (selector: string) => Element[],
- *   invalidate: () => void,
- *   openShadowRoots: () => ReadonlySet<ShadowRoot>,
- *   recheck: (element: Element) => void,
- * }}
- */
-export function createElementQuery(root) {
-  /** @type {boolean | null} */
-  let hasOpenShadowRoot = null
-  /** @type {Set<ShadowRoot> | null} */
-  let openShadowRoots = null
-
-  return {
-    find(selector) {
-      hasOpenShadowRoot ??= containsOpenShadowRoot(root)
-
-      if (!hasOpenShadowRoot) {
-        openShadowRoots ??= new Set()
-      }
-
-      /** @type {Element[]} */
-      const elements = []
-      queryElementTree(root, selector, elements, hasOpenShadowRoot)
-      return elements
-    },
-
-    invalidate() {
-      hasOpenShadowRoot = null
-      openShadowRoots = null
-    },
-
-    openShadowRoots() {
-      if (openShadowRoots === null) {
-        openShadowRoots = collectOpenShadowRoots(root)
-        hasOpenShadowRoot = openShadowRoots.size > 0
-      }
-
-      return openShadowRoots
-    },
-
-    // A write reaches the element it targets, so only that subtree can gain
-    // a shadow host during a commit. Rechecking it is cheaper than discarding
-    // a component-wide result that a single write cannot invalidate.
-    recheck(element) {
-      if (hasOpenShadowRoot !== false) {
-        openShadowRoots = null
-        return
-      }
-
-      hasOpenShadowRoot = containsOpenShadowRoot(element)
-
-      if (hasOpenShadowRoot) {
-        openShadowRoots = null
-      }
-    },
-  }
-}
-
-/**
- * Collects every reachable open shadow root below one component view.
- *
- * @param {Element | ShadowRoot} scope
- * @returns {Set<ShadowRoot>}
- */
-export function collectOpenShadowRoots(scope) {
-  /** @type {Set<ShadowRoot>} */
-  const roots = new Set()
-
-  if (scope.nodeType === 1) {
-    collectOpenShadowRoot(/** @type {Element} */ (scope), roots)
-  }
-
-  const walker = elementWalker(scope)
-
-  while (walker.nextNode() !== null) {
-    collectOpenShadowRoot(
-      /** @type {Element} */ (walker.currentNode),
-      roots,
-    )
-  }
-
-  return roots
-}
-
-/**
- * @param {Element} element
- * @param {Set<ShadowRoot>} roots
- */
-function collectOpenShadowRoot(element, roots) {
-  const shadowRoot = element.shadowRoot
-
-  if (shadowRoot === null) {
-    return
-  }
-
-  roots.add(shadowRoot)
-
-  for (const nested of collectOpenShadowRoots(shadowRoot)) {
-    roots.add(nested)
-  }
-}
-
-/**
- * Resolves a native selector separately in each open tree, then merges the
- * matches into shadow-including tree order. Resolving per tree preserves
- * contextual selector behavior such as :scope.
- *
- * @param {Element | ShadowRoot} scope
- * @param {string} selector
- * @param {Element[]} matches
- * @param {boolean} [hasOpenShadowRoot]
- */
-function queryElementTree(scope, selector, matches, hasOpenShadowRoot) {
-  const matchesInScope = scope.querySelectorAll(selector)
-
-  if (!(hasOpenShadowRoot ?? containsOpenShadowRoot(scope))) {
-    if (
-      scope.nodeType === 1
-      && /** @type {Element} */ (scope).matches(selector)
-    ) {
-      matches.push(/** @type {Element} */ (scope))
-    }
-
-    matches.push(...matchesInScope)
-    return
-  }
-
-  const matchSet = new Set(matchesInScope)
-
-  if (scope.nodeType === 1) {
-    const root = /** @type {Element} */ (scope)
-
-    if (root.matches(selector)) {
-      matchSet.add(root)
-    }
-
-    visitScopedElement(root, selector, matchSet, matches)
-    return
-  }
-
-  for (const child of scope.children) {
-    visitScopedElement(child, selector, matchSet, matches)
-  }
-}
-
-/**
- * Uses native tree traversal for the common light-DOM case. The full merge
- * walk is needed only when an open shadow root participates in tree order.
- *
- * @param {Element | ShadowRoot} scope
- */
-export function containsOpenShadowRoot(scope) {
-  if (scope.nodeType === 1) {
-    const element = /** @type {Element} */ (scope)
-
-    if (element.shadowRoot !== null) {
-      return true
-    }
-
-    if (element.childElementCount === 0) {
-      return false
-    }
-  }
-
-  // Walking avoids materializing a node list for a check that usually stops
-  // at the first host, or finds none at all.
-  const walker = elementWalker(scope)
-
-  while (walker.nextNode() !== null) {
-    if (/** @type {Element} */ (walker.currentNode).shadowRoot !== null) {
-      return true
-    }
-  }
-
-  return false
-}
-
-/**
- * Walks the element descendants of one tree, excluding the scope itself.
- *
- * @param {Element | ShadowRoot | DocumentFragment} scope
- * @returns {TreeWalker}
- */
-export function elementWalker(scope) {
-  return scope.ownerDocument.createTreeWalker(scope, 1 /* SHOW_ELEMENT */)
-}
-
-/**
- * @param {Element} element
- * @param {string} selector
- * @param {ReadonlySet<Element>} matchesInScope
- * @param {Element[]} matches
- */
-function visitScopedElement(
-  element,
-  selector,
-  matchesInScope,
-  matches,
-) {
-  if (matchesInScope.has(element)) {
-    matches.push(element)
-  }
-
-  if (element.shadowRoot !== null) {
-    queryElementTree(element.shadowRoot, selector, matches)
-  }
-
-  for (const child of element.children) {
-    visitScopedElement(child, selector, matchesInScope, matches)
-  }
+  elements.push(...root.querySelectorAll(selector))
+  return elements
 }
 
 /**
@@ -270,13 +59,10 @@ function visitScopedElement(
  * @param {Element} root
  * @param {string} selector
  * @param {ReadonlyArray<Element>} ownedSubtrees
- * @param {{find: (selector: string) => Element[]}} [query]
  * @returns {Element[]}
  */
-export function queryOwnedElements(root, selector, ownedSubtrees, query) {
-  const elements = query === undefined
-    ? queryElements(root, selector)
-    : query.find(selector)
+export function queryOwnedElements(root, selector, ownedSubtrees) {
+  const elements = queryElements(root, selector)
 
   if (ownedSubtrees.length === 0) {
     return elements
@@ -295,52 +81,8 @@ export function queryOwnedElements(root, selector, ownedSubtrees, query) {
  */
 export function isInsideOwnedSubtree(element, ownedSubtrees) {
   return ownedSubtrees.some(owned => {
-    return owned !== element && shadowIncludingContains(owned, element)
+    return owned !== element && owned.contains(element)
   })
-}
-
-/**
- * Returns the parent element across an open ShadowRoot boundary.
- *
- * @param {Element} element
- * @returns {Element | null}
- */
-export function shadowIncludingParent(element) {
-  if (element.parentElement !== null) {
-    return element.parentElement
-  }
-
-  const parent = element.parentNode
-
-  return (
-    parent !== null
-    && parent.nodeType === 11
-    && 'host' in parent
-  )
-    ? /** @type {ShadowRoot} */ (parent).host
-    : null
-}
-
-/**
- * Returns whether an element is the same as or a shadow-including descendant
- * of another element.
- *
- * @param {Element} ancestor
- * @param {Element} descendant
- * @returns {boolean}
- */
-export function shadowIncludingContains(ancestor, descendant) {
-  let current = /** @type {Element | null} */ (descendant)
-
-  while (current !== null) {
-    if (current === ancestor) {
-      return true
-    }
-
-    current = shadowIncludingParent(current)
-  }
-
-  return false
 }
 
 /**
@@ -354,7 +96,7 @@ function lostTarget() {
 }
 
 /**
- * Returns an element's depth in a shadow-including component tree.
+ * Returns an element's depth in a component tree.
  *
  * @param {Element} root
  * @param {Element} element
@@ -363,7 +105,7 @@ function elementDepth(root, element) {
   let depth = 0
 
   for (let current = element; current !== root; depth += 1) {
-    current = shadowIncludingParent(current) ?? lostTarget()
+    current = current.parentElement ?? lostTarget()
   }
 
   return depth
@@ -412,8 +154,8 @@ export function tasksByDepth(root, runtimes, matchesOf, isTask) {
 }
 
 /**
- * Returns an element-only path. Negative steps enter the current element's
- * open shadow root; non-negative steps enter its light DOM.
+ * Returns the child element index of each step from an ancestor to a
+ * descendant.
  *
  * @param {Element} ancestor
  * @param {Element} descendant
@@ -424,16 +166,10 @@ export function elementPath(ancestor, descendant) {
   const path = []
 
   for (let current = descendant; current !== ancestor;) {
-    const parent = current.parentNode ?? lostTarget()
-    const index = Array.prototype.indexOf.call(parent.children, current)
+    const parent = current.parentElement ?? lostTarget()
 
-    if (parent.nodeType === 1) {
-      path.unshift(index)
-      current = /** @type {Element} */ (parent)
-    } else {
-      path.unshift(-index - 1)
-      current = /** @type {ShadowRoot} */ (parent).host ?? lostTarget()
-    }
+    path.unshift(Array.prototype.indexOf.call(parent.children, current))
+    current = parent
   }
 
   return path
@@ -450,11 +186,7 @@ export function elementAtPath(root, path) {
   let current = root
 
   for (const step of path) {
-    current = (
-      step < 0
-        ? current.shadowRoot?.children[-step - 1]
-        : current.children[step]
-    ) ?? lostTarget()
+    current = current.children[step] ?? lostTarget()
   }
 
   return current
@@ -467,8 +199,8 @@ export function elementAtPath(root, path) {
  * @typedef {object} Locator
  * @property {number[]} slots The result positions that receive the element
  * of this node.
- * @property {number[]} steps The elementPath() steps to the child nodes:
- * first the light DOM steps, then the shadow root steps, each in tree order.
+ * @property {number[]} steps The elementPath() steps to the child nodes, in
+ * tree order.
  * @property {Locator[]} nodes The node for each step.
  */
 
@@ -482,8 +214,6 @@ export function elementAtPath(root, path) {
 export function createLocator(paths) {
   /** @returns {Locator} */
   const createNode = () => ({slots: [], steps: [], nodes: []})
-  // Light DOM steps come before shadow root steps.
-  const rank = (/** @type {number} */ step) => step < 0 ? 2 ** 31 - step : step
   const root = createNode()
 
   paths.forEach((path, slot) => {
@@ -491,7 +221,7 @@ export function createLocator(paths) {
 
     for (const step of path) {
       const {steps, nodes} = node
-      let at = steps.findIndex(other => rank(other) >= rank(step))
+      let at = steps.findIndex(other => other >= step)
 
       if (at < 0) {
         at = steps.length
@@ -525,24 +255,16 @@ export function locateElements(element, {slots, steps, nodes}, found) {
     found[/** @type {number} */ (slots[index])] = element
   }
 
-  // The child list of the last step: the element or its shadow root.
-  /** @type {Element | ShadowRoot | null | undefined} */
-  let list
+  if (steps.length === 0) {
+    return
+  }
+
   /** @type {Element | null | undefined} */
-  let child
+  let child = element.firstElementChild
   let position = 0
 
   for (let index = 0; index < steps.length; index += 1) {
-    const step = /** @type {number} */ (steps[index])
-    const parent = step < 0 ? element.shadowRoot : element
-
-    if (list !== parent) {
-      list = parent
-      child = parent?.firstElementChild
-      position = 0
-    }
-
-    for (; position < (step < 0 ? -step - 1 : step); position += 1) {
+    for (; position < /** @type {number} */ (steps[index]); position += 1) {
       child = child?.nextElementSibling
     }
 
@@ -555,58 +277,9 @@ export function locateElements(element, {slots, steps, nodes}, found) {
 }
 
 /**
- * Imports an element and its open shadow trees without invoking custom-element
- * constructors in the inert planning document.
- *
- * @param {Document} document
- * @param {Element} source
- * @param {boolean} [hasOpenShadowRoot] Whether the source contains an open
- * shadow root, when the caller knows. A source that does not change gives
- * the same answer for each import.
- * @returns {Element}
- */
-export function importElementTree(
-  document,
-  source,
-  hasOpenShadowRoot = containsOpenShadowRoot(source),
-) {
-  const imported = /** @type {Element} */ (document.importNode(source, true))
-
-  // importNode() already copies the light DOM. Pairing the two trees is only
-  // needed to reattach open shadow roots, which most components never have.
-  if (hasOpenShadowRoot) {
-    copyOpenShadowTrees(document, source, imported)
-  }
-
-  return imported
-}
-
-/**
- * @param {Document} document
- * @param {Element} source
- * @param {Element} target
- */
-function copyOpenShadowTrees(document, source, target) {
-  pairElementTrees(source, target, (sourceElement, targetElement) => {
-    const sourceShadow = sourceElement.shadowRoot
-
-    if (sourceShadow !== null && targetElement.shadowRoot === null) {
-      const targetShadow = targetElement.attachShadow({
-        mode: 'open',
-        delegatesFocus: sourceShadow.delegatesFocus,
-      })
-
-      for (const child of sourceShadow.childNodes) {
-        targetShadow.append(document.importNode(child, true))
-      }
-    }
-  })
-}
-
-/**
- * Visits two element trees side by side: first the two elements, then the
- * children of their open shadow roots, then their light DOM children. When
- * the trees differ, only the children at the same positions are visited.
+ * Visits two element trees side by side: first the two elements, then their
+ * children. When the trees differ, only the children at the same positions
+ * are visited.
  *
  * @param {Element} left
  * @param {Element} right
@@ -615,25 +288,14 @@ function copyOpenShadowTrees(document, source, target) {
 export function pairElementTrees(left, right, visit) {
   visit(left, right)
 
-  if (left.shadowRoot !== null && right.shadowRoot !== null) {
-    pairChildren(left.shadowRoot.children, right.shadowRoot.children, visit)
-  }
-
-  pairChildren(left.children, right.children, visit)
-}
-
-/**
- * @param {HTMLCollection} left
- * @param {HTMLCollection} right
- * @param {(left: Element, right: Element) => void} visit
- */
-function pairChildren(left, right, visit) {
-  const length = Math.min(left.length, right.length)
+  const leftChildren = left.children
+  const rightChildren = right.children
+  const length = Math.min(leftChildren.length, rightChildren.length)
 
   for (let index = 0; index < length; index += 1) {
     pairElementTrees(
-      /** @type {Element} */ (left[index]),
-      /** @type {Element} */ (right[index]),
+      /** @type {Element} */ (leftChildren[index]),
+      /** @type {Element} */ (rightChildren[index]),
       visit,
     )
   }

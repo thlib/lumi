@@ -9,7 +9,6 @@
  */
 
 import {
-  collectOpenShadowRoots,
   isInsideOwnedSubtree,
   queryElements,
   queryOwnedElements,
@@ -73,7 +72,7 @@ const nonBubblingEventTypes = new Set(
 /**
  * One managed native listener and the targets that hold it. Component
  * declarations with the same type, capture phase, and passive declaration
- * share one group, whose targets are the event boundaries of the component.
+ * share one group, whose one target is the component root.
  * Each element declaration has its own group, whose targets are the
  * matching elements. All declarations of a group have the same `at`, `type`,
  * `capture`, and `passive` values as `descriptor`.
@@ -98,7 +97,7 @@ const nonBubblingEventTypes = new Set(
 /**
  * Declares one native event relationship inside Lumi-owned DOM.
  *
- * By default the event is routed through component-owned event boundaries, so
+ * By default the event is routed through a listener on the component root, so
  * one managed listener keeps covering matching elements created, repeated, or
  * moved by later updates. `{at: 'elements'}` instead maintains native
  * listeners on every matching element, which is what non-bubbling events and
@@ -150,35 +149,23 @@ export function getEventBindingDescriptor(binding) {
 /**
  * Connects every event declaration of one component to its managed listeners.
  *
- * Compatible component declarations share one native listener per component
- * event boundary. Element declarations maintain native listeners that follow
+ * Compatible component declarations share one native listener on the
+ * component root. Element declarations maintain native listeners that follow
  * their matching elements through the rendering lifecycle.
  *
  * @template Data
  * @param {Element} root
  * @param {ReadonlyArray<EventBindingDescriptor>} descriptors
  * @param {ReadonlyArray<Element>} [ownedSubtrees]
- * @param {(() => ReadonlySet<ShadowRoot> | null)} [readShadowRoots]
  * @returns {import('./types.js').ConnectedBinding<Data>}
  */
-export function connectEventBindings(
-  root,
-  descriptors,
-  ownedSubtrees = [],
-  readShadowRoots,
-) {
+export function connectEventBindings(root, descriptors, ownedSubtrees = []) {
   let isConnected = true
   /** @type {Map<unknown, ListenerGroup>} */
   const groupsByKey = new Map()
-
-  /**
-   * A binding runs at most once per native event even when the event reaches
-   * more than one component-owned routing boundary. Keying by the event keeps
-   * that true for reentrant dispatch.
-   *
-   * @type {WeakMap<Event, Set<EventRuntime>>}
-   */
-  const invokedByEvent = new WeakMap()
+  // The one target of each component listener.
+  /** @type {ReadonlySet<EventTarget>} */
+  const componentTargets = new Set([root])
 
   for (const descriptor of descriptors) {
     // Validate every selector while connecting, including when it currently
@@ -227,12 +214,6 @@ export function connectEventBindings(
     const path = isRouted
       ? componentPath(nativeEvent, root, ownedSubtrees)
       : []
-    let invoked = invokedByEvent.get(nativeEvent)
-
-    if (invoked === undefined && isRouted) {
-      invoked = new Set()
-      invokedByEvent.set(nativeEvent, invoked)
-    }
 
     for (const runtime of group.runtimes) {
       // A handler may have unmounted this component.
@@ -240,7 +221,7 @@ export function connectEventBindings(
         return
       }
 
-      if (!runtime.isActive || (isRouted && invoked?.has(runtime))) {
+      if (!runtime.isActive) {
         continue
       }
 
@@ -252,8 +233,6 @@ export function connectEventBindings(
       if (element === undefined) {
         continue
       }
-
-      invoked?.add(runtime)
 
       if (descriptor.freq === 'once') {
         // A consumed binding leaves the listeners that other declarations
@@ -304,9 +283,6 @@ export function connectEventBindings(
       return
     }
 
-    /** @type {Set<EventTarget> | undefined} */
-    let boundaries
-
     for (const group of groups) {
       // A consumed group released its listeners and receives no new ones.
       if (!isActive(group)) {
@@ -315,28 +291,11 @@ export function connectEventBindings(
 
       const { type, capture, passive, at, selector } = group.descriptor
       const current = group.targets
-      /** @type {ReadonlySet<EventTarget>} */
-      let next
-
-      if (at === 'elements') {
-        next = new Set(queryOwnedElements(root, selector, ownedSubtrees))
-      } else {
-        // The event trees that the component owns: its root tree plus
-        // every reachable open shadow root inside its own DOM. The final
-        // DOM commit of the same update can supply the shadow roots.
-        if (boundaries === undefined) {
-          boundaries = new Set([root])
-
-          for (const shadowRoot of readShadowRoots?.()
-            ?? collectOpenShadowRoots(root)) {
-            if (!isInsideOwnedSubtree(shadowRoot.host, ownedSubtrees)) {
-              boundaries.add(shadowRoot)
-            }
-          }
-        }
-
-        next = boundaries
-      }
+      // A component listener stays on the component root. An event from a
+      // shadow tree reaches the root only when the event is composed.
+      const next = at === 'elements'
+        ? new Set(queryOwnedElements(root, selector, ownedSubtrees))
+        : componentTargets
 
       for (const target of current) {
         if (!next.has(target)) {
@@ -373,7 +332,8 @@ export function connectEventBindings(
 /**
  * Restricts a native event path to the elements owned by one component,
  * nearest target first. DOM owned internally by a nested Lumi component is
- * excluded; the child's own mount container is not.
+ * excluded; the child's own mount container is not. The contents of a shadow
+ * root are excluded also: they belong to the element that attached it.
  *
  * @param {Event} nativeEvent
  * @param {Element} root
@@ -383,6 +343,8 @@ export function connectEventBindings(
 function componentPath(nativeEvent, root, ownedSubtrees) {
   /** @type {Element[]} */
   const path = []
+  // Whether the event started in a shadow tree below the component root.
+  let crossesShadowRoot = false
 
   for (const target of nativeEvent.composedPath()) {
     const node = /** @type {Element} */ (target)
@@ -394,13 +356,23 @@ function componentPath(nativeEvent, root, ownedSubtrees) {
       break
     }
 
-    // A ShadowRoot separates two element trees Lumi may both own.
-    if (node.nodeType === 1 && !isInsideOwnedSubtree(node, ownedSubtrees)) {
+    if (node.nodeType === 11) {
+      // Only a shadow root is a fragment between an event target and the
+      // component root.
+      crossesShadowRoot = true
+    } else if (
+      node.nodeType === 1
+      && !isInsideOwnedSubtree(node, ownedSubtrees)
+    ) {
       path.push(node)
     }
   }
 
-  return path
+  // An open shadow root shows its contents in the path. Keep the elements
+  // of the component tree: the hosts, their ancestors, and slotted content.
+  return crossesShadowRoot
+    ? path.filter(node => root.contains(node))
+    : path
 }
 
 /**

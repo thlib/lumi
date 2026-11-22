@@ -8,16 +8,12 @@
  */
 
 import {
-  containsOpenShadowRoot,
   createLocator,
   elementAtPath,
   elementPath,
-  importElementTree,
   locateElements,
   markCreated,
   queryOwnedElements,
-  shadowIncludingContains,
-  shadowIncludingParent,
   tasksByDepth,
 } from './dom.js'
 import { noValue } from './internal/no-value.js'
@@ -43,7 +39,7 @@ import {isStructuralBinding} from './internal/structural.js'
  *   domValue: unknown
  * }>} values
  * @property {(projected: unknown) => unknown} normalize
- * @property {(element: Element, value: unknown) => boolean} apply
+ * @property {(element: Element, value: unknown) => void} apply
  */
 
 /**
@@ -72,8 +68,6 @@ import {isStructuralBinding} from './internal/structural.js'
  * @property {ScopeSpec} scope
  * @property {ReadonlyArray<unknown> | null} acceptedKeys The keys of the
  * last item list that passed the duplicate check.
- * @property {boolean} hasOpenShadowRoot Whether the target contains an open
- * shadow root. The target is in the blueprint, which does not change.
  * @property {boolean} keepsContexts Whether a plan keeps the context of each
  * occurrence. Only dynamic planning reads the contexts.
  */
@@ -270,7 +264,6 @@ function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
         ownSinks: [],
         scope: createScope(),
         acceptedKeys: null,
-        hasOpenShadowRoot: containsOpenShadowRoot(target),
         keepsContexts,
       })
     }
@@ -384,15 +377,14 @@ function nearestRegion(target, regions, strict, runtime) {
       (runtime !== undefined && candidate.runtime !== runtime)
       ||
       (strict && candidate.target === target)
-      // A target in an open shadow root of an occurrence is in the region.
-      || !shadowIncludingContains(candidate.target, target)
+      || !candidate.target.contains(target)
     ) {
       continue
     }
 
     if (
       nearest === null
-      || shadowIncludingContains(nearest.target, candidate.target)
+      || nearest.target.contains(candidate.target)
     ) {
       nearest = candidate
     }
@@ -650,9 +642,8 @@ function prepareDynamicOperations(
   ownedSubtreePaths,
   data,
 ) {
-  const planningRoot = importElementTree(
-    blueprintRoot.ownerDocument,
-    blueprintRoot,
+  const planningRoot = /** @type {Element} */ (
+    blueprintRoot.ownerDocument.importNode(blueprintRoot, true)
   )
   const ownedSubtrees = ownedSubtreePaths.map(path => {
     return elementAtPath(planningRoot, path)
@@ -866,7 +857,7 @@ function findContext(el, contextByElement) {
       return context
     }
 
-    current = shadowIncludingParent(current)
+    current = current.parentElement
   }
 
   throw new Error('Lumi lost a dynamic projection context')
@@ -1238,13 +1229,9 @@ class RegionState {
 
   /** @returns {ScopeState} */
   detachedOccurrence() {
-    const spec = this.spec
-
     return new ScopeState(
-      importElementTree(
-        this.anchor.ownerDocument,
-        spec.target,
-        spec.hasOpenShadowRoot,
+      /** @type {Element} */ (
+        this.anchor.ownerDocument.importNode(this.spec.target, true)
       ),
     )
   }

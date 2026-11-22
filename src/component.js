@@ -90,9 +90,6 @@ function connectComponent(root, bindings) {
   const ownedSubtrees = []
   /** @type {Array<import('./types.js').PreparedUpdate>} */
   const prepared = []
-  // The shadow roots that the last DOM commit found, for the event manager.
-  /** @type {ReadonlySet<ShadowRoot> | null} */
-  let shadowRoots = null
 
   // An update is settled when it is committed or discarded.
   const settle = () => {
@@ -197,11 +194,6 @@ function connectComponent(root, bindings) {
       }
     }
 
-    // The event manager can use the shadow roots of the DOM commit only
-    // when no other binding commits between the two.
-    const sharesShadowRoots = eventBindings.length > 0
-      && domBindingIndex === connected.length
-
     if (domBindingIndex !== undefined) {
       connected.splice(
         domBindingIndex,
@@ -210,11 +202,6 @@ function connectComponent(root, bindings) {
           root,
           flattenDomBindingDescriptors(domBindings),
           ownedSubtrees,
-          sharesShadowRoots
-            ? roots => {
-              shadowRoots = roots
-            }
-            : undefined,
         ),
       )
     }
@@ -222,18 +209,9 @@ function connectComponent(root, bindings) {
     if (eventBindings.length > 0) {
       // Managed listeners follow the committed DOM, so the event manager
       // commits last and releases its listeners first on unmount.
-      connected.push(connectEventBindings(
-        root,
-        eventBindings,
-        ownedSubtrees,
-        sharesShadowRoots
-          ? () => {
-            const roots = shadowRoots
-            shadowRoots = null
-            return roots
-          }
-          : undefined,
-      ))
+      connected.push(
+        connectEventBindings(root, eventBindings, ownedSubtrees),
+      )
     }
   } catch (error) {
     destroyConnected(connected)

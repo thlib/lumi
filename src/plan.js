@@ -8,9 +8,7 @@
  */
 
 import {
-  createElementQuery,
   elementPath,
-  importElementTree,
   markCreated,
   pairElementTrees,
   queryOwnedElements,
@@ -39,10 +37,6 @@ const unplannedMatch = Symbol('Lumi unplanned match')
 
 /**
  * @typedef {string | number | boolean} TextValue
- */
-
-/**
- * @typedef {ReturnType<typeof createElementQuery>} ElementQuery
  */
 
 /**
@@ -90,7 +84,7 @@ const unplannedMatch = Symbol('Lumi unplanned match')
  * that the declaration has reported.
  * @property {Window | null} view
  * @property {(projected: unknown) => unknown} normalize
- * @property {(element: Element, value: unknown) => boolean} apply
+ * @property {(element: Element, value: unknown) => void} apply
  * @property {(element: Element, value: unknown) => boolean} changes
  */
 
@@ -191,15 +185,9 @@ export function flattenDomBindingDescriptors(
  * @param {Element} root
  * @param {ReadonlyArray<DomBindingDescriptor<Data>>} descriptors
  * @param {ReadonlyArray<Element>} [ownedSubtrees]
- * @param {(roots: ReadonlySet<ShadowRoot>) => void} [publishShadowRoots]
  * @returns {import('./types.js').ConnectedBinding<Data>}
  */
-export function connectDomBindings(
-  root,
-  descriptors,
-  ownedSubtrees = [],
-  publishShadowRoots,
-) {
+export function connectDomBindings(root, descriptors, ownedSubtrees = []) {
   const trustedTypes = descriptors.some(requiresTrustedHTML)
     ? trustedTypesFactory(root)
     : null
@@ -208,19 +196,14 @@ export function connectDomBindings(
   })
 
   if (!descriptors.some(descriptor => descriptor.kind === 'repeat')) {
-    return connectScalarDomBindings(
-      root,
-      runtimes,
-      ownedSubtrees,
-      publishShadowRoots,
-    )
+    return connectScalarDomBindings(root, runtimes, ownedSubtrees)
   }
 
   return connectCardinalityDomBindings(
     root,
-    importElementTree(
-      root.ownerDocument.implementation.createHTMLDocument(),
-      root,
+    /** @type {Element} */ (
+      root.ownerDocument.implementation.createHTMLDocument()
+        .importNode(root, true)
     ),
     runtimes,
     ownedSubtrees.map(subtree => elementPath(root, subtree)),
@@ -244,8 +227,8 @@ function requiresTrustedHTML(descriptor) {
  * `normalize` gives the value to write for a projected value, or `noValue`
  * when the projected value asks for no DOM operation.
  *
- * `apply` writes a value and tells whether the live DOM changed. `changes`
- * is a read-only check that tells whether applying one value to the current
+ * `apply` writes a value when the DOM does not have it. `changes` is a
+ * read-only check that tells whether applying one value to the current
  * DOM can change the result of a later selector resolution. Any attribute,
  * class token, property, or inline style write can do that. A text write
  * changes only text when the element keeps one non-empty text node, so only
@@ -272,7 +255,7 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
     warnings: null,
     view: root.ownerDocument.defaultView,
     normalize: projected => projected ?? noValue,
-    apply: () => false,
+    apply: () => {},
     changes: () => false,
   }
 
@@ -285,12 +268,9 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
    */
   const useDomValue = (read, write) => {
     runtime.apply = (element, value) => {
-      if (read(element) === value) {
-        return false
+      if (read(element) !== value) {
+        write(element, value)
       }
-
-      write(element, value)
-      return true
     }
     runtime.changes = (element, value) => read(element) !== value
   }
@@ -322,7 +302,7 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
         const written = sink[writtenText]
 
         if (written === text) {
-          return false
+          return
         }
 
         sink[writtenText] = text
@@ -349,7 +329,7 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
                 : element.textContent
           ) === text
         ) {
-          return false
+          return
         }
 
         // Keep the text node when the element has only that node. An empty
@@ -359,8 +339,6 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
         } else {
           element.textContent = text
         }
-
-        return true
       }
       runtime.changes = (element, value) => {
         if (/** @type {TextSink} */ (element)[writtenText] === value) {
@@ -407,9 +385,7 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
         }
       }
       runtime.apply = (element, value) => {
-        const shouldWrite = runtime.changes(element, value)
-
-        if (shouldWrite) {
+        if (runtime.changes(element, value)) {
           setProperty(element, name, value)
 
           if (runtime.structural) {
@@ -421,7 +397,6 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
           projectedValue: projectedCacheValue(runtime, value),
           domValue: /** @type {any} */ (element)[name],
         })
-        return shouldWrite
       }
       runtime.changes = (element, value) => {
         return !isPropertyCurrent(
@@ -576,15 +551,9 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
  * @param {Element} root
  * @param {ReadonlyArray<DomBindingRuntime<Data>>} runtimes
  * @param {ReadonlyArray<Element>} ownedSubtrees
- * @param {(roots: ReadonlySet<ShadowRoot>) => void} [publishShadowRoots]
  * @returns {import('./types.js').ConnectedBinding<Data>}
  */
-function connectScalarDomBindings(
-  root,
-  runtimes,
-  ownedSubtrees,
-  publishShadowRoots,
-) {
+function connectScalarDomBindings(root, runtimes, ownedSubtrees) {
   const contentRuntimes = runtimes.filter(runtime => runtime.structural)
   const lastRuntime = runtimes[runtimes.length - 1]
   /** @type {Document | null} */
@@ -593,7 +562,6 @@ function connectScalarDomBindings(
   return {
     prepare(data) {
       const context = rootContext(data)
-      const liveQuery = createElementQuery(root)
       // The planning view is the live tree, which the plan only reads, until
       // a prepared write can change the result of a later selector
       // resolution. From then on, the view is an inert copy that receives
@@ -601,7 +569,6 @@ function connectScalarDomBindings(
       // the same order in the two views, and each projection runs one time.
       let view = root
       let owned = ownedSubtrees
-      let query = liveQuery
       /** @type {WeakMap<Element, Element> | null} */
       let liveByPlanned = null
       /**
@@ -637,7 +604,6 @@ function connectScalarDomBindings(
           view,
           runtime.descriptor.selector,
           owned,
-          query,
         )
 
         if (liveMatches !== null) {
@@ -762,7 +728,9 @@ function connectScalarDomBindings(
         // document serves all updates.
         planningDocument ??= root.ownerDocument.implementation
           .createHTMLDocument()
-        const copy = importElementTree(planningDocument, root)
+        const copy = /** @type {Element} */ (
+          planningDocument.importNode(root, true)
+        )
         /** @type {WeakMap<Element, Element>} */
         const lives = new WeakMap()
         /** @type {WeakMap<Element, Element>} */
@@ -798,10 +766,6 @@ function connectScalarDomBindings(
         liveByPlanned = lives
         view = copy
         owned = ownedSubtrees.map(live => plannedElement(live))
-        // Planned content writes cannot attach a shadow root, so the shadow
-        // topology of the copy can only become smaller. One query stays
-        // correct.
-        query = createElementQuery(copy)
 
         // The operations were resolved in the unchanged live view, which
         // equals the copy until the last of them. Replay them in the same
@@ -904,10 +868,6 @@ function connectScalarDomBindings(
 
       return {
         commit() {
-          // Custom binding commits run between preparation and this DOM
-          // commit. Refresh once in case one changed the component's shadow
-          // topology.
-          liveQuery.invalidate()
           // A content property can establish content that the rules for
           // descendants refine. Its cache then gets the final refined DOM,
           // not the intermediate write, so the next update does not rebuild
@@ -922,7 +882,6 @@ function connectScalarDomBindings(
               root,
               selector,
               ownedSubtrees,
-              liveQuery,
             )
 
             if (elements.length !== count) {
@@ -960,9 +919,7 @@ function connectScalarDomBindings(
                   })
                 }
 
-                if (runtime.apply(element, value)) {
-                  liveQuery.recheck(element)
-                }
+                runtime.apply(element, value)
               }
             }
           }
@@ -976,8 +933,6 @@ function connectScalarDomBindings(
               ]
             }
           }
-
-          publishShadowRoots?.(liveQuery.openShadowRoots())
         },
       }
     },

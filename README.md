@@ -134,9 +134,9 @@ The experimental implementation is plain JavaScript with no runtime
 dependencies.
 
 It currently supports parsed-DOM source mounting, scalar bindings, positional
-and keyed repetition from array projections, nested components, and bindings
-through open Shadow DOM. Managed event bindings route native events at the
-component boundary, or follow matching elements when a binding declares
+and keyed repetition from array projections, and nested components. Bindings
+stop at each shadow root, as native selectors do. Managed event bindings route
+native events at the component boundary, or follow matching elements when a binding declares
 `{at: 'elements'}`, without introducing a synthetic event system.
 
 Mounting replaces the target's existing contents with a fresh clone of the

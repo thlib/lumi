@@ -202,12 +202,26 @@ Each scalar binding resolves every matching element during each update. The
 component root itself also participates in selector matching. A selector with
 no matches is a no-op: its projection does not run and the update continues.
 
-Resolution recursively enters open shadow roots below the component boundary,
-so the same bindings and `child` declarations work for elements owned by a
-custom element's open Shadow DOM. Closed shadow roots remain encapsulated and
-are not observable to Lumi. Native CSS scoping still applies: Lumi searches
-each open tree, but a single selector cannot express an ancestor relationship
-across a shadow boundary.
+Resolution stops at each shadow root, as a native selector does. The contents
+of a shadow root belong to the element that attached it. A binding or a
+`child` declaration does not match an element in a shadow root, open or
+closed. The light DOM children of a shadow host stay in the component tree,
+and bindings match them. This includes slotted content.
+
+To render the contents of a shadow root that you own, mount a component on an
+element in that shadow root. The selectors of the component then resolve in
+the shadow tree, and the styles of the shadow root apply to the component:
+
+```js
+class TeamCard extends HTMLElement {
+  constructor() {
+    super()
+    const shadow = this.attachShadow({mode: 'open'})
+    shadow.innerHTML = '<style>h2 { margin: 0 }</style><div></div>'
+    this.view = teamCard.mount(shadow.lastElementChild)
+  }
+}
+```
 
 Content-owning rules (`text` and structural properties) are planned in DOM
 ancestor order, independent of declaration order. Descendant selectors are
@@ -345,19 +359,20 @@ The options object defaults to:
 
 ### `at: 'component'`
 
-The default routes matching events through the component's own event
-boundaries. One managed listener keeps covering matching elements created,
+The default routes matching events through managed listeners on the
+component root. One managed listener keeps covering matching elements created,
 repeated, or moved by later updates, and no listener has to be reconnected
 when repeated elements change.
 
 Lumi reads the event's composed path, restricts it to DOM the component owns,
-excludes DOM owned internally by nested Lumi components, and invokes each
-matching binding once with the closest matching path element. The mounted
+excludes the contents of shadow roots and DOM owned internally by nested Lumi
+components, and invokes each matching binding once with the closest matching
+path element. The mounted
 component root participates in matching.
 
 Compatible declarations share one logical router. The grouping key is the
-component event boundary, event type, `capture`, and `passive`; `once` is
-binding state rather than part of the key.
+event type, `capture`, and `passive`; `once` is binding state rather than part
+of the key.
 
 ```js
 bindings: [
@@ -374,7 +389,7 @@ and `stopPropagation()` keep their native behavior. Code that needs exactly
 independent native listeners should combine the behavior in one handler or use
 `at: 'elements'`.
 
-`event.currentTarget` is the routing boundary and is never rewritten, because
+`event.currentTarget` is the component root and is never rewritten, because
 that would require a wrapped event object. Use the handler's second argument
 for the matched element.
 
@@ -431,11 +446,17 @@ which would mean once per element instead of once per declaration.
 
 ### Lifecycle and boundaries
 
-Selectors are scoped to the component's current DOM, include the component
-root, and follow open Shadow DOM in the same way as scalar bindings. A
-component may own more than one event tree, so Lumi maintains compatible
-routers in reachable open shadow roots too, and still invokes a binding at
-most once per native event. Closed shadow roots stay encapsulated.
+Selectors are scoped to the component's current DOM and include the component
+root. They stop at each shadow root, as scalar bindings do.
+
+A composed event from a shadow tree reaches the component root. The browser
+sets the shadow host as the target of that event. A component binding can
+match the host or an ancestor of the host. It cannot match an element in the
+shadow root. An event that is not composed stays in its shadow tree and does
+not reach the component.
+
+To handle events in a shadow root that you own, mount a component in that
+shadow root.
 
 Parent selectors do not match inside a child component's owned subtree; the
 child mount container itself remains available to the parent. Unmount

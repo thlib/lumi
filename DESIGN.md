@@ -531,14 +531,20 @@ the browser owns event behavior. The native event object, capture, bubbling,
 cancellation, listener options, default actions, and Shadow DOM behavior
 remain intact; there is no synthetic event system.
 
-The default, `{at: 'component'}`, routes the event through the component's own
-event boundaries. Compatible declarations — same boundary, type, `capture`,
-and `passive` — share one logical router, and one managed listener keeps
-working for matching elements created by later structural updates. Lumi
-restricts the event's composed path to DOM the component owns, excludes DOM
-owned by nested components, and passes the closest matching element to the
-handler. `event.currentTarget` remains the routing boundary rather than a
-rewritten value, because rewriting it would require a wrapped event.
+The default, `{at: 'component'}`, routes the event through a listener on the
+component root. Compatible declarations — same type, `capture`, and `passive`
+— share one logical router, and one managed listener keeps working for
+matching elements created by later structural updates. Lumi restricts the
+event's composed path to DOM the component owns, excludes DOM owned by nested
+components, and passes the closest matching element to the handler.
+`event.currentTarget` remains the component root rather than a rewritten
+value, because rewriting it would require a wrapped event.
+
+Lumi stops at each shadow root, as native selectors and native event
+retargeting do. The contents of a shadow root belong to the element that
+attached it. A selector does not match an element in a shadow root, and Lumi
+adds no listener there. An author who owns a shadow root mounts a component
+in it.
 
 `{at: 'elements'}` instead maintains native listeners on every matching
 element and reconciles that set after each successful update. It is the

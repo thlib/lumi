@@ -328,7 +328,6 @@ function ActivityPage() {
         <aside className="activity-summary">
           <section className="panel summary-card">
             <p className="eyebrow">Last 7 days</p><strong>42</strong><span>team updates</span>
-            <div className="mini-bars" aria-hidden="true">{Array.from({length: 7}, (_, index) => <i key={index} />)}</div>
           </section>
           <section className="panel contributor-card">
             <p className="eyebrow">Top contributors</p>

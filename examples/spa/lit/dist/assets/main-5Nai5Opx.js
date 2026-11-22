@@ -73,7 +73,7 @@ const O=globalThis,K=O.ShadowRoot&&(O.ShadyCSS===void 0||O.ShadyCSS.nativeShadow
         </li>
       `)}
     </ol>
-  `}const yt=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];function bt(){return h`
+  `}function yt(){return h`
     <section id="activity" aria-labelledby="activity-title">
       <div class="heading">
         <div><p class="eyebrow">Workspace</p><h1 id="activity-title">Team activity</h1><p>A shared record of progress across every project.</p></div>
@@ -87,7 +87,6 @@ const O=globalThis,K=O.ShadowRoot&&(O.ShadyCSS===void 0||O.ShadyCSS.nativeShadow
         <aside class="activity-summary">
           <section class="panel summary-card">
             <p class="eyebrow">Last 7 days</p><strong>42</strong><span>team updates</span>
-            <div class="mini-bars" aria-hidden="true">${yt.map(()=>h`<i></i>`)}</div>
           </section>
           <section class="panel contributor-card">
             <p class="eyebrow">Top contributors</p>
@@ -112,7 +111,7 @@ const O=globalThis,K=O.ShadowRoot&&(O.ShadyCSS===void 0||O.ShadyCSS.nativeShadow
         </article>
       `)}
     </div>
-  `}const wt=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];function _t(s){const e=ot(s);return h`
+  `}const bt=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];function wt(s){const e=ot(s);return h`
     <section id="overview" aria-labelledby="overview-title">
       <div class="heading">
         <div><p class="eyebrow">${e.date}</p><h1 id="overview-title">${e.title}</h1><p>Here's what's happening across your workspace today.</p></div>
@@ -144,17 +143,17 @@ const O=globalThis,K=O.ShadowRoot&&(O.ShadyCSS===void 0||O.ShadyCSS.nativeShadow
         <aside class="panel week-card" aria-labelledby="week-title">
           <div class="top"><p class="eyebrow">This week</p><h2 id="week-title">Strong momentum</h2><p>Your team completed 28% more work than last week.</p></div>
           <div class="week-chart" aria-label="Weekly activity chart">
-            ${wt.map(t=>h`<span data-day-state=${t===e.today?"today":m}><i>${t}</i></span>`)}
+            ${bt.map(t=>h`<span data-day-state=${t===e.today?"today":m}><i>${t}</i></span>`)}
           </div>
         </aside>
       </div>
     </section>
-  `}const At=["all","active","planning"];function St({filter:s,onFilterChange:e}){const t=Z.filter(i=>s==="all"||i.status.toLowerCase()===s);return h`
+  `}const _t=["all","active","planning"];function At({filter:s,onFilterChange:e}){const t=Z.filter(i=>s==="all"||i.status.toLowerCase()===s);return h`
     <section id="projects" aria-labelledby="projects-title">
       <div class="heading"><div><p class="eyebrow">Workspace</p><h1 id="projects-title">Projects</h1><p>Plan work, track progress, and keep the team aligned.</p></div></div>
       <div class="project-toolbar">
         <div class="filters" aria-label="Filter projects">
-          ${At.map(i=>h`
+          ${_t.map(i=>h`
             <button
               type="button"
               aria-pressed=${s===i}
@@ -166,12 +165,12 @@ const O=globalThis,K=O.ShadowRoot&&(O.ShadyCSS===void 0||O.ShadyCSS.nativeShadow
       </div>
       ${ke(t)}
     </section>
-  `}const Et=["all","alpha","beta","gamma","delta"],kt=["alpha","beta","gamma","delta"],Ct=["Aida Loveleys","Norm Barlug","Freddy Fraggin","Emmy Nother","Fazlo Kan"],xt=2e4,L={recordFilters:Et,groups:kt,owners:Ct,recordCount:xt},Pt=L.recordFilters,ve=L.groups,fe=L.owners,$e=Array.from({length:L.recordCount},(s,e)=>{const t=e+1,i=`record-${String(t).padStart(5,"0")}`,a=ve[e%ve.length]??"alpha",r=fe[e%fe.length]??"Aida Loveleys",n=t*97%1e4;return{id:i,name:`Workspace record ${String(t).padStart(5,"0")}`,group:a,owner:r,value:n,label:`${i} · ${a} · ${r} · ${n}`}});function Mt(s){return s==="all"?$e:$e.filter(e=>e.group===s)}function Tt(s,e){return e==="ascending"?s:Array.from(s).reverse()}function Ht({filter:s,sortDirection:e,onFilterChange:t,onSortChange:i}){const a=Tt(Mt(s),e);return h`
+  `}const St=["all","alpha","beta","gamma","delta"],Et=["alpha","beta","gamma","delta"],kt=["Aida Loveleys","Norm Barlug","Freddy Fraggin","Emmy Nother","Fazlo Kan"],Ct=2e4,L={recordFilters:St,groups:Et,owners:kt,recordCount:Ct},xt=L.recordFilters,ve=L.groups,fe=L.owners,$e=Array.from({length:L.recordCount},(s,e)=>{const t=e+1,i=`record-${String(t).padStart(5,"0")}`,a=ve[e%ve.length]??"alpha",r=fe[e%fe.length]??"Aida Loveleys",n=t*97%1e4;return{id:i,name:`Workspace record ${String(t).padStart(5,"0")}`,group:a,owner:r,value:n,label:`${i} · ${a} · ${r} · ${n}`}});function Pt(s){return s==="all"?$e:$e.filter(e=>e.group===s)}function Mt(s,e){return e==="ascending"?s:Array.from(s).reverse()}function Tt({filter:s,sortDirection:e,onFilterChange:t,onSortChange:i}){const a=Mt(Pt(s),e);return h`
     <section id="records" aria-labelledby="records-title">
       <div class="heading"><div><p class="eyebrow">Performance dataset</p><h1 id="records-title">Records</h1><p>Filter and sort a deterministic 20,000-row dataset without virtualization.</p></div></div>
       <div class="record-toolbar">
         <div class="filters" aria-label="Filter records">
-          ${Pt.map(r=>h`
+          ${xt.map(r=>h`
             <button
               type="button"
               data-record-filter=${r}
@@ -199,7 +198,7 @@ const O=globalThis,K=O.ShadowRoot&&(O.ShadyCSS===void 0||O.ShadyCSS.nativeShadow
         </ol>
       </div>
     </section>
-  `}function Ft(s,e){return h`
+  `}function Ht(s,e){return h`
     <div id="toasts" aria-live="polite" aria-label="Notifications">
       ${C(s,t=>t.id,t=>h`
         <div class="toast">
@@ -209,12 +208,12 @@ const O=globalThis,K=O.ShadowRoot&&(O.ShadyCSS===void 0||O.ShadyCSS.nativeShadow
         </div>
       `)}
     </div>
-  `}function It(s){const e=j.find(t=>t.id===s.memberId);return h`
+  `}function Ft(s){const e=j.find(t=>t.id===s.memberId);return h`
     <section id="teams">
-      ${e?Bt(e):Ot(s)}
-      ${Ft(s.toasts,s.onDismissToast)}
+      ${e?Ot(e):It(s)}
+      ${Ht(s.toasts,s.onDismissToast)}
     </section>
-  `}function Ot({emailError:s,onInviteSubmit:e,onDemoSubmit:t,onEmailInput:i}){return h`
+  `}function It({emailError:s,onInviteSubmit:e,onDemoSubmit:t,onEmailInput:i}){return h`
     <div>
       <div class="heading">
         <div><p class="eyebrow">Manage</p><h1 id="teams-title">Manage teams</h1><p>Invite people and organize how your workspace collaborates.</p></div>
@@ -262,7 +261,7 @@ const O=globalThis,K=O.ShadowRoot&&(O.ShadyCSS===void 0||O.ShadyCSS.nativeShadow
         </div>
       </section>
     </div>
-  `}function Bt(s){return h`
+  `}function Ot(s){return h`
     <div id="profile">
       <a class="back-link" href="#/teams"><span aria-hidden="true">←</span> All team members</a>
       <article class="panel member-profile-card">
@@ -283,7 +282,7 @@ const O=globalThis,K=O.ShadowRoot&&(O.ShadyCSS===void 0||O.ShadyCSS.nativeShadow
       <span class="icon" data-form-kind=${i??m} aria-hidden="true"><svg viewBox="0 0 24 24">${s}</svg></span>
       <div><h2>${e}</h2><p>${t}</p></div>
     </div>
-  `}const jt=3200;class Nt{constructor(e){this.onChange=e}onChange;nextId=1;toasts=[];timers=new Map;show(e="No server for demo"){const t={id:`toast-${this.nextId++}`,message:e};this.toasts=[...this.toasts,t],this.publish(),this.timers.set(t.id,window.setTimeout(()=>this.dismiss(t.id),jt))}dismiss(e){clearTimeout(this.timers.get(e)),this.timers.delete(e),this.toasts=this.toasts.filter(t=>t.id!==e),this.publish()}clear(){this.timers.forEach(e=>clearTimeout(e)),this.timers.clear(),this.toasts=[],this.publish()}publish(){this.onChange(this.toasts)}}class Ut extends T{static properties={route:{state:!0},memberId:{state:!0},navOpen:{state:!0},projectFilter:{state:!0},recordFilter:{state:!0},recordSort:{state:!0},toasts:{state:!0},emailError:{state:!0},now:{state:!0}};clock;toastController=new Nt(e=>{this.toasts=e});constructor(){super(),lt(),this.route=de(location.hash),this.memberId=he(location.hash),this.navOpen=!1,this.projectFilter="all",this.recordFilter="all",this.recordSort="ascending",this.toasts=[],this.emailError="",this.now=new Date}createRenderRoot(){return this}connectedCallback(){super.connectedCallback(),addEventListener("hashchange",this.handleHashChange),this.clock=window.setInterval(()=>{this.now=new Date},6e4)}disconnectedCallback(){removeEventListener("hashchange",this.handleHashChange),window.clearInterval(this.clock),this.toastController.clear(),super.disconnectedCallback()}updated(){document.title=ct(this.route,this.memberId)}handleHashChange=()=>{this.route=de(location.hash),this.memberId=he(location.hash),this.navOpen=!1,this.toastController.clear(),this.updateComplete.then(()=>{this.querySelector("main")?.focus({preventScroll:!0})})};validationMessage(e){return e.validity.valueMissing?"Enter an email address.":e.validity.typeMismatch?"Enter a valid email address.":""}submitInvite=e=>{e.preventDefault();const i=e.currentTarget.elements.namedItem("email");if(i.value=i.value.trim(),this.emailError=this.validationMessage(i),this.emailError!==""){i.focus();return}this.toastController.show()};submitDemo=e=>{e.preventDefault(),this.toastController.show()};updateEmailError=e=>{this.emailError!==""&&(this.emailError=this.validationMessage(e.currentTarget))};render(){return h`
+  `}const Bt=3200;class jt{constructor(e){this.onChange=e}onChange;nextId=1;toasts=[];timers=new Map;show(e="No server for demo"){const t={id:`toast-${this.nextId++}`,message:e};this.toasts=[...this.toasts,t],this.publish(),this.timers.set(t.id,window.setTimeout(()=>this.dismiss(t.id),Bt))}dismiss(e){clearTimeout(this.timers.get(e)),this.timers.delete(e),this.toasts=this.toasts.filter(t=>t.id!==e),this.publish()}clear(){this.timers.forEach(e=>clearTimeout(e)),this.timers.clear(),this.toasts=[],this.publish()}publish(){this.onChange(this.toasts)}}class Nt extends T{static properties={route:{state:!0},memberId:{state:!0},navOpen:{state:!0},projectFilter:{state:!0},recordFilter:{state:!0},recordSort:{state:!0},toasts:{state:!0},emailError:{state:!0},now:{state:!0}};clock;toastController=new jt(e=>{this.toasts=e});constructor(){super(),lt(),this.route=de(location.hash),this.memberId=he(location.hash),this.navOpen=!1,this.projectFilter="all",this.recordFilter="all",this.recordSort="ascending",this.toasts=[],this.emailError="",this.now=new Date}createRenderRoot(){return this}connectedCallback(){super.connectedCallback(),addEventListener("hashchange",this.handleHashChange),this.clock=window.setInterval(()=>{this.now=new Date},6e4)}disconnectedCallback(){removeEventListener("hashchange",this.handleHashChange),window.clearInterval(this.clock),this.toastController.clear(),super.disconnectedCallback()}updated(){document.title=ct(this.route,this.memberId)}handleHashChange=()=>{this.route=de(location.hash),this.memberId=he(location.hash),this.navOpen=!1,this.toastController.clear(),this.updateComplete.then(()=>{this.querySelector("main")?.focus({preventScroll:!0})})};validationMessage(e){return e.validity.valueMissing?"Enter an email address.":e.validity.typeMismatch?"Enter a valid email address.":""}submitInvite=e=>{e.preventDefault();const i=e.currentTarget.elements.namedItem("email");if(i.value=i.value.trim(),this.emailError=this.validationMessage(i),this.emailError!==""){i.focus();return}this.toastController.show()};submitDemo=e=>{e.preventDefault(),this.toastController.show()};updateEmailError=e=>{this.emailError!==""&&(this.emailError=this.validationMessage(e.currentTarget))};render(){return h`
       <div id="shell" data-navigation-state=${this.navOpen?"open":m}>
         <div id="header">
           ${dt({navOpen:this.navOpen,onToggleNavigation:()=>{this.navOpen=!this.navOpen}})}
@@ -299,4 +298,4 @@ const O=globalThis,K=O.ShadowRoot&&(O.ShadyCSS===void 0||O.ShadyCSS.nativeShadow
         ></button>
         <main tabindex="-1">${this.renderPage()}</main>
       </div>
-    `}renderPage(){switch(this.route){case"projects":return St({filter:this.projectFilter,onFilterChange:e=>{this.projectFilter=e}});case"records":return Ht({filter:this.recordFilter,sortDirection:this.recordSort,onFilterChange:e=>{this.recordFilter=e},onSortChange:e=>{this.recordSort=e}});case"activity":return bt();case"teams":return It({memberId:this.memberId,toasts:this.toasts,emailError:this.emailError,onDismissToast:e=>this.toastController.dismiss(e),onInviteSubmit:this.submitInvite,onDemoSubmit:this.submitDemo,onEmailInput:this.updateEmailError});default:return _t(this.now)}}}customElements.define("luminate-app",Ut);
+    `}renderPage(){switch(this.route){case"projects":return At({filter:this.projectFilter,onFilterChange:e=>{this.projectFilter=e}});case"records":return Tt({filter:this.recordFilter,sortDirection:this.recordSort,onFilterChange:e=>{this.recordFilter=e},onSortChange:e=>{this.recordSort=e}});case"activity":return yt();case"teams":return Ft({memberId:this.memberId,toasts:this.toasts,emailError:this.emailError,onDismissToast:e=>this.toastController.dismiss(e),onInviteSubmit:this.submitInvite,onDemoSubmit:this.submitDemo,onEmailInput:this.updateEmailError});default:return wt(this.now)}}}customElements.define("luminate-app",Nt);

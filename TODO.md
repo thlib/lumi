@@ -8,7 +8,6 @@
 - remove classes that are colors
 - remove `background-color`
 - remove the unused styles
-- fix the mini-bars
 - `data-form-kind="create-team"` is wrong.
 - `data-toast="create"` with what msg?
 - remove the actual `data-path` attr from the final html

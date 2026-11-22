@@ -225,7 +225,7 @@ onBeforeUnmount(() => {
         <div class="activity-layout">
           <section class="panel activity-panel" aria-label="All activity"><div class="activity-date"><span>Today</span><span class="line" /></div><ActivityList :items="activities" /></section>
           <aside class="activity-summary">
-            <section class="panel summary-card"><p class="eyebrow">Last 7 days</p><strong>42</strong><span>team updates</span><div class="mini-bars" aria-hidden="true"><i /><i /><i /><i /><i /><i /><i /></div></section>
+            <section class="panel summary-card"><p class="eyebrow">Last 7 days</p><strong>42</strong><span>team updates</span></section>
             <section class="panel contributor-card"><p class="eyebrow">Top contributors</p><div><span class="avatar" data-person="norm-barlug">NB</span><a href="#/teams/norm-barlug">Norm Barlug</a><em>14</em></div><div><span class="avatar" data-person="emmy-nother">EN</span><a href="#/teams/emmy-nother">Emmy Nother</a><em>11</em></div><div><span class="avatar" data-person="fazlo-kan">FK</span><a href="#/teams/fazlo-kan">Fazlo Kan</a><em>9</em></div></section>
           </aside>
         </div>

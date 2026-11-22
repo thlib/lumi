@@ -1483,52 +1483,6 @@ main > :is(
   font-size: 10px;
 }
 
-.mini-bars {
-  display: flex;
-  height: 58px;
-  align-items: flex-end;
-  gap: 5px;
-  margin-top: 19px;
-}
-
-.mini-bars i {
-  flex: 1;
-  background: #dcd6ff;
-  border-radius: 3px 3px 1px 1px;
-}
-
-.mini-bars i:nth-child(1) {
-  height: 30%;
-}
-
-.mini-bars i:nth-child(2) {
-  height: 55%;
-}
-
-.mini-bars i:nth-child(3) {
-  height: 42%;
-}
-
-.mini-bars i:nth-child(4) {
-  height: 75%;
-}
-
-.mini-bars i:nth-child(5) {
-  height: 100%;
-}
-
-.mini-bars i:nth-child(6) {
-  height: 62%;
-}
-
-.mini-bars i:nth-child(7) {
-  height: 80%;
-}
-
-.mini-bars i:nth-child(5) {
-  background: var(--violet);
-}
-
 .contributor-card {
   display: grid;
   gap: 13px;

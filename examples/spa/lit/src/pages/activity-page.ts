@@ -2,8 +2,6 @@ import {html, type TemplateResult} from 'lit'
 import {activities} from '../../../data'
 import {renderActivityList} from '../components/activity-list'
 
-const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
-
 export function renderActivityPage(): TemplateResult {
   return html`
     <section id="activity" aria-labelledby="activity-title">
@@ -19,7 +17,6 @@ export function renderActivityPage(): TemplateResult {
         <aside class="activity-summary">
           <section class="panel summary-card">
             <p class="eyebrow">Last 7 days</p><strong>42</strong><span>team updates</span>
-            <div class="mini-bars" aria-hidden="true">${weekdays.map(() => html`<i></i>`)}</div>
           </section>
           <section class="panel contributor-card">
             <p class="eyebrow">Top contributors</p>

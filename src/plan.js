@@ -9,6 +9,10 @@
  * elements that a markup write creates get their selector matches in each
  * update.
  *
+ * The value list of the last update is the record of the DOM state. A value
+ * that is equal to its record needs no DOM access. A new repeated element is
+ * a copy of one inert element that already has the values.
+ *
  * @internal
  */
 
@@ -695,6 +699,9 @@ function isTextValue(value) {
  * @property {Element} target
  * @property {number} matchIndex
  * @property {number[]} path
+ * @property {boolean} remembers Whether the plan value is a record of the
+ * DOM state. No other declaration writes the same state, so a value that
+ * is equal to the value of the last update needs no DOM access.
  */
 
 /**
@@ -717,6 +724,14 @@ function isTextValue(value) {
  * last item list that passed the duplicate check.
  * @property {boolean} keepsContexts Whether a plan keeps the context of each
  * occurrence. Only dynamic planning reads the contexts.
+ * @property {ReadonlyArray<SinkSpec>} sinks The sinks of one occurrence,
+ * in the order of their values: the own sinks, then the sinks of the scope.
+ * @property {boolean} fills Whether a new occurrence can be a copy of the
+ * fill element.
+ * @property {ScopeState | null} filler The fill element: one inert copy of
+ * the target that gets the values of each new occurrence.
+ * @property {Array<Element | string | null>} classes Each element of the
+ * fill element that has a class binding, then its source `class` attribute.
  */
 
 /**
@@ -855,7 +870,7 @@ function connectPlanner(
           }
 
           markupWrites.length = 0
-          state.apply(scope, apply, plan.sinks, 0, plan.regions, 0)
+          state.apply(scope, scope.sinks, 0, apply, plan.sinks, 0, plan.regions, 0)
 
           if (needsDynamicPlanning) {
             commitDynamicOperations(
@@ -970,6 +985,10 @@ function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
         scope: createScope(),
         acceptedKeys: null,
         keepsContexts,
+        sinks: [],
+        fills: false,
+        filler: null,
+        classes: [],
       })
     }
   }
@@ -1006,6 +1025,12 @@ function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
     region.path = elementPath(parent?.target ?? root, region.target)
     ;(parent?.scope ?? rootScope).regions.push(region)
   }
+
+  // The elements that have a sink, and those that have more than one.
+  /** @type {Set<Element>} */
+  const targeted = new Set()
+  /** @type {Set<Element>} */
+  const shared = new Set()
 
   // The sinks of each scope are in declaration order.
   for (const runtime of runtimes) {
@@ -1047,6 +1072,11 @@ function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
         target,
         matchIndex,
         path: elementPath(parent?.target ?? root, target),
+        remembers: false,
+      }
+
+      if (targeted.size === targeted.add(target).size) {
+        shared.add(target)
       }
       const scope = parent?.scope ?? rootScope
 
@@ -1070,7 +1100,9 @@ function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
     }
   }
 
-  for (const scope of [rootScope, ...regions.map(region => region.scope)]) {
+  for (const region of [null, ...regions]) {
+    const scope = region?.scope ?? rootScope
+
     // A markup write goes before the other bindings, in ancestor order, so
     // that markup that is equal to the current content replaces no element
     // that an earlier declaration changed. The sort is stable.
@@ -1078,9 +1110,85 @@ function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
     scope.locator = createLocator(
       [...scope.sinks, ...scope.regions].map(spec => spec.path),
     )
+
+    const sinks = region === null
+      ? scope.sinks
+      : region.sinks = [...region.ownSinks, ...scope.sinks]
+
+    // A component with a markup write resolves selectors in each update,
+    // so its plan values are not a record of the DOM state.
+    if (keepsContexts) {
+      continue
+    }
+
+    let fills = region !== null
+      && sinks.length > 0
+      && scope.regions.length === 0
+
+    for (const sink of sinks) {
+      const kind = sink.runtime.descriptor.kind
+      const target = sink.target
+
+      // A property binding compares with the live property.
+      sink.remembers = kind !== 'property'
+        && !(
+          shared.has(target)
+          && sinks.some(other => {
+            return other !== sink
+              && other.target === target
+              && sharesState(sink, other)
+          })
+        )
+      // A copy of the fill element has the text, attributes, and classes
+      // of that element. A text write removes the targets inside its
+      // element, so such a copy cannot find those targets later. An empty
+      // text keeps source content that is not text, and the fill element
+      // does not have that content after its first text.
+      fills &&= sink.remembers
+        && kind !== 'style'
+        && !(
+          kind === 'text'
+          && (
+            target.childNodes.length > 1
+            || (target.firstChild?.nodeType ?? 3) !== 3
+            || sinks.some(other => {
+              return other.target !== target && target.contains(other.target)
+            })
+          )
+        )
+    }
+
+    if (region !== null) {
+      region.fills = fills
+    }
   }
 
   return rootScope
+}
+
+/**
+ * Tells whether another declaration for the same element can change the
+ * state that a declaration writes.
+ *
+ * @param {SinkSpec} sink
+ * @param {SinkSpec} other
+ */
+function sharesState(sink, other) {
+  const {kind, name} = sink.runtime.descriptor
+  const {kind: otherKind, name: otherName} = other.runtime.descriptor
+
+  // A property can reflect each other state. Two style properties can be
+  // a shorthand and its longhand. The attributes `class` and `style` hold
+  // the state of the bindings with those names.
+  return otherKind === 'property'
+    || (
+      kind === otherKind
+        // Text has no name.
+        ? kind === 'style'
+          || name?.toLowerCase() === otherName?.toLowerCase()
+        : name?.toLowerCase() === otherKind
+          || otherName?.toLowerCase() === kind
+    )
 }
 
 /**
@@ -1451,7 +1559,16 @@ function prepareDynamicOperations(
 
   const planningState = new ScopeState(planningRoot)
   planningState.connect(scope)
-  planningState.apply(scope, applyPlanned, plan.sinks, 0, plan.regions, 0)
+  planningState.apply(
+    scope,
+    scope.sinks,
+    0,
+    applyPlanned,
+    plan.sinks,
+    0,
+    plan.regions,
+    0,
+  )
   trackOccurrences(
     planningState.regions,
     plan.regions,
@@ -1665,6 +1782,11 @@ class ScopeState {
     this.sinks = null
     /** @type {RegionState[]} */
     this.regions = noRegionStates
+    // The values of the last update, at `offset` in the value list of that
+    // plan. A binding that remembers its value compares with these.
+    /** @type {ReadonlyArray<unknown>} */
+    this.values = noValues
+    this.offset = 0
   }
 
   /**
@@ -1700,25 +1822,59 @@ class ScopeState {
   }
 
   /**
-   * Applies the values of a connected scope.
+   * Applies the values of a scope. The scope finds its targets when the
+   * first value needs a DOM operation.
    *
    * @param {ScopeSpec} spec
+   * @param {ReadonlyArray<SinkSpec>} sinks The sinks, in the order of their
+   * values: the sinks on the element of an occurrence, then the sinks of
+   * the scope.
+   * @param {number} ownCount The number of sinks on the element.
    * @param {ApplyValue} apply
    * @param {ReadonlyArray<unknown>} values
    * @param {number} offset The position of the value of the first sink.
    * @param {ReadonlyArray<RegionPlan>} plans
    * @param {number} planOffset The position of the plan of the first region.
    */
-  apply(spec, apply, values, offset, plans, planOffset) {
-    const specs = spec.sinks
-    const sinks = /** @type {Element[]} */ (this.sinks)
+  apply(spec, sinks, ownCount, apply, values, offset, plans, planOffset) {
+    const last = this.values
+    const lastOffset = this.offset
 
-    for (let index = 0; index < specs.length; index += 1) {
-      apply(
-        /** @type {SinkSpec} */ (specs[index]).runtime,
-        /** @type {Element} */ (sinks[index]),
-        values[offset + index],
-      )
+    // A copy of the fill element already has its values of this plan.
+    if (last !== values || lastOffset !== offset) {
+      // A failure leaves no record of the DOM state.
+      this.values = noValues
+
+      for (let index = 0; index < sinks.length; index += 1) {
+        const sink = /** @type {SinkSpec} */ (sinks[index])
+        const value = values[offset + index]
+
+        if (
+          value !== noValue
+          && !(sink.remembers && last[lastOffset + index] === value)
+        ) {
+          if (this.sinks === null) {
+            this.connect(spec)
+          }
+
+          apply(
+            sink.runtime,
+            index < ownCount
+              ? this.element
+              : /** @type {Element} */ (
+                /** @type {Element[]} */ (this.sinks)[index - ownCount]
+              ),
+            value,
+          )
+        }
+      }
+
+      this.values = values
+      this.offset = offset
+    }
+
+    if (this.sinks === null && spec.regions.length > 0) {
+      this.connect(spec)
     }
 
     const regions = this.regions
@@ -1769,54 +1925,52 @@ class RegionState {
       return
     }
 
-    if (plan.keys === null) {
-      this.applyPositional(plan.count)
-    } else {
-      this.applyKeyed(plan.keys)
-    }
-
     const spec = this.spec
     const scope = spec.scope
-    const ownSinks = spec.ownSinks
-    const ownCount = ownSinks.length
-    const valueCount = ownCount + scope.sinks.length
+    const sinks = spec.sinks
+    const valueCount = sinks.length
+    const ownCount = spec.ownSinks.length
     const nestedCount = scope.regions.length
-    const occurrences = this.occurrences
     const values = plan.values
 
+    if (plan.keys === null) {
+      this.applyPositional(plan.count, values, valueCount)
+    } else {
+      this.applyKeyed(plan.keys, values, valueCount)
+    }
+
+    const occurrences = this.occurrences
+
     for (let index = 0; index < plan.count; index += 1) {
-      const occurrence = /** @type {ScopeState} */ (occurrences[index])
-      const offset = index * valueCount
-
-      if (occurrence.sinks === null) {
-        occurrence.connect(scope)
-      }
-
-      for (let sink = 0; sink < ownCount; sink += 1) {
-        apply(
-          /** @type {SinkSpec} */ (ownSinks[sink]).runtime,
-          occurrence.element,
-          values[offset + sink],
-        )
-      }
-
-      occurrence.apply(
+      /** @type {ScopeState} */ (occurrences[index]).apply(
         scope,
+        sinks,
+        ownCount,
         apply,
         values,
-        offset + ownCount,
+        index * valueCount,
         plan.regions,
         index * nestedCount,
       )
     }
   }
 
-  /** @param {number} count */
-  applyPositional(count) {
+  /**
+   * @param {number} count
+   * @param {ReadonlyArray<unknown>} values The values of all occurrences.
+   * @param {number} valueCount The number of values of one occurrence.
+   */
+  applyPositional(count, values, valueCount) {
     const occurrences = this.occurrences
 
     while (occurrences.length < count) {
-      occurrences.push(this.createOccurrence())
+      const occurrence = this.detachedOccurrence(
+        values,
+        occurrences.length * valueCount,
+      )
+
+      this.anchor.parentNode?.insertBefore(occurrence.element, this.anchor)
+      occurrences.push(occurrence)
     }
 
     while (occurrences.length > count) {
@@ -1832,8 +1986,10 @@ class RegionState {
    * if other code reordered the elements, this restores the projected order.
    *
    * @param {ReadonlyArray<unknown>} keys
+   * @param {ReadonlyArray<unknown>} values The values of all occurrences.
+   * @param {number} valueCount The number of values of one occurrence.
    */
-  applyKeyed(keys) {
+  applyKeyed(keys, values, valueCount) {
     const previous = this.occurrences
     const previousKeys = this.keys
     const count = keys.length
@@ -1861,7 +2017,7 @@ class RegionState {
         const source = /** @type {number} */ (sources[index])
 
         next[index] = source === -1
-          ? this.detachedOccurrence()
+          ? this.detachedOccurrence(values, index * valueCount)
           : /** @type {ScopeState} */ (previous[source])
       }
       for (let index = 0; index < previous.length; index += 1) {
@@ -1909,7 +2065,7 @@ class RegionState {
       }
 
       if (source === undefined) {
-        next[index] = this.detachedOccurrence()
+        next[index] = this.detachedOccurrence(values, index * valueCount)
         sources[index] = -1
       } else {
         next[index] = /** @type {ScopeState} */ (previous[source])
@@ -1983,20 +2139,31 @@ class RegionState {
     }
   }
 
-  /** @returns {ScopeState} */
-  createOccurrence() {
-    const occurrence = this.detachedOccurrence()
-    this.anchor.parentNode?.insertBefore(occurrence.element, this.anchor)
-    return occurrence
-  }
-
-  /** @returns {ScopeState} */
-  detachedOccurrence() {
-    return new ScopeState(
+  /**
+   * Makes an occurrence that is not in the document. When the fill element
+   * can have the values of the occurrence, the occurrence is a copy of the
+   * fill element. Such an occurrence needs no DOM operation, so it does
+   * not find its targets.
+   *
+   * @param {ReadonlyArray<unknown>} values The values of all occurrences.
+   * @param {number} offset The position of the first value of this one.
+   * @returns {ScopeState}
+   */
+  detachedOccurrence(values, offset) {
+    const spec = this.spec
+    const filled = fillElement(spec, values, offset)
+    const occurrence = new ScopeState(
       /** @type {Element} */ (
-        this.anchor.ownerDocument.importNode(this.spec.target, true)
+        this.anchor.ownerDocument.importNode(filled ?? spec.target, true)
       ),
     )
+
+    if (filled !== null) {
+      occurrence.values = values
+      occurrence.offset = offset
+    }
+
+    return occurrence
   }
 
   destroy() {
@@ -2006,6 +2173,105 @@ class RegionState {
     this.occurrences = []
     this.anchor.remove()
   }
+}
+
+/**
+ * Gives the values of one occurrence to the fill element of a region. A
+ * copy of the fill element is equal to a copy of the source that got the
+ * same values.
+ *
+ * @param {RegionSpec} spec
+ * @param {ReadonlyArray<unknown>} values The values of all occurrences.
+ * @param {number} offset The position of the first value of the occurrence.
+ * @returns {Element | null} The fill element, or null when the occurrence
+ * must be a copy of the source.
+ */
+function fillElement(spec, values, offset) {
+  const sinks = spec.sinks
+
+  if (!spec.fills) {
+    return null
+  }
+
+  for (let index = 0; index < sinks.length; index += 1) {
+    const value = values[offset + index]
+
+    // A nullish projection keeps the source content, and the fill element
+    // has the content of an earlier occurrence. An attribute that the fill
+    // element loses comes back at a different position.
+    if (
+      value === noValue
+      || (
+        value === false
+        && /** @type {SinkSpec} */ (sinks[index]).runtime.descriptor.kind
+          === 'attribute'
+      )
+    ) {
+      return null
+    }
+  }
+
+  const classes = spec.classes
+  let filler = spec.filler
+
+  if (filler === null) {
+    // The copy stays in the inert document of the source.
+    filler = spec.filler = new ScopeState(
+      /** @type {Element} */ (
+        spec.target.ownerDocument.importNode(spec.target, true)
+      ),
+    )
+    filler.connect(spec.scope)
+
+    const found = /** @type {Element[]} */ (filler.sinks)
+    const ownCount = spec.ownSinks.length
+
+    for (let index = 0; index < sinks.length; index += 1) {
+      const element = index < ownCount
+        ? filler.element
+        : /** @type {Element} */ (found[index - ownCount])
+
+      if (
+        /** @type {SinkSpec} */ (sinks[index]).runtime.descriptor.kind
+          === 'class'
+        && !classes.includes(element)
+      ) {
+        classes.push(element, element.getAttribute('class'))
+      }
+    }
+  }
+
+  // A class binding changes one part of the `class` attribute, so its
+  // result depends on the classes of the occurrence before this one. Each
+  // occurrence starts from the source classes.
+  for (let index = 0; index < classes.length; index += 2) {
+    const element = /** @type {Element} */ (classes[index])
+    const value = /** @type {string | null} */ (classes[index + 1])
+
+    if (element.getAttribute('class') !== value) {
+      if (value === null) {
+        element.removeAttribute('class')
+      } else {
+        element.setAttribute('class', value)
+      }
+    }
+  }
+
+  // The fill element has no record of its classes, so each binding
+  // compares with the fill element.
+  filler.values = noValues
+  filler.apply(
+    spec.scope,
+    sinks,
+    spec.ownSinks.length,
+    applyLive,
+    values,
+    offset,
+    noRegionPlans,
+    0,
+  )
+
+  return filler.element
 }
 
 /**

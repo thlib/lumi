@@ -153,7 +153,10 @@ component. The mounted component owns the target contents for its lifetime. If
 connecting a binding fails, Lumi removes the clone and restores the preceding
 target contents.
 
-The target is an element or a shadow root. The target and an element or
+The target is an element or a document fragment. A shadow root is a document
+fragment. When you insert a document fragment into a document, the component
+root moves with the other child nodes of the fragment, and the component
+stays mounted. The target and an element or
 template source may be direct `querySelector` results. A clear error is thrown if either is missing or the source does not
 provide exactly one root element. A connected and a detached element have the
 same source semantics: `mount` clones them and does not adopt them.
@@ -172,13 +175,18 @@ validation fails, the prepared work is discarded, the mounted component tree
 remains unchanged, and a later update is still permitted.
 
 Commit begins only after the complete active component tree prepares
-successfully. Each binding compares its projected value with the corresponding
-DOM state and writes only when the value differs. Bindings cache values where
-the browser cannot change the owned state independently.
+successfully. A `text`, `attr`, `classToggle`, or `style` binding remembers
+the value that it wrote. When the next projected value is equal to that
+value, the binding does not read or write the DOM. When the value is
+different, the binding compares it with the DOM state and writes only a
+difference. When two bindings write the same state of one element, they do
+not remember: each compares with the DOM state on each update, and the last
+declaration wins.
 
-Property bindings also compare against the live property on every update.
+A `prop` binding compares with the live property on each update.
 This lets authoritative data restore a user-mutated `value`, `checked`, or
-similar browser state. The binding remembers the browser's post-assignment value so
+similar browser state. Use `prop`, not `attr`, for a state that the browser
+changes, for example the `open` state of a `<details>` element. The binding remembers the browser's post-assignment value so
 native coercion does not cause a repeated write.
 
 Arbitrary DOM operations are not fully transactional. A native or custom
@@ -623,6 +631,13 @@ The repeatable target must exist in the component source to provide a
 pristine element to clone. Projection and coordinate validation complete
 before the live DOM changes.
 
+A new repeated element is a copy of the source element. When the bindings of
+the repeat are `text`, `attr`, and `classToggle` bindings, Lumi can give the
+values to one inert element and copy that element. The new element then has
+its text, attributes, and classes before it goes into the document, and it
+is equal to a copy of the source that got the same values. A custom element
+in such a copy has its attributes when its constructor runs.
+
 ## Explicit positional contexts
 
 `repeat` separates positional cardinality from text. Its projection receives
@@ -755,10 +770,11 @@ nested component, so the mount is rejected.
 Unbound state remains under browser or application ownership. Imperative code
 should not write a property or subtree already owned by a binding.
 
-Lumi does not repair such a write to a `text` sink. A `text` binding compares
-its projection with the text that it last wrote, not with the live DOM. The
-foreign text stays until the projection changes. A property binding is
-different: it compares with the live property on each update.
+Lumi does not repair such a write to the state of a `text`, `attr`,
+`classToggle`, or `style` binding. These bindings compare the projection
+with the value that they wrote last, not with the live DOM. The foreign
+state stays until the projection changes. A `prop` binding is different: it
+compares with the live property on each update.
 
 ## Errors
 

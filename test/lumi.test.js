@@ -739,17 +739,56 @@ test('mounts on a shadow root', () => {
   )
   assert.equal(shadow.innerHTML, '<style>p { margin: 0 }</style><p>Before</p>')
 
-  // A fragment that is not a shadow root is not a mount target.
-  assert.throws(
-    () => view.mount(
-      /** @type {ShadowRoot} */ (document.createDocumentFragment()),
+})
+
+test('mounts on a document fragment', () => {
+  const { document } = createDocument()
+  const view = component({
+    source: createTemplate(
+      document,
+      '<ul><li class="item"></li></ul>',
     ),
-    /mount target must be a DOM element or a shadow root/,
+    bindings: [
+      repeat(
+        '.item',
+        ({data}) => /** @type {string[]} */ (data),
+        [text(':scope', ({item}) => /** @type {string} */ (item))],
+      ),
+    ],
+  })
+  const fragment = document.createDocumentFragment()
+
+  fragment.append('Before')
+
+  const mounted = view.mount(fragment)
+
+  // The component root replaces the contents of the fragment.
+  assert.strictEqual(mounted.root.parentNode, fragment)
+  assert.equal(fragment.childNodes.length, 1)
+
+  mounted.update(['Ada'])
+  assert.equal(fragment.textContent, 'Ada')
+
+  // An insertion moves the component root out of the fragment. The
+  // component stays mounted.
+  document.body.append(fragment)
+  assert.strictEqual(mounted.root.parentNode, document.body)
+
+  mounted.update(['Ada', 'Grace'])
+  assert.deepEqual(
+    Array.from(document.body.querySelectorAll('.item'), item => item.textContent),
+    ['Ada', 'Grace'],
   )
-  assert.throws(
-    () => view.mount(/** @type {ShadowRoot} */ (template.content)),
-    /mount target/,
-  )
+
+  mounted.unmount()
+  assert.equal(document.body.childNodes.length, 0)
+
+  for (const target of [null, document, document.createTextNode('text')]) {
+    assert.throws(
+      () => view.mount(/** @type {Element} */ (/** @type {unknown} */ (target))),
+      /mount target must be a DOM element or a document fragment/,
+    )
+  }
 })
 
 test('classToggle updates one token without repeated DOMTokenList work', () => {

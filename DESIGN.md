@@ -294,9 +294,10 @@ Each explicit `update(data)` call proceeds as follows:
    elements that the markup creates.
 4. Recursively prepares the active component tree.
 5. Discards the complete plan without live DOM changes if preparation fails.
-6. Writes the prepared values to persistent live nodes, compares projected
-   values with owned DOM state or its safely cached representation, and
-   writes only differences.
+6. Writes the prepared values to persistent live nodes. A value that is
+   equal to the value that the binding wrote last needs no DOM access. Each
+   other value is compared with the owned DOM state, and only a difference
+   is written.
 7. Reconciles positional or explicitly keyed structural regions and nested
    child components.
 8. Retains projected values needed to avoid redundant DOM writes.
@@ -334,12 +335,19 @@ data snapshot owns that property, the next update restores the supplied value.
 The binding also remembers native coercion, so projecting the number `1` into a
 string-valued property does not cause a write on every update.
 
-Text bindings do not read the live DOM. A text binding compares its projection
-with the text that Lumi last wrote to that element. Text has one writer, so a
-different value in the DOM is a foreign write. Lumi does not repair a foreign
-write: the foreign text stays until the projection changes. When the
-projection changes, Lumi sets the data of the existing text node, so the node
+Text, attribute, class, and style bindings remember the value that they
+wrote. A binding compares its projection with that value, and an equal value
+needs no DOM access. Such a state has one writer, so a different value in
+the DOM is a foreign write. Lumi does not repair a foreign write: the foreign
+state stays until the projection changes. When the projection of a text
+binding changes, Lumi sets the data of the existing text node, so the node
 persists.
+
+The record of each value is the value list of the last update. A repeated
+element thus needs no object for each binding. A new repeated element is a
+copy of one inert element that already has the values, so the element needs
+no DOM operation after the copy. It finds its targets only when one of its
+values changes.
 
 This is not reactive dependency tracking. No properties are observed or
 subscribed to, and update timing is never inferred from what a function reads.

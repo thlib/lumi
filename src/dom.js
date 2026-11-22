@@ -343,19 +343,19 @@ export function cloneSourceRoot(source) {
 
 /**
  * Rejects a value that cannot contain a mounted component. A mount target
- * is an element or a shadow root.
+ * is an element or a document fragment. A shadow root is a document
+ * fragment.
  *
- * @param {Element | ShadowRoot | null} target
- * @returns {asserts target is Element | ShadowRoot}
- * @throws {TypeError} When the value is not an element or a shadow root.
+ * @param {Element | DocumentFragment | null} target
+ * @returns {asserts target is Element | DocumentFragment}
+ * @throws {TypeError} When the value is not an element or a fragment.
  */
 export function assertMountTarget(target) {
   const type = target?.nodeType
 
-  // Only a shadow root is a fragment with a host.
-  if (type !== 1 && !(type === 11 && 'host' in /** @type {Node} */ (target))) {
+  if (type !== 1 && type !== 11) {
     throw new TypeError(
-      'Lumi mount target must be a DOM element or a shadow root',
+      'Lumi mount target must be a DOM element or a document fragment',
     )
   }
 }

@@ -250,3 +250,26 @@ test('the production build renders duplicate keys and ignores lost targets', () 
   assert.deepEqual(names(), ['Edsger D.', 'Ada L.'])
   assert.equal(mounted.root.querySelectorAll('.row').length, 2)
 })
+
+test('the source maps of the two builds have the lines of the source files', () => {
+  for (const name of ['lumi.js', 'lumi.dev.js']) {
+    const map = JSON.parse(readFileSync(
+      new URL(`../dist/${name}.map`, import.meta.url),
+      'utf8',
+    ))
+
+    assert.ok(map.sources.length > 0)
+    for (const [index, source] of map.sources.entries()) {
+      const file = readFileSync(
+        new URL(`../dist/${source}`, import.meta.url),
+        'utf8',
+      )
+
+      assert.equal(
+        map.sourcesContent[index].split('\n').length,
+        file.split('\n').length,
+        `${name}: ${source}`,
+      )
+    }
+  }
+})

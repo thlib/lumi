@@ -26,7 +26,8 @@ const production = {
   name: 'lumi-production',
   setup(build) {
     build.onLoad({filter: /\.js$/}, ({path}) => ({
-      contents: readFileSync(path, 'utf8').replace(devImport, ''),
+      // The line break stays, so that the source map has the correct lines.
+      contents: readFileSync(path, 'utf8').replace(devImport, '\n'),
       loader: 'js',
     }))
   },

@@ -73,7 +73,13 @@ export type ComponentOptions<Data> = {
 }
 
 export type Component<Data> = {
-  /** Puts a copy of the component source into the target. */
+  /**
+   * Connects the component to the target. When the first element in the
+   * target has the tag of the root element of the source, the component
+   * keeps that element, and the first update writes only the differences.
+   * In all other cases, a copy of the source replaces the content of the
+   * target.
+   */
   mount: (target: Element | DocumentFragment | null) => MountedComponent<Data>
 }
 

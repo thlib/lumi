@@ -152,11 +152,19 @@ The bindings array is optional.
 
 ### `definition.mount(target)`
 
-`mount` deep-clones the source, replaces the target's existing contents with
-its single root element, resolves the bindings, and returns a mounted
-component. The mounted component owns the target contents for its lifetime. If
-connecting a binding fails, Lumi removes the clone and restores the preceding
-target contents. The error then goes to the caller of `mount`.
+`mount` connects the component to the target, resolves the bindings, and
+returns a mounted component. The root of the component comes from one of two
+places:
+
+- When the first element in the target has the tag of the root element of
+  the source, that element is the root, and `mount` does not change the
+  target. Refer to [Existing DOM in the target](#existing-dom-in-the-target).
+- In all other cases, `mount` makes a copy of the source and replaces the
+  content of the target with the root element of the copy.
+
+The mounted component owns its root for its lifetime. If connecting a binding
+fails, the target gets its preceding content again. The error then goes to
+the caller of `mount`.
 
 The target is an element or a document fragment. A shadow root is a document
 fragment. When you insert a document fragment into a document, the component
@@ -165,8 +173,72 @@ stays mounted. The target and an element or
 template source may be direct `querySelector` results. If the target or the
 source is missing, the development version gives a clear error, and the
 production version gives the error of the browser. A connected and a detached
-element have the same source semantics: `mount` clones them and does not
-adopt them.
+element have the same source semantics: `mount` makes a copy of them. A
+source element that is in the target is not existing DOM for the component,
+and `mount` replaces it with its copy.
+
+#### Existing DOM in the target
+
+The target can have the DOM of the component before the mount, for example
+HTML from a server. `mount` then connects the component to that DOM:
+
+```html
+<div id="app">
+  <section>
+    <h1>People</h1>
+    <ul><li>Ada</li><li>Grace</li></ul>
+  </section>
+</div>
+```
+
+```js
+const view = page.mount(document.querySelector('#app'))
+
+view.update(data)
+```
+
+The HTML needs no marker and no attribute for Lumi. It must have the
+structure of the component source:
+
+- A `repeat` has one element for each item, at the position of its source
+  element. A [conditional region](#conditional-regions) without an item has
+  no element.
+- The container of a child component has the root of the child.
+
+The first update connects the elements to the data:
+
+- A `repeat` gets the number of its items from the data. It keeps that
+  number of elements at its position, when they have the tag of its source
+  element. It makes its other occurrences from the source. Lumi then puts its
+  position marker, a comment, after the last element.
+- Each binding compares its value with the DOM and writes only a
+  difference. When the HTML agrees with the data, the first update writes no
+  content.
+- A repeated element that has only `text`, `attr`, and `classToggle`
+  bindings is compared with its values in one operation of the browser.
+  Lumi keeps no reference to the elements in an element that agrees.
+- A keyed `repeat` removes the nodes between its elements, for example white
+  space. Its elements then have the positions that Lumi gives to the
+  elements that it makes.
+
+The event bindings are active from the mount. A child component at the
+component boundary is connected in the first update, not in the mount.
+
+A `repeat` whose first projection is nullish keeps its region, and Lumi
+then takes the region to have the one element of the source.
+
+HTML with a different structure gives no error. A target that is not at its
+position gets no update, as with other
+[changes that other code makes](#changes-that-other-code-makes-to-the-dom).
+
+The other nodes in the target stay. `unmount` removes only the root.
+
+`mount` cannot tell HTML from a server from the root of a component that is
+mounted in the target. Thus, call `unmount` before you mount a component of
+the same tag in the same target again. If you do not, the two components
+share one root, and the event bindings of the two are active. To start from
+a new copy of the source, remove the content of the target before the mount,
+for example with `target.replaceChildren()`.
 
 ### `mounted.update(data)`
 
@@ -271,8 +343,8 @@ class TeamCard extends HTMLElement {
 }
 ```
 
-A mount replaces the child nodes of its target, which includes a `<style>`
-element in a shadow root. An adopted style sheet is not a child node, so it
+A mount that makes a copy of the source replaces the child nodes of its
+target, which includes a `<style>` element in a shadow root. An adopted style sheet is not a child node, so it
 stays. To keep other child nodes of a shadow root, mount the component on an
 element in the shadow root:
 
@@ -785,7 +857,9 @@ child('.profile-slot', profileComponent, ({data}) => data.profile)
 
 The child replaces the content of the container. The root of the child stays
 the same element for all updates of the parent. A child at the component
-boundary is in the DOM from the mount of the parent.
+boundary is in the DOM from the mount of the parent. When the parent has
+[existing DOM in the target](#existing-dom-in-the-target), a container that
+has the root of the child keeps it.
 
 In the child, `data` is the value that the projection gave. A nullish
 projection keeps the child as it is.

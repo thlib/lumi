@@ -32,9 +32,16 @@ export function component(options) {
       }
 
       const container = /** @type {Element | DocumentFragment} */ (target)
-      const root = /** @type {Element} */ (
-        sourceRoot(options.source).cloneNode(true)
-      )
+      const source = sourceRoot(options.source)
+      const existing = container.firstElementChild
+
+      // A target that has the root element of the component keeps it. The
+      // first update then writes only the differences.
+      if (existing !== source && existing?.localName === source.localName) {
+        return connectComponent(existing, bindings, source)
+      }
+
+      const root = /** @type {Element} */ (source.cloneNode(true))
       const previousChildren = Array.from(container.childNodes)
       let mounted
 
@@ -60,9 +67,11 @@ export function component(options) {
  * @template Data
  * @param {Element} root
  * @param {ReadonlyArray<import('./types.js').Binding<Data>>} bindings
+ * @param {Element | null} [source] The root element of the component
+ * source, when `root` is an element that the target had.
  * @returns {import('./types.js').MountedComponent<Data>}
  */
-function connectComponent(root, bindings) {
+function connectComponent(root, bindings, source = null) {
   let isRendering = false
 
   /** @type {Array<import('./types.js').ConnectedBinding<Data>>} */
@@ -182,7 +191,7 @@ function connectComponent(root, bindings) {
       connected.splice(
         domBindingIndex,
         0,
-        connectDomBindings(root, descriptors, containers),
+        connectDomBindings(root, descriptors, containers, source),
       )
     }
 

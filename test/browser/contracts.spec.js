@@ -610,3 +610,78 @@ test('binding-level once consumes one declaration for the mounted component', as
 
   expect(result).toEqual(['once', 'always', 'always', 'always'])
 })
+
+test('mount keeps the DOM that the target has and writes only the differences', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { attr, component, on, repeat, text } = /** @type {typeof import('../../src/index.js')} */ (
+      await import(String('/src/index.js'))
+    )
+    const template = document.createElement('template')
+    template.innerHTML = '<section><h1>Title</h1><ul><li class="row"><b>Name</b></li></ul><button type="button">Go</button></section>'
+    const target = /** @type {Element} */ (document.querySelector('#test-root'))
+    target.innerHTML = '<section><h1>People</h1><ul>\n'
+      + '<li class="row" data-id="a"><b>Ada</b></li>\n'
+      + '<li class="row" data-id="g"><b>Grace</b></li>\n'
+      + '</ul><button type="button">Go</button></section>'
+    const rows = Array.from(target.querySelectorAll('.row'))
+    /** @typedef {{id: string, name: string}} Person */
+    let clicks = 0
+    const mounted = component({
+      source: template,
+      bindings: [
+        text('h1', () => 'People'),
+        repeat(
+          '.row',
+          ({data}) => /** @type {Person[]} */ (data),
+          ({item}) => /** @type {Person} */ (item).id,
+          [
+            attr(':scope', 'data-id', ({item}) => /** @type {Person} */ (item).id),
+            text('b', ({item}) => /** @type {Person} */ (item).name),
+          ],
+        ),
+        on('button', 'click', () => {
+          clicks += 1
+        }),
+      ],
+    }).mount(target)
+    const observer = new MutationObserver(() => {})
+
+    observer.observe(target, {
+      attributes: true,
+      characterData: true,
+      childList: true,
+      subtree: true,
+    })
+    mounted.update([{id: 'a', name: 'Ada'}, {id: 'g', name: 'Grace'}])
+
+    // The position marker and the white space between the rows.
+    const contentWrites = observer.takeRecords().filter(record => {
+      return [...record.addedNodes, ...record.removedNodes]
+        .some(node => node.nodeType === 1)
+        || record.type !== 'childList'
+    }).length
+
+    target.querySelector('button')?.click()
+    mounted.update([{id: 'g', name: 'Grace H.'}, {id: 'a', name: 'Ada'}])
+
+    const after = Array.from(target.querySelectorAll('.row'))
+
+    return {
+      contentWrites,
+      clicks,
+      sameRoot: mounted.root === target.firstElementChild,
+      moved: after[0] === rows[1] && after[1] === rows[0],
+      names: after.map(row => row.textContent),
+    }
+  })
+
+  expect(result).toEqual({
+    contentWrites: 0,
+    clicks: 1,
+    sameRoot: true,
+    moved: true,
+    names: ['Grace H.', 'Ada'],
+  })
+})

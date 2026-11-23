@@ -261,7 +261,9 @@ mount multiple independent roots.
 
 Mounting happens once. The parsed DOM source is cloned, replaces the mount
 target's existing contents, and has its bindings connected to that component
-boundary.
+boundary. A target that has the root element of the component keeps it, for
+example HTML from a server, and the first update writes only the differences.
+Refer to [Existing DOM in the target](./API.md#existing-dom-in-the-target).
 Selectors are resolved one time, at mount, in the component source. A rule
 owns the elements that it matched, so an update does no selector work for
 them. Only the elements that a markup write (`innerHTML` or `outerHTML`)

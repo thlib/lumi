@@ -216,12 +216,16 @@ export function flattenDomBindingDescriptors(
  * @param {ReadonlyArray<DomBindingDescriptor<Data>>} descriptors
  * @param {WeakSet<Element> | null} [containers] Receives the mounted
  * containers of the child components.
+ * @param {Element | null} [source] The root element of the component
+ * source, when `root` is DOM that other code made. The first update then
+ * adopts that DOM.
  * @returns {import('./types.js').ConnectedBinding<Data>}
  */
 export function connectDomBindings(
   root,
   descriptors,
   containers = null,
+  source = null,
 ) {
   /** @type {Planner} */
   const planner = {root, inert: null, children: null}
@@ -232,7 +236,9 @@ export function connectDomBindings(
   })
   const compiled = compile(
     planner,
-    needsCopy ? inertCopy(planner, root) : root,
+    source !== null
+      ? inertCopy(planner, source)
+      : needsCopy ? inertCopy(planner, root) : root,
     descriptors,
     containers,
     [],
@@ -244,7 +250,7 @@ export function connectDomBindings(
 
   // A child component at the component boundary is in the DOM from the
   // mount.
-  if (scope.children.length > 0) {
+  if (source === null && scope.children.length > 0) {
     state = new ScopeState(root)
     state.connect(scope)
   }
@@ -257,6 +263,13 @@ export function connectDomBindings(
         commit() {
           if (state === null) {
             state = new ScopeState(root)
+
+            if (source !== null) {
+              adoptScope(state, scope, plan.regions, 0)
+              commitCompiled(compiled, state, plan)
+              releaseTargets(state)
+              return
+            }
 
             if (compiled.root === root) {
               // The selectors resolved in the mounted root, so the targets
@@ -2229,6 +2242,164 @@ class ScopeState {
 }
 
 /**
+ * Connects a scope to DOM that other code made, for example HTML from a
+ * server. That DOM has the structure of the component source, with one
+ * element for each item of a repeat. Thus the position of an element
+ * depends on the number of items, and the plan of the first update gives
+ * that number.
+ *
+ * A repeat adopts the elements at its position that have the tag of its
+ * source element, to the number of its items. It makes its other
+ * occurrences from the source.
+ *
+ * @param {ScopeState} state
+ * @param {ScopeSpec} spec
+ * @param {ReadonlyArray<SlotPlan>} plans
+ * @param {number} planOffset The position of the plan of the first region.
+ */
+function adoptScope(state, spec, plans, planOffset) {
+  const sinkCount = spec.sinks.length
+  const regions = spec.regions
+  /** @type {Array<any>} */
+  const found = new Array(sinkCount + spec.slots)
+
+  /**
+   * @param {Element} element
+   * @param {import('./dom.js').Locator} locator
+   */
+  const adopt = (element, {slots, steps, nodes}) => {
+    for (const slot of slots) {
+      const child = spec.children[slot - sinkCount - regions.length]
+
+      found[slot] = child === undefined
+        ? element
+        : new ChildState(
+          element,
+          child,
+          /** @type {ScopePlan | null} */ (
+            plans[planOffset + slot - sinkCount]
+          ),
+        )
+    }
+
+    /** @type {Element | null | undefined} */
+    let child = element.firstElementChild
+    // The position of `child` in the source.
+    let position = 0
+
+    for (let index = 0; index < steps.length; index += 1) {
+      for (; position < /** @type {number} */ (steps[index]); position += 1) {
+        child = child?.nextElementSibling
+      }
+
+      const node = /** @type {import('./dom.js').Locator} */ (nodes[index])
+      const slot = /** @type {number} */ (node.slots[0])
+      // A repeat target has one slot, and its scope has all its targets.
+      const region = regions[slot - sinkCount]
+
+      if (region === undefined) {
+        if (child) {
+          adopt(child, node)
+        }
+        continue
+      }
+
+      const plan = /** @type {RegionPlan} */ (
+        plans[planOffset + slot - sinkCount]
+      )
+      // A nullish projection keeps the region, which then has the one
+      // element of the source.
+      const count = plan.isNoop ? 1 : plan.count
+      /** @type {ScopeState[]} */
+      const occurrences = []
+      /** @type {Element | null} */
+      let last = null
+
+      while (
+        occurrences.length < count
+        && child?.localName === region.target.localName
+      ) {
+        const occurrence = new ScopeState(child)
+
+        if (!plan.isNoop) {
+          const offset = occurrences.length * region.sinks.length
+
+          if (region.scope.slots > 0) {
+            adoptScope(
+              occurrence,
+              region.scope,
+              plan.regions,
+              occurrences.length * region.scope.slots,
+            )
+          } else if (
+            // An element that is equal to the fill element has its values.
+            // One comparison in the browser replaces one read for each
+            // target, and Lumi gets no reference to the targets. An
+            // element that is not equal finds its targets at the positions
+            // of the source and gets the differences.
+            child.isEqualNode(fillElement(region, plan.values, offset))
+          ) {
+            occurrence.values = plan.values
+            occurrence.offset = offset
+          }
+        }
+
+        // The elements of a keyed repeat have no node between them.
+        while (plan.keys !== null && last !== null && last.nextSibling !== child) {
+          last.nextSibling?.remove()
+        }
+
+        occurrences.push(occurrence)
+        last = child
+        child = child.nextElementSibling
+      }
+
+      const anchor = element.ownerDocument.createComment('lumi')
+
+      element.insertBefore(anchor, last === null ? child ?? null : last.nextSibling)
+      found[slot] = new RegionState(
+        region,
+        anchor,
+        occurrences,
+        plan.keys === null ? null : plan.keys.slice(0, occurrences.length),
+      )
+      position += 1
+    }
+  }
+
+  adopt(state.element, spec.locator)
+  state.regions = found.splice(sinkCount)
+  state.sinks = found
+}
+
+/**
+ * Releases the targets of the adopted occurrences that can find them again.
+ * The first update compared each adopted element with its value. After
+ * that, an occurrence needs its targets only when a value changes, as a
+ * copy of the fill element does. Without this, a large adopted list keeps a
+ * reference to each of its elements.
+ *
+ * @param {ScopeState} state
+ */
+function releaseTargets(state) {
+  for (const region of state.regions) {
+    if (region instanceof ChildState) {
+      releaseTargets(region.state)
+    } else if (region !== undefined) {
+      const flat = region.spec.scope.slots === 0
+
+      for (const occurrence of region.occurrences) {
+        if (flat) {
+          occurrence.sinks = null
+        } else {
+          releaseTargets(occurrence)
+        }
+      }
+    }
+  }
+}
+
+/**
  * One child component in the mounted DOM: a copy of the compiled source of
  * the child, in its container.
  */
@@ -2236,14 +2407,21 @@ class ChildState {
   /**
    * @param {Element} container
    * @param {ChildSpec} spec
+   * @param {ScopePlan | null} [plan] The plan of the first update, when the
+   * container can have the DOM of the child from other code.
    */
-  constructor(container, spec) {
+  constructor(container, spec, plan) {
     const compiled = /** @type {Compiled} */ (spec.runtime.child)
-    const root = /** @type {Element} */ (
-      container.ownerDocument.importNode(compiled.root, true)
-    )
+    const existing = plan === undefined ? null : container.firstElementChild
+    const root = existing?.localName === compiled.root.localName
+      ? existing
+      : /** @type {Element} */ (
+        container.ownerDocument.importNode(compiled.root, true)
+      )
 
-    container.replaceChildren(root)
+    if (root !== existing) {
+      container.replaceChildren(root)
+    }
     // The DOM in the container now belongs to the child component.
     spec.runtime.owner?.add(container)
 
@@ -2260,7 +2438,13 @@ class ChildState {
       )
     }
 
-    if (compiled.scope.children.length > 0) {
+    if (root === existing) {
+      // Without a plan, the child gets no update, and its targets stay at
+      // the positions of the source.
+      if (plan) {
+        adoptScope(this.state, compiled.scope, plan.regions, 0)
+      }
+    } else if (compiled.scope.children.length > 0) {
       // A child component at the boundary of this child is in the DOM from
       // this moment.
       this.state.connect(compiled.scope)

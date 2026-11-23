@@ -1,6 +1,4 @@
-export {
-  filterLargeRecords,
-  largeRecords,
-  orderLargeRecords,
-  recordFilters,
-} from '../../data-20k.js'
+import {getLargeRecords} from '../../records.js'
+
+export {filterLargeRecords, orderLargeRecords, recordFilters} from '../../records.js'
+export const largeRecords = /* @__PURE__ */ getLargeRecords()

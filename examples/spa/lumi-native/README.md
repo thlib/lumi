@@ -2,7 +2,7 @@
 
 This is the browser-native version of the Lumi SPA. All native templates and
 their adjacent inline module behavior live in [`index.html`](./index.html), and
-all demo-owned application code lives in [`demo-app.js`](./demo-app.js).
+the application starts in [`application.js`](./application.js).
 The page imports that module and the built Lumi library directly, without an
 application bundle.
 

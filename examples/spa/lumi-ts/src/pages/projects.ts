@@ -1,5 +1,5 @@
 import {attr, on, text} from '../app.js'
-import {update} from '../page.js'
+import {updateState as update} from '../page.js'
 
 import type {DefinitionOptions} from '../components.js'
 import type {PageData} from '../page.js'

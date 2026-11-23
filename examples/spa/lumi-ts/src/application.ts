@@ -31,7 +31,7 @@ type PlanEntry = {
 
 interface MountedPlan {
   root: Element
-  update(data: ApplicationData): void
+  update(data: ApplicationData, reuseRecords?: boolean): void
   unmount(): void
 }
 
@@ -110,7 +110,7 @@ export function mountApplication(target: Element | null): MountedPlan {
   return Object.freeze({
     root: shell.root,
 
-    update(data: ApplicationData) {
+    update(data: ApplicationData, reuseRecords = false) {
       if (!isMounted) {
         throw new Error('Cannot update an unmounted application')
       }
@@ -123,7 +123,9 @@ export function mountApplication(target: Element | null): MountedPlan {
         pages[data.route] = page
       }
 
-      page.update(data)
+      if (!reuseRecords || activeRoute !== data.route || data.route !== 'records') {
+        page.update(data)
+      }
       shell.update(data)
 
       if (activeRoute !== data.route) {

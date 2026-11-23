@@ -79,7 +79,7 @@ const routePlans = {
  * @param {Element | null} target
  * @returns {{
  *   root: Element,
- *   update: (data: ApplicationData) => void,
+ *   update: (data: ApplicationData, reuseRecords?: boolean) => void,
  *   unmount: () => void,
  * }}
  */
@@ -105,7 +105,7 @@ export function mountApplication(target) {
   return Object.freeze({
     root: shell.root,
 
-    update(data) {
+    update(data, reuseRecords = false) {
       if (!isMounted) {
         throw new Error('Cannot update an unmounted application')
       }
@@ -118,7 +118,9 @@ export function mountApplication(target) {
         pages[data.route] = page
       }
 
-      page.update(data)
+      if (!reuseRecords || activeRoute !== data.route || data.route !== 'records') {
+        page.update(data)
+      }
       shell.update(data)
 
       if (activeRoute !== data.route) {

@@ -33,6 +33,9 @@ removes the element, so a list of zero or one item is a conditional region:
 <div id="profile" data-repeat="$.data.profile[*]">…</div>
 ```
 
+A keyed repeat can also use `data-repeat-when`. If its path gives `false`,
+the repeat keeps its current elements. Records uses this on menu and clock updates.
+
 Structural classes such as `avatar` remain static. Additive semantic
 attributes such as `data-person`, `data-project`, and `data-direction` carry
 dynamic meaning without replacing those classes; the shared stylesheet

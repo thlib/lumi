@@ -4,7 +4,7 @@ import {
   prop,
   repeat,
   text,
-  update,
+  updateState as update,
 } from '../app.js'
 
 import type {Member, Toast} from '../../../data.js'

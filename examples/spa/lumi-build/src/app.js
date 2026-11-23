@@ -29,7 +29,7 @@ export {
 } from '../../../../dist/lumi.js'
 
 export {overviewDetails} from './navigation.js'
-export {update} from './page.js'
+export {update, updateState} from './page.js'
 export {emailValidation} from '../email-validation.js'
 export {
   filterLargeRecords,

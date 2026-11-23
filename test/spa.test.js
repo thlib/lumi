@@ -47,13 +47,14 @@ test('disconnects SPA routing before unmount and permits reconnection', async ()
   })
 
   try {
-    const {connectPage} = await import(
+    const {connectPage, update, updateState} = await import(
       '../examples/spa/lumi-native/demo-app.js'
     )
     let firstUpdateCount = 0
     let secondUpdateCount = 0
     /** @type {string | undefined} */
     let secondRoute
+    let reusedRows = false
     const firstApplication = {
       root: dom.window.document.body,
       update() {
@@ -63,10 +64,11 @@ test('disconnects SPA routing before unmount and permits reconnection', async ()
     }
     const secondApplication = {
       root: dom.window.document.body,
-      /** @param {{route: string}} data */
-      update(data) {
+      /** @param {{route: string}} data @param {boolean} [reuseRecords] */
+      update(data, reuseRecords = false) {
         secondUpdateCount += 1
         secondRoute = data.route
+        reusedRows = reuseRecords
       },
       unmount() {},
     }
@@ -87,6 +89,17 @@ test('disconnects SPA routing before unmount and permits reconnection', async ()
     dom.window.dispatchEvent(new dom.window.HashChangeEvent('hashchange'))
     assert.equal(secondUpdateCount, 2)
     assert.equal(firstUpdateCount, 1)
+
+    dom.window.history.replaceState(null, '', '#/records')
+    dom.window.dispatchEvent(new dom.window.HashChangeEvent('hashchange'))
+    assert.equal(reusedRows, false)
+    updateState(current => ({...current, navOpen: true}))
+    assert.equal(reusedRows, true)
+    update(current => {
+      assert.equal(current.records.length, 20_000)
+      return current
+    })
+    assert.equal(reusedRows, false)
 
     disconnectSecond()
     disconnectSecond()

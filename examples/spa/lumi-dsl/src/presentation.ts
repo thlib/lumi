@@ -2,7 +2,7 @@ import {overviewDetails} from '../../data'
 import {
   filterLargeRecords,
   orderLargeRecords,
-} from '../../data-20k'
+} from '../../records.js'
 
 import type {
   Activity,
@@ -76,6 +76,7 @@ export interface Presentation {
     delta: string
     gamma: string
   }
+  updateRecordRows: boolean
   recordRows: readonly LargeRecord[]
   recordSort: PageData['recordSort']
   recordSortIndicator: string
@@ -108,7 +109,10 @@ const weekdays: readonly Weekday[] = [
   'Sun',
 ]
 
-export function present(data: PageData): Presentation {
+export function present(
+  data: PageData,
+  previousRows?: readonly LargeRecord[],
+): Presentation {
   const overview = overviewDetails(data.now)
   const projects = data.projects.map(projectView)
   const filteredProjects = projects.filter(project => {
@@ -121,7 +125,7 @@ export function present(data: PageData): Presentation {
   )
 
   const records = data.route === 'records'
-    ? orderLargeRecords(
+    ? previousRows ?? orderLargeRecords(
         filterLargeRecords(data.recordFilter),
         data.recordSort,
       )
@@ -163,6 +167,7 @@ export function present(data: PageData): Presentation {
       delta: String(data.recordFilter === 'delta'),
       gamma: String(data.recordFilter === 'gamma'),
     },
+    updateRecordRows: previousRows === undefined,
     recordRows: records,
     recordSort: data.recordSort,
     recordSortIndicator: data.recordSort === 'ascending' ? '↑' : '↓',

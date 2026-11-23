@@ -1,16 +1,7 @@
 import config from './data-records.json'
 
-export type RecordFilter = 'all' | 'alpha' | 'beta' | 'gamma' | 'delta'
-export type RecordSortDirection = 'ascending' | 'descending'
-
-export interface LargeRecord {
-  id: string
-  name: string
-  group: Exclude<RecordFilter, 'all'>
-  owner: string
-  value: number
-  label: string
-}
+import type {LargeRecord, RecordFilter, RecordSortDirection} from './records.js'
+export type {LargeRecord, RecordFilter, RecordSortDirection} from './records.js'
 
 export const recordFilters = config.recordFilters as readonly RecordFilter[]
 const groups = config.groups as readonly Exclude<RecordFilter, 'all'>[]

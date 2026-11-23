@@ -1,5 +1,7 @@
 // @ts-check
 
+import {sameRecords, withRecords} from '../../records.js'
+
 import content from '../../data-content.json' with {type: 'json'}
 
 /** @typedef {'overview' | 'projects' | 'records' | 'activity' | 'teams'} Route */
@@ -74,20 +76,14 @@ import content from '../../data-content.json' with {type: 'json'}
  *   recordFilter: RecordFilter,
  *   recordSort: RecordSortDirection,
  *   now: Date,
- *   records: ReadonlyArray<{
- *     id: string,
- *     name: string,
- *     group: string,
- *     owner: string,
- *     value: number,
- *     label: string,
- *   }>,
  *   projects: readonly Project[],
  *   activities: readonly Activity[],
  *   members: readonly Member[],
  *   metrics: readonly Metric[],
- * }} PageData
+ * }} PageState
  */
+
+/** @typedef {PageState & {records: ReadonlyArray<import('../../records.js').LargeRecord>}} PageData */
 
 import {
   documentTitle,
@@ -95,7 +91,6 @@ import {
   normalizeHash,
   routeFromHash,
 } from './navigation.js'
-import {largeRecords} from './records.js'
 
 const {
   activities,
@@ -109,7 +104,7 @@ const {
  *   projects: readonly Project[],
  * }} */ (/** @type {unknown} */ (content))
 
-/** @type {PageData} */
+/** @type {PageState} */
 let data = {
   route: routeFromHash(window.location.hash),
   navOpen: false,
@@ -119,14 +114,13 @@ let data = {
   recordFilter: 'all',
   recordSort: 'ascending',
   now: new Date(),
-  records: largeRecords,
   projects,
   activities,
   members,
   metrics,
 }
 
-/** @type {{update: (data: PageData) => void} | null} */
+/** @type {{update: (data: PageData, reuseRecords?: boolean) => void} | null} */
 let page = null
 
 /**
@@ -134,7 +128,7 @@ let page = null
  *
  * @param {{
  *   root: Element,
- *   update: (data: PageData) => void,
+ *   update: (data: PageData, reuseRecords?: boolean) => void,
  *   unmount: () => void,
  * }} lumiPage
  * @returns {() => void} Disconnects routing from the application.
@@ -147,12 +141,12 @@ export function connectPage(lumiPage) {
   page = lumiPage
 
   function handleHashChange() {
-    update(dataFromCurrentHash)
+    updateState(dataFromCurrentHash)
     document.querySelector('main')?.focus({ preventScroll: true })
   }
 
   const clock = window.setInterval(() => {
-    update(current => ({...current, now: new Date()}))
+    updateState(current => ({...current, now: new Date()}))
   }, 60_000)
   let isConnected = true
 
@@ -164,6 +158,7 @@ export function connectPage(lumiPage) {
     window.removeEventListener('hashchange', handleHashChange)
     window.clearInterval(clock)
     page = null
+    rendered = null
     isConnected = false
   }
 
@@ -181,7 +176,7 @@ export function connectPage(lumiPage) {
   return disconnect
 }
 
-/** @param {PageData} current */
+/** @param {PageState} current */
 function dataFromCurrentHash(current) {
   return {
     ...current,
@@ -198,6 +193,15 @@ function dataFromCurrentHash(current) {
  * @param {(data: PageData) => PageData} change
  */
 export function update(change) {
+  updateState(current => {
+    const previous = rendered ?? withRecords(current)
+    rendered = null
+    return change(previous)
+  })
+}
+
+/** @param {(data: PageState) => PageState} change */
+export function updateState(change) {
   if (page === null) {
     throw new Error('Page is not connected')
   }
@@ -206,11 +210,18 @@ export function update(change) {
   render()
 }
 
+/** @type {PageData | null} */
+let rendered = null
+
 function render() {
   if (page === null) {
     throw new Error('Page is not connected')
   }
 
-  page.update(data)
+  const next = withRecords(data)
+  const reuseRecords = sameRecords(rendered, next)
+  rendered = null
+  page.update(next, reuseRecords)
+  rendered = next
   document.title = documentTitle(data.route, data.selectedMemberId)
 }

@@ -119,7 +119,9 @@ test('random lists of integer keys keep each element with its key', () => {
 })
 
 test('lists that mix integer keys with other keys keep each element', () => {
-  const keys = [3, 'three', 2 ** 31, -1, 1.5, NaN, 0, true, null, 2 ** 31 - 1]
+  const keys = [
+    3, Symbol('key'), 7n, 'three', 2 ** 31, -1, 1.5, NaN, 0, true, null, 2 ** 31 - 1,
+  ]
 
   assertFollowsKeys(
     [

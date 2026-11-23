@@ -72,6 +72,7 @@ const unusedValues = new WeakMap()
  * @property {(input: any, el: Element) => unknown} project
  * @property {((input: any) => unknown) | undefined} [key]
  * @property {string} [name]
+ * @property {typeof markupOperations} [markup]
  * @property {object} [component] The component of a `child` binding.
  * @property {DomBindingDescriptor<Data>} [scope]
  * @property {ReadonlyArray<DomBindingDescriptor<Data>>} [bindings]
@@ -181,8 +182,8 @@ export function flattenDomBindingDescriptors(
  * needs no copy.
  * @property {ScopeSpec} scope
  * @property {ReadonlyArray<Runtime>} runtimes
- * @property {boolean} dynamic Whether a markup write makes the selectors
- * resolve in each update.
+ * @property {typeof markupOperations | undefined} markup The operations for
+ * a component that writes markup.
  * @property {WeakSet<Element> | null} containers The mounted containers of
  * the child components, or null for a component without a child.
  * @property {ReadonlyArray<import('./events.js').EventBindingDescriptor>} events
@@ -328,7 +329,8 @@ function compile(
   custom,
   compiled = /** @type {Compiled} */ ({}),
 ) {
-  const trustedTypes = descriptors.some(writesMarkup)
+  const markup = descriptors.find(writesMarkup)?.markup
+  const trustedTypes = markup
     ? trustedTypesFactory(planner.root)
     : null
   const runtimes = descriptors.map((descriptor, index) => {
@@ -355,7 +357,7 @@ function compile(
 
   compiled.root = root
   compiled.runtimes = runtimes
-  compiled.dynamic = descriptors.some(writesMarkup)
+  compiled.markup = markup
   compiled.containers = containers
   compiled.events = events
   compiled.custom = custom
@@ -364,7 +366,7 @@ function compile(
     root,
     runtimes,
     containers,
-    compiled.dynamic,
+    markup !== undefined,
   )
 
   return compiled
@@ -440,8 +442,8 @@ function compileChild(planner, component) {
 function prepareCompiled(compiled, data) {
   const plan = prepareScope(compiled.scope, rootContext(data), data)
 
-  if (compiled.dynamic) {
-    plan.operations = prepareDynamicOperations(compiled, plan, data)
+  if (compiled.markup) {
+    plan.operations = compiled.markup.prepare(compiled, plan, data)
   }
 
   return plan
@@ -462,11 +464,27 @@ function commitCompiled(compiled, state, plan) {
     state.connect(scope)
   }
 
-  if (!compiled.dynamic) {
+  if (!compiled.markup) {
     state.apply(scope, scope.sinks, 0, applyLive, plan.sinks, 0, plan.regions, 0)
     return
   }
 
+  compiled.markup.commit(compiled, state, plan)
+}
+
+// Only prop() supplies these operations. A bundle without prop() can omit them.
+export const markupOperations = {
+  prepare: prepareDynamicOperations,
+  commit: commitMarkup,
+}
+
+/**
+ * @param {Compiled} compiled
+ * @param {ScopeState} state
+ * @param {ScopePlan} plan
+ */
+function commitMarkup(compiled, state, plan) {
+  const scope = compiled.scope
   // The markup writes of this commit: each runtime, then its element.
   /** @type {Array<Runtime | Element>} */
   const markupWrites = []
@@ -632,13 +650,14 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
         const current = /** @type {any} */ (element)[name]
 
         if (
-          !Object.is(current, projectedValue)
-          && (
-            previous === undefined
-            || !Object.is(previous.projectedValue, projectedValue)
-            || !Object.is(previous.domValue, current)
-          )
+          previous !== undefined
+          && Object.is(previous.projectedValue, projectedValue)
+          && Object.is(previous.domValue, current)
         ) {
+          return element
+        }
+
+        if (!Object.is(current, projectedValue)) {
           const before = element.previousSibling
           const after = element.nextSibling
           const parent = element.parentNode
@@ -1159,6 +1178,8 @@ function applyLive(runtime, element, value) {
  * @returns {ScopeSpec}
  */
 function compileScope(planner, root, runtimes, containers, keepsContexts) {
+  // The mounted root already has the targets. Only copies need paths.
+  const liveTargets = root === planner.root
   /** @type {Map<Element, RegionSpec>} */
   const regionByTarget = new Map()
   /** @returns {ScopeSpec} */
@@ -1314,7 +1335,7 @@ function compileScope(planner, root, runtimes, containers, keepsContexts) {
         runtime,
         target,
         matchIndex,
-        path: elementPath(parent?.target ?? root, target),
+        path: liveTargets ? noPath : elementPath(parent?.target ?? root, target),
         remembers: false,
       }
 
@@ -1349,10 +1370,12 @@ function compileScope(planner, root, runtimes, containers, keepsContexts) {
     // that an earlier declaration changed. The sort is stable.
     scope.sinks.sort((left, right) => markupDepth(left) - markupDepth(right))
     scope.slots = scope.regions.length + scope.children.length
-    scope.locator = createLocator(
-      [...scope.sinks, ...scope.regions, ...scope.children]
-        .map(spec => spec.path),
-    )
+    if (!liveTargets) {
+      scope.locator = createLocator(
+        [...scope.sinks, ...scope.regions, ...scope.children]
+          .map(spec => spec.path),
+      )
+    }
 
     const sinks = region === null
       ? scope.sinks
@@ -1408,6 +1431,9 @@ function compileScope(planner, root, runtimes, containers, keepsContexts) {
 
   return rootScope
 }
+
+/** @type {number[]} */
+const noPath = []
 
 /** @type {ChildSpec[]} */
 const noChildSpecs = []
@@ -2838,9 +2864,6 @@ function fillElement(spec, values, offset) {
     }
   }
 
-  // The fill element has no record of its classes, so each binding
-  // compares with the fill element.
-  filler.values = noValues
   filler.apply(
     spec.scope,
     sinks,
@@ -2852,6 +2875,8 @@ function fillElement(spec, values, offset) {
     0,
   )
 
+  // The next row must compare with the fill element. Release this list.
+  filler.values = noValues
   return filler.element
 }
 

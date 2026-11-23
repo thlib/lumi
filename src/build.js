@@ -14,6 +14,17 @@ mkdirSync(output, {recursive: true})
 
 const devImport = /^import \{DEV\} from '[^']*\/dev\.js'\n/m
 
+// Shorten only fields that the renderer owns. Public bindings, projection
+// contexts, event options, and DOM properties keep their names.
+const privateFields = new RegExp('^(' + [
+  'acceptedKeys', 'applyKeyed', 'applyPositional', 'compiled', 'containers',
+  'descriptor', 'detachedOccurrence', 'domValue', 'filler', 'fills', 'isActive',
+  'isNoop', 'keepsContexts', 'locator', 'markup', 'matchCount', 'matchIndex',
+  'normalize', 'occurrences', 'operations', 'ownSinks', 'placeInOrder',
+  'projectedValue', 'regions', 'remembers', 'requiresTrustedHTML', 'runtime',
+  'runtimes', 'scope', 'sinks', 'structural',
+].join('|') + ')$')
+
 /**
  * Removes the import of the development switch from each source module.
  * `DEV` is then a free name, and the `define` option gives it the value
@@ -45,6 +56,7 @@ for (const [name, isProduction] of /** @type {const} */ ([
     format: 'esm',
     target: 'es2022',
     minify: true,
+    ...(isProduction && {mangleProps: privateFields}),
     sourcemap: true,
     legalComments: 'none',
     banner: {

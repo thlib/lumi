@@ -1,5 +1,5 @@
 import {on} from '../../../../../dist/lumi.js'
-import {update} from '../page'
+import {updateState as update} from '../page'
 
 import type {RecordFilter} from '../../../data-20k'
 import type {Binding} from '../../../../../dist/lumi.js'

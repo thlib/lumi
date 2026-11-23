@@ -1,5 +1,5 @@
 import {attr, on} from '../app.js'
-import {update} from '../page.js'
+import {updateState as update} from '../page.js'
 import {emailValidation} from '../../email-validation.js'
 
 import type {DefinitionOptions} from '../components.js'

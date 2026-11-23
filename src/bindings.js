@@ -7,6 +7,7 @@ import {fail} from './internal/fail.js'
 import {
   createDomBinding,
   getDomBindingDescriptor,
+  markupOperations,
 } from './plan.js'
 
 /**
@@ -162,6 +163,7 @@ export function prop(selector, name, project) {
 
   return createDomBinding({
     kind: 'property',
+    markup: markupOperations,
     selector,
     project: /** @type {(context: import('./types.js').ProjectionContext<Item, Data>, el: Element) => unknown} */ (
       /** @type {unknown} */ (project)

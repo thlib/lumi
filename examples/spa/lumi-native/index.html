@@ -10,7 +10,7 @@
     >
     <title>Overview · Luminate</title>
     <link rel="stylesheet" href="../spa.css">
-    <script type="module" src="./demo-app.js"></script>
+    <script type="module" src="./application.js"></script>
   </head>
   <body>
     <div id="app"></div>
@@ -29,7 +29,7 @@
 
     <script type="module">
       import {attr, on} from '../../../dist/lumi.js'
-      import {define, emailValidation, update} from './demo-app.js'
+      import {define, emailValidation, updateState as update} from './application.js'
 
       define('appShell', {
         source: document.querySelector('#app-shell'),
@@ -92,7 +92,7 @@
 
     <script type="module">
       import {attr, on, text} from '../../../dist/lumi.js'
-      import {define, update} from './demo-app.js'
+      import {define, updateState as update} from './application.js'
 
       define('header', {
         source: document.querySelector('#header-view'),
@@ -166,7 +166,7 @@
 
     <script type="module">
       import {attr, on, text} from '../../../dist/lumi.js'
-      import {define, update} from './demo-app.js'
+      import {define, updateState as update} from './application.js'
 
       // Each link already carries its route in href, so the bindings read the
       // document rather than a parallel attribute.
@@ -380,8 +380,8 @@
       } from '../../../dist/lumi.js'
       import {
         define,
-        update,
-      } from './demo-app.js'
+        updateState as update,
+      } from './application.js'
 
       define('teams', () => {
         let nextToastId = 1
@@ -503,7 +503,7 @@
         repeat,
         text,
       } from '../../../dist/lumi.js'
-      import {define} from './demo-app.js'
+      import {define} from './application.js'
 
       define('projectList', {
         source: document.querySelector('#project-list'),
@@ -542,7 +542,7 @@
 
     <script type="module">
       import {attr, repeat, text} from '../../../dist/lumi.js'
-      import {define} from './demo-app.js'
+      import {define} from './application.js'
 
       define('activityList', {
         source: document.querySelector('#activity-list'),
@@ -639,7 +639,7 @@
         repeat,
         text,
       } from '../../../dist/lumi.js'
-      import {define, overviewDetails} from './demo-app.js'
+      import {define, overviewDetails} from './application.js'
 
       const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -696,7 +696,7 @@
         on,
         text,
       } from '../../../dist/lumi.js'
-      import {define, update} from './demo-app.js'
+      import {define, updateState as update} from './application.js'
 
       define('projects', {
         source: document.querySelector('#projects-view'),
@@ -779,8 +779,8 @@
         define,
         filterLargeRecords,
         orderLargeRecords,
-        update,
-      } from './demo-app.js'
+        updateState as update,
+      } from './application.js'
 
       define('records', {
         source: document.querySelector('#records-view'),
@@ -872,7 +872,7 @@
 
     <script type="module">
       import {text} from '../../../dist/lumi.js'
-      import {define} from './demo-app.js'
+      import {define} from './application.js'
 
       define('activityPage', {
         source: document.querySelector('#activity-page'),

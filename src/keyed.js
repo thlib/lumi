@@ -13,6 +13,14 @@
  */
 
 /**
+ * @param {unknown} key
+ * @returns {key is number}
+ */
+function isIntegerKey(key) {
+  return typeof key === 'number' && (key | 0) === key
+}
+
+/**
  * Finds the previous occurrence of each new key when all keys are 32-bit
  * integers. A lookup table in a typed array replaces a Map.
  *
@@ -26,6 +34,13 @@
 export function matchIntegerKeys(previousKeys, keys) {
   const previousCount = previousKeys.length
   const count = keys.length
+  // String keys use the Map matcher and need no integer lookup table.
+  if (
+    (previousCount > 0 && !isIntegerKey(previousKeys[0]))
+    || (count > 0 && !isIntegerKey(keys[0]))
+  ) {
+    return null
+  }
   let size = 4
 
   while (size < previousCount * 2) {
@@ -39,9 +54,9 @@ export function matchIntegerKeys(previousKeys, keys) {
   const previous = new Int32Array(previousCount)
 
   for (let index = 0; index < previousCount; index += 1) {
-    const key = /** @type {number} */ (previousKeys[index])
+    const key = previousKeys[index]
 
-    if ((key | 0) !== key) {
+    if (!isIntegerKey(key)) {
       return null
     }
     previous[index] = key
@@ -60,9 +75,9 @@ export function matchIntegerKeys(previousKeys, keys) {
   let last = -1
 
   for (let index = 0; index < count; index += 1) {
-    const key = /** @type {number} */ (keys[index])
+    const key = keys[index]
 
-    if ((key | 0) !== key) {
+    if (!isIntegerKey(key)) {
       return null
     }
 

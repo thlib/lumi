@@ -1,3 +1,4 @@
+import {sameRecords, withRecords} from '../../records.js'
 import {
   activities,
   documentTitle,
@@ -8,7 +9,6 @@ import {
   projects,
   routeFromHash,
 } from '../../data'
-import {largeRecords} from '../../data-20k'
 import {present} from './presentation'
 
 import type {
@@ -25,15 +25,18 @@ import type {
 } from '../../data-20k'
 import type {Presentation} from './presentation'
 
-export interface PageData extends AppState {
+interface PageState extends AppState {
   activities: readonly Activity[]
   members: readonly Member[]
   metrics: readonly Metric[]
   now: Date
   projects: readonly Project[]
   recordFilter: RecordFilter
-  records: readonly LargeRecord[]
   recordSort: RecordSortDirection
+}
+
+export interface PageData extends PageState {
+  records: readonly LargeRecord[]
 }
 
 interface ConnectedPage {
@@ -42,7 +45,7 @@ interface ConnectedPage {
   unmount(): void
 }
 
-let data: PageData = {
+let data: PageState = {
   route: routeFromHash(window.location.hash),
   navOpen: false,
   toasts: [],
@@ -51,7 +54,6 @@ let data: PageData = {
   recordFilter: 'all',
   recordSort: 'ascending',
   now: new Date(),
-  records: largeRecords,
   projects,
   activities,
   members,
@@ -68,12 +70,12 @@ export function connectPage(lumiPage: ConnectedPage): () => void {
   page = lumiPage
 
   function handleHashChange(): void {
-    update(dataFromCurrentHash)
+    updateState(dataFromCurrentHash)
     document.querySelector('main')?.focus({preventScroll: true})
   }
 
   const clock = window.setInterval(() => {
-    update(current => ({...current, now: new Date()}))
+    updateState(current => ({...current, now: new Date()}))
   }, 60_000)
   let isConnected = true
 
@@ -85,6 +87,8 @@ export function connectPage(lumiPage: ConnectedPage): () => void {
     window.removeEventListener('hashchange', handleHashChange)
     window.clearInterval(clock)
     page = null
+    rendered = null
+    renderedRows = []
     isConnected = false
   }
 
@@ -102,7 +106,7 @@ export function connectPage(lumiPage: ConnectedPage): () => void {
   return disconnect
 }
 
-function dataFromCurrentHash(current: PageData): PageData {
+function dataFromCurrentHash(current: PageState): PageState {
   return {
     ...current,
     route: routeFromHash(window.location.hash),
@@ -113,6 +117,14 @@ function dataFromCurrentHash(current: PageData): PageData {
 }
 
 export function update(change: (data: PageData) => PageData): void {
+  updateState(current => {
+    const previous = rendered ?? withRecords(current)
+    rendered = null
+    return change(previous)
+  })
+}
+
+export function updateState(change: (data: PageState) => PageState): void {
   if (page === null) {
     throw new Error('Page is not connected')
   }
@@ -121,11 +133,20 @@ export function update(change: (data: PageData) => PageData): void {
   render()
 }
 
+let rendered: PageData | null = null
+let renderedRows: Presentation['recordRows'] = []
+
 function render(): void {
   if (page === null) {
     throw new Error('Page is not connected')
   }
 
-  page.update(present(data))
+  const next = withRecords(data)
+  const reuseRecords = sameRecords(rendered, next)
+  rendered = null
+  const view = present(next, reuseRecords ? renderedRows : undefined)
+  page.update(view)
+  renderedRows = view.recordRows
+  rendered = next
   document.title = documentTitle(data.route, data.selectedMemberId)
 }

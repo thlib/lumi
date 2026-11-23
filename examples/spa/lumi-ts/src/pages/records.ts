@@ -1,6 +1,6 @@
 import {attr, on, repeat, text} from '../app.js'
 import {filterLargeRecords, orderLargeRecords} from '../records.js'
-import {update} from '../page.js'
+import {updateState as update} from '../page.js'
 
 import type {LargeRecord} from '../../../data-20k.js'
 import type {DefinitionOptions} from '../components.js'

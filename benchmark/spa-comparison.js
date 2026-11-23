@@ -1383,6 +1383,7 @@ function mapUrlToFile(pathname) {
     || decoded === '/examples/spa/spa.css'
     || decoded === '/examples/spa/data-content.json'
     || decoded === '/examples/spa/data-records.json'
+    || decoded === '/examples/spa/records.js'
   ) {
     return resolveInside(root, decoded.slice(1))
   }

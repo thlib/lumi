@@ -1,5 +1,5 @@
 import {repeat} from '../../../../../dist/lumi.js'
-import {pathMatches} from './path-value'
+import {pathBoolean, pathMatches} from './path-value'
 
 import type {Binding} from '../../../../../dist/lumi.js'
 import type {Presentation} from '../presentation'
@@ -26,9 +26,15 @@ export const keyedRepeatBehavior: Binding<Presentation> = repeat<
   unknown
 >(
   '[data-repeat-by-id]',
-  (context, element) => pathMatches(
-    context,
-    element.getAttribute('data-repeat-by-id') ?? undefined,
-  ) as Array<{id: unknown}>,
+  (context, element) => {
+    const when = element.getAttribute('data-repeat-when')
+    if (when !== null && pathBoolean(context, when, 'data-repeat-when') === false) {
+      return null
+    }
+    return pathMatches(
+      context,
+      element.getAttribute('data-repeat-by-id') ?? undefined,
+    ) as Array<{id: unknown}>
+  },
   ({item}) => item.id,
 )

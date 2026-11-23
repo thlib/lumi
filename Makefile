@@ -19,13 +19,13 @@ help: ## List the available targets
 install: ## Install dependencies from the lockfile
 	$(PNPM) install --frozen-lockfile
 
-build: ## Emit declarations and the browser bundle into dist/
+build: ## Emit declarations and the two browser bundles into dist/
 	$(PNPM) run build
 
 types: ## Emit only the TypeScript declarations
 	$(PNPM) run build:types
 
-bundle: ## Emit only the minified browser bundle
+bundle: ## Emit only the minified browser bundles
 	$(PNPM) run build:bundle
 
 spa: ## Build the bundled Lumi SPA variants
@@ -34,9 +34,11 @@ spa: ## Build the bundled Lumi SPA variants
 spa-dev: ## Rebuild and serve the bundled Lumi SPA during development
 	$(PNPM) run dev:spa
 
-size: bundle ## Report the browser bundle size, raw and gzipped
-	@printf 'dist/lumi.js  %s bytes raw  %s bytes gzipped\n' \
+size: bundle ## Report the size of the two browser bundles, raw and gzipped
+	@printf 'dist/lumi.js      %s bytes raw  %s bytes gzipped\n' \
 		"$$(wc -c < dist/lumi.js)" "$$(gzip -9 -c dist/lumi.js | wc -c)"
+	@printf 'dist/lumi.dev.js  %s bytes raw  %s bytes gzipped\n' \
+		"$$(wc -c < dist/lumi.dev.js)" "$$(gzip -9 -c dist/lumi.dev.js | wc -c)"
 
 lint: ## Type-check sources, tests, and the declaration build
 	$(PNPM) run lint

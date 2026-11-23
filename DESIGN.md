@@ -309,8 +309,9 @@ attempted.
 DOM commit itself cannot be completely transactional. A native property or
 custom-element setter can perform arbitrary side effects before throwing, and
 those effects cannot be safely reversed by a general renderer. A commit error
-therefore faults the mounted component. It may be unmounted, but the
-application must mount a fresh boundary before rendering again.
+therefore goes to the caller, and the DOM keeps the writes that were complete.
+The component keeps no record of a write that failed, so the next update
+compares its values with the DOM again and writes the differences.
 
 With the example above, rendering
 `{ count: 3, counterDisabled: false }` projects:

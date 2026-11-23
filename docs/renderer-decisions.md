@@ -16,8 +16,8 @@ therefore leave the preceding live tree unchanged and recoverable.
 
 DOM commit is not presented as fully transactional because browser and custom
 element setters may execute arbitrary side effects before throwing. A commit
-failure faults that mounted component boundary instead of attempting an unsafe
-general rollback.
+failure goes to the caller. Lumi does not attempt an unsafe general rollback,
+and the next update compares its values with the DOM again.
 
 ### Explicit bindings form a DOM-aware update plan
 
@@ -109,8 +109,8 @@ Lumi applies the part of the idea that keeps this result. It makes the work
 for each row small:
 
 - When the keys are equal to the keys of the last update, position for
-  position, the duplicate check and the reconciliation build no lookup. The
-  lookup starts at the first key that is different.
+  position, the reconciliation builds no lookup. The key list starts at the
+  first key that is different.
 - A plan holds one value for each sink. It holds no object for each sink.
 - The positional `path` of a context is built only when a projection reads
   it.

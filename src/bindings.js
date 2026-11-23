@@ -2,6 +2,9 @@
 
 import { findElement } from './dom.js'
 import { prepareMounted } from './component.js'
+import {warn} from './internal/diagnostics.js'
+import {DEV} from './internal/dev.js'
+import {fail} from './internal/fail.js'
 import {
   createDomBinding,
   getDomBindingDescriptor,
@@ -46,15 +49,11 @@ function assertSafeBindingName(kind, name) {
   const normalizedName = name.toLowerCase()
 
   if (normalizedName.startsWith('on')) {
-    throw new TypeError(
-      `Lumi ${kind} binding "${name}" is an event handler; use on()`,
-    )
+    fail(1, kind, name)
   }
 
   if (normalizedName === 'srcdoc') {
-    throw new TypeError(
-      `Lumi ${kind} binding "${name}" requires an explicit trusted-content API`,
-    )
+    fail(2, kind, name)
   }
 }
 
@@ -80,12 +79,14 @@ function assertSafeBindingName(kind, name) {
  */
 export function repeat(selector, project, keyOrBindings, bindings) {
   if (
-    keyOrBindings !== undefined
+    DEV
+    && keyOrBindings !== undefined
     && typeof keyOrBindings !== 'function'
     && !Array.isArray(keyOrBindings)
   ) {
-    throw new TypeError(
-      'Lumi repeat third argument must be a key projection or binding list',
+    warn(
+      `repeat "${selector}": the third argument is not a key projection or `
+      + 'a list of bindings. It has no effect.',
     )
   }
 
@@ -103,30 +104,17 @@ export function repeat(selector, project, keyOrBindings, bindings) {
       /** @type {unknown} */ (project)
     ),
     key,
-    bindings: repeatBindingDescriptors(localBindings),
-  })
-}
+    bindings: (localBindings ?? []).map(binding => {
+      const descriptor = getDomBindingDescriptor(binding)
 
-/**
- * @template Data
- * @param {ReadonlyArray<import('./types.js').Binding<Data>> | undefined} bindings
- * @returns {ReadonlyArray<import('./plan.js').DomBindingDescriptor<Data>>}
- */
-function repeatBindingDescriptors(bindings) {
-  if (bindings === undefined) {
-    return []
-  }
+      if (DEV && descriptor === null) {
+        fail(23, selector)
+      }
 
-  return bindings.map(binding => {
-    const descriptor = getDomBindingDescriptor(binding)
-
-    if (descriptor === null) {
-      throw new TypeError(
-        'Lumi repeat bindings must use built-in DOM bindings',
+      return /** @type {import('./plan.js').DomBindingDescriptor<Data>} */ (
+        descriptor
       )
-    }
-
-    return descriptor
+    }),
   })
 }
 
@@ -167,8 +155,9 @@ export function text(selector, project) {
  * @param {ContextProjection<Item, Data, Value | null | undefined, SelectorElement<Selector>>} project
  * @param {string} name
  * @returns {import('./types.js').Binding<Data>}
- * @throws {TypeError} When name is an event handler or srcdoc, or an
- * innerHTML/outerHTML projection does not return TrustedHTML.
+ * @throws {Error} E1 or E2 when name is an event handler or srcdoc. An
+ * innerHTML or outerHTML projection that does not return TrustedHTML gives
+ * E3 or E4 in the update.
  */
 export function prop(selector, project, name) {
   assertSafeBindingName('property', name)
@@ -202,7 +191,7 @@ export function prop(selector, project, name) {
  * @param {Name} name
  * @param {ContextProjection<Item, Data, (Lowercase<Name> extends `aria-${string}` ? string | number | false : TextValue) | null | undefined, SelectorElement<Selector>>} project
  * @returns {import('./types.js').Binding<Data>}
- * @throws {TypeError} When name is an event handler or srcdoc.
+ * @throws {Error} E1 or E2 when name is an event handler or srcdoc.
  */
 export function attr(selector, name, project) {
   assertSafeBindingName('attribute', name)
@@ -263,11 +252,14 @@ export function style(selector, name, project) {
   })
 }
 
+/** @type {import('./types.js').PreparedUpdate} */
+const noUpdate = {commit() {}}
+
 /**
  * Mounts one nested component and projects parent data into it.
  *
- * The selected container owns the child root and must not contain another
- * element when connected.
+ * The selected container owns the child root. The mount replaces the content
+ * of the container. A selector that matches no element mounts no child.
  *
  * @template ParentData
  * @template ChildData
@@ -281,10 +273,12 @@ export function child(selector, childComponent, project) {
     connect(root) {
       const container = findElement(root, selector)
 
-      if (container.childElementCount !== 0) {
-        throw new Error(
-          `Lumi child container "${selector}" must not contain an element`,
-        )
+      if (container === null) {
+        if (DEV) {
+          warn(`child "${selector}" matches no element. No child is mounted.`)
+        }
+
+        return {prepare: () => noUpdate, destroy() {}}
       }
 
       const mounted = childComponent.mount(container)

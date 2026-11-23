@@ -879,9 +879,15 @@ test('does not translate one native event type into another', () => {
 
   assert.equal(handled.length, 0)
   assert.equal(warnings.length, 2)
-  assert.match(warnings[0] ?? '', /"focus" normally does not bubble/)
+  assert.match(
+    warnings[0] ?? '',
+    /^Lumi: on "input" "focus": this event type usually does not bubble/,
+  )
   assert.match(warnings[0] ?? '', /\{at: "elements"\}/)
-  assert.match(warnings[1] ?? '', /"mouseenter" normally does not bubble/)
+  assert.match(
+    warnings[1] ?? '',
+    /on "\.card" "mouseenter": this event type usually does not bubble/,
+  )
 
   // Element attachment and intentional capture are not warned about.
   const { warnings: quiet } = recordWarnings(() => {
@@ -922,18 +928,28 @@ test('routes custom events according to their native initialization', () => {
   assert.deepEqual(handled, [{ id: 7 }])
 })
 
-test('rejects invalid event declarations', () => {
+test('gives a warning for each invalid part of an event declaration', () => {
   const { document } = createDocument()
+  /**
+   * @param {() => unknown} declare
+   * @param {RegExp} pattern
+   */
+  const warns = (declare, pattern) => {
+    const { warnings } = recordWarnings(declare)
 
-  assert.throws(
+    assert.equal(warnings.length, 1)
+    assert.match(warnings[0] ?? '', pattern)
+  }
+
+  warns(
     () => on('  ', 'click', () => {}),
-    /Lumi event binding selector must be a non-empty string/,
+    /^Lumi: on " {2}" "click": the selector must be a string that is not empty\.$/,
   )
-  assert.throws(
+  warns(
     () => on('button', '', () => {}),
-    /Lumi event binding on "button" requires a non-empty event type/,
+    /on "button" "": the event type must be a string that is not empty\./,
   )
-  assert.throws(
+  warns(
     () => on(
       'button',
       'click',
@@ -941,38 +957,69 @@ test('rejects invalid event declarations', () => {
         /** @type {unknown} */ ('save')
       ),
     ),
-    /Invalid Lumi event binding for "click" on "button": handler must be a function/,
+    /on "button" "click": the handler must be a function\./,
   )
-  assert.throws(
-    () => on('video', 'ended', () => {}, /** @type {never} */ ({ at: 'window' })),
-    /Invalid Lumi event binding for "ended" on "video": options\.at must be "component" or "elements"/,
+  warns(
+    () => on('video', 'ended', () => {}, /** @type {never} */ ({ at: 'window', capture: true })),
+    /on "video" "ended": the option "at" must be "component" or "elements"\./,
   )
-  assert.throws(
+  warns(
     () => on('button', 'click', () => {}, /** @type {never} */ ({ once: true })),
-    /options\.once is not a supported event option; use freq: "once" for a binding-level once/,
+    /the option "once" is not known and has no effect\. Use freq: "once"\./,
   )
-  assert.throws(
+  warns(
     () => on('button', 'click', () => {}, /** @type {never} */ ({ freq: 'sometimes' })),
-    /options\.freq must be "always" or "once"/,
+    /the option "freq" must be "always" or "once"\./,
   )
-  assert.throws(
+  warns(
     () => on('button', 'click', () => {}, /** @type {never} */ ({ capture: 'yes' })),
-    /options\.capture must be a boolean/,
+    /the option "capture" must be a boolean\./,
   )
-  assert.throws(
+  warns(
     () => on('button', 'click', () => {}, /** @type {never} */ ({ passive: 1 })),
-    /options\.passive must be a boolean/,
+    /the option "passive" must be a boolean\./,
   )
-  assert.throws(
+  warns(
     () => on('button', 'click', () => {}, /** @type {never} */ ({ prevent: true })),
-    /options\.prevent is not a supported event option; use "at", "capture", "passive" or "freq"/,
+    /the option "prevent" is not known and has no effect\.$/,
   )
-  assert.throws(
+  warns(
     () => on('button', 'click', () => {}, /** @type {never} */ ('capture')),
-    /options must be an object/,
+    /the options must be an object\. They have no effect\./,
+  )
+})
+
+test('an option that is not valid gets its default value', () => {
+  const { document, window } = createDocument()
+  const template = createTemplate(
+    document,
+    '<section><button type="button">Save</button></section>',
+  )
+  let calls = 0
+  const { result: mounted } = recordWarnings(() => {
+    return component({
+      source: template,
+      bindings: [
+        on('button', 'click', () => {
+          calls += 1
+        }, /** @type {never} */ ({ at: 'window', freq: 'sometimes' })),
+      ],
+    }).mount(document.createElement('div'))
+  })
+  const button = /** @type {HTMLButtonElement} */ (
+    mounted.root.querySelector('button')
   )
 
-  // An invalid selector fails component connection rather than the first event.
+  // The defaults are a component listener that stays active.
+  button.dispatchEvent(nativeEvent(window, 'click'))
+  button.dispatchEvent(nativeEvent(window, 'click'))
+
+  assert.equal(calls, 2)
+})
+
+test('an invalid selector fails the mount, not the first event', () => {
+  const { document } = createDocument()
+
   const template = createTemplate(document, '<section></section>')
   const target = document.createElement('div')
   target.append(document.createElement('p'))

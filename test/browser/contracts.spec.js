@@ -78,8 +78,8 @@ test('text and TrustedHTML properties work with Trusted Types enforced', async (
   expect(result).toEqual({
     text: 'Bound safely',
     markup: '<strong>Trusted safely</strong>',
-    unsafeError: 'Lumi property "innerHTML" projection must return '
-      + 'TrustedHTML; received type string',
+    unsafeError: 'Lumi E4: property "innerHTML" must get TrustedHTML. '
+      + 'The projection gave a different value.',
   })
 })
 
@@ -505,10 +505,8 @@ test('a preparation failure leaves the live form and focus unchanged', async ({
     return ''
   })
 
-  expect(message).toBe(
-    'Lumi text projection for ".second" at matched position 1 failed: '
-    + 'preparation failed',
-  )
+  // The caller gets the error of the projection.
+  expect(message).toBe('preparation failed')
   await expect(page.locator('.first')).toHaveText('before')
   await expect(page.locator('.second')).toHaveText('stable')
   await expect(input).toHaveValue('keep this')

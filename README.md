@@ -47,10 +47,16 @@ Without a build step, load the browser bundle from a CDN:
 </script>
 ```
 
-`dist/lumi.js` is one minified ES module of approximately 10 kB when compressed
-with gzip. One request replaces the module graph. Its source map resolves to
-the published source, so developer tools show the original code. Use a fixed
-version because an unpinned CDN URL follows the latest release.
+`dist/lumi.js` is the production version: one minified ES module of
+approximately 8 kB when compressed with gzip. One request replaces the module
+graph. Its source map resolves to the published source, so developer tools
+show the original code. Use a fixed version because an unpinned CDN URL
+follows the latest release.
+
+During development, load `dist/lumi.dev.js` from the same URL. The
+development version has more checks, gives warnings, and explains each error
+with a sentence. The production version gives a short error code. Refer to
+[Development and production versions](API.md#development-and-production-versions).
 
 Lumi has no fallback code for a browser that does not have an API that Lumi
 uses. Safari needs a shim for `moveBefore()`. Refer to

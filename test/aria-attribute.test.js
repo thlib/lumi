@@ -39,10 +39,10 @@ function ariaComponent(name, markup = '<div><button>Menu</button></div>') {
 }
 
 const warningPattern = new RegExp(
-  '^Lumi attribute binding "button" projected true into "aria-expanded"; '
-  + 'true writes an empty attribute, but ARIA states are string tokens\\. '
-  + 'Project the string \'true\' or \'false\' instead, for example '
-  + 'String\\(value\\)\\.$',
+  '^Lumi: attribute "button": the projection gave true for '
+  + '"aria-expanded"\\. The value true writes an empty attribute, but an '
+  + 'ARIA state is a string\\. Give the string "true" or "false", for '
+  + 'example String\\(value\\)\\.$',
 )
 
 test('warns once when an ARIA attribute projects true', () => {
@@ -143,7 +143,7 @@ test('matches ARIA names without regard to case', () => {
     mounted.update({value: true})
 
     assert.equal(warnings.length, 1, name)
-    assert.match(warnings[0] ?? '', new RegExp(`into "${name}"`))
+    assert.match(warnings[0] ?? '', new RegExp(`gave true for "${name}"`))
     assert.equal(
       mounted.root.querySelector('button')?.getAttribute('aria-expanded'),
       '',
@@ -179,34 +179,10 @@ test('warns once inside a repeat for every occurrence', () => {
   assert.equal(mounted.root.getAttribute('aria-busy'), '')
   assert.equal(warnings.length, 2)
   assert.ok(warnings.some(msg => {
-    return /attribute binding "button" projected true into "aria-pressed"/
+    return /attribute "button": the projection gave true for "aria-pressed"/
       .test(msg)
   }))
   assert.ok(warnings.some(msg => {
-    return /attribute binding "ul" projected true into "aria-busy"/.test(msg)
+    return /attribute "ul": the projection gave true for "aria-busy"/.test(msg)
   }))
-})
-
-test('does not warn in production', () => {
-  const previous = process.env.NODE_ENV
-  process.env.NODE_ENV = 'production'
-
-  try {
-    const {definition, target, warnings} = ariaComponent('aria-expanded')
-    const mounted = definition.mount(target)
-
-    mounted.update({value: true})
-
-    assert.deepEqual(warnings, [])
-    assert.equal(
-      mounted.root.querySelector('button')?.getAttribute('aria-expanded'),
-      '',
-    )
-  } finally {
-    if (previous === undefined) {
-      delete process.env.NODE_ENV
-    } else {
-      process.env.NODE_ENV = previous
-    }
-  }
 })

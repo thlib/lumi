@@ -1,22 +1,14 @@
 // @ts-check
 
 /**
- * Emits one recoverable development diagnostic at the standard warning
- * severity. The optional global selects the console associated with mounted
- * DOM while environment detection remains a host concern.
+ * Writes one warning to the console. Only the development version calls
+ * this function. The optional global selects the console of the document
+ * that holds the mounted DOM.
  *
- * @param {string} msg
+ * @internal
+ * @param {string} message The text after "Lumi: ".
  * @param {typeof globalThis | Window | null} [target]
  */
-export function warn(msg, target = globalThis) {
-  const host = /** @type {any} */ (globalThis)
-  const console = /** @type {any} */ (target ?? globalThis).console
-
-  // Development is the default; a host reports production with NODE_ENV.
-  if (
-    host.process?.env?.NODE_ENV !== 'production'
-    && typeof console?.warn === 'function'
-  ) {
-    console.warn(msg)
-  }
+export function warn(message, target = globalThis) {
+  /** @type {any} */ (target ?? globalThis).console?.warn?.(`Lumi: ${message}`)
 }

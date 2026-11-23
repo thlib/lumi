@@ -7,28 +7,22 @@
  * @internal
  */
 
+import {DEV} from './internal/dev.js'
+import {warn} from './internal/diagnostics.js'
+import {fail} from './internal/fail.js'
+
 /**
- * Returns the first matching element inside a component boundary.
+ * Returns the first matching element inside a component boundary, or null.
  *
  * The component root participates in matching because querySelector() only
  * searches descendants.
  *
  * @param {Element} root
  * @param {string} selector
- * @returns {Element}
- * @throws {Error} When the selector does not match the component root or one
- * of its descendants.
+ * @returns {Element | null}
  */
 export function findElement(root, selector) {
-  const element = root.matches(selector) ? root : root.querySelector(selector)
-
-  if (element === null) {
-    throw new Error(
-      `Lumi selector "${selector}" did not match inside <${root.localName}>`,
-    )
-  }
-
-  return element
+  return root.matches(selector) ? root : root.querySelector(selector)
 }
 
 /**
@@ -86,16 +80,6 @@ export function isInsideOwnedSubtree(element, ownedSubtrees) {
 }
 
 /**
- * Reports a DOM target that is not at its expected position. This occurs
- * only when other code changes the DOM that Lumi owns.
- *
- * @returns {never}
- */
-function lostTarget() {
-  throw new Error('Lumi lost a DOM target')
-}
-
-/**
  * Returns an element's depth in a component tree.
  *
  * @param {Element} root
@@ -105,7 +89,7 @@ function elementDepth(root, element) {
   let depth = 0
 
   for (let current = element; current !== root; depth += 1) {
-    current = current.parentElement ?? lostTarget()
+    current = /** @type {Element} */ (current.parentElement)
   }
 
   return depth
@@ -166,7 +150,7 @@ export function elementPath(ancestor, descendant) {
   const path = []
 
   for (let current = descendant; current !== ancestor;) {
-    const parent = current.parentElement ?? lostTarget()
+    const parent = /** @type {Element} */ (current.parentElement)
 
     path.unshift(Array.prototype.indexOf.call(parent.children, current))
     current = parent
@@ -176,17 +160,20 @@ export function elementPath(ancestor, descendant) {
 }
 
 /**
- * Resolves a path produced by elementPath().
+ * Resolves a path produced by elementPath(). Other code can change the DOM
+ * that Lumi owns. When the path then has no element, the result is
+ * undefined.
  *
  * @param {Element} root
  * @param {ReadonlyArray<number>} path
- * @returns {Element}
+ * @returns {Element | undefined}
  */
 export function elementAtPath(root, path) {
+  /** @type {Element | undefined} */
   let current = root
 
   for (const step of path) {
-    current = current.children[step] ?? lostTarget()
+    current = current?.children[step]
   }
 
   return current
@@ -246,9 +233,13 @@ export function createLocator(paths) {
  * sibling to sibling, so it reads each child list one time and does not
  * create a child collection for each element.
  *
+ * Other code can change the DOM that Lumi owns. A position that then has
+ * no element gets no result, and the targets below it get no update.
+ *
  * @param {Element} element
  * @param {Locator} locator
- * @param {Element[]} found Receives each element at its result position.
+ * @param {Array<Element | undefined>} found Receives each element at its
+ * result position.
  */
 export function locateElements(element, {slots, steps, nodes}, found) {
   for (let index = 0; index < slots.length; index += 1) {
@@ -268,11 +259,9 @@ export function locateElements(element, {slots, steps, nodes}, found) {
       child = child?.nextElementSibling
     }
 
-    locateElements(
-      child ?? lostTarget(),
-      /** @type {Locator} */ (nodes[index]),
-      found,
-    )
+    if (child) {
+      locateElements(child, /** @type {Locator} */ (nodes[index]), found)
+    }
   }
 }
 
@@ -302,10 +291,11 @@ export function markCreated(node, end, createdBy, history) {
  * children. An element contributes itself. The source is never consumed or
  * inserted into the mounted document.
  *
+ * The source must be parsed DOM with a root element. A source with more
+ * than one root element gives its first element.
+ *
  * @param {import('./types.js').ComponentSource | null} source
  * @returns {Element}
- * @throws {TypeError} When the source is not parsed DOM or does not provide
- * exactly one root element.
  */
 export function cloneSourceRoot(source) {
   const type = source?.nodeType
@@ -324,38 +314,26 @@ export function cloneSourceRoot(source) {
     content = /** @type {DocumentFragment} */ (source)
   }
 
-  if (content === null) {
-    throw new TypeError(
-      'Lumi component source must be a <template>, DocumentFragment, or Element',
-    )
-  }
+  if (DEV) {
+    if (content === null) {
+      fail(21)
+    }
 
-  if (content.childElementCount !== 1) {
-    throw new TypeError(
-      'Lumi component source must provide exactly one root element',
-    )
+    if (content.childElementCount === 0) {
+      fail(22)
+    }
+
+    if (content.childElementCount > 1) {
+      warn(
+        `the component source has ${content.childElementCount} root `
+        + 'elements. The component uses the first one.',
+      )
+    }
   }
 
   return /** @type {Element} */ (
-    /** @type {Element} */ (content.firstElementChild).cloneNode(true)
+    /** @type {Element} */ (
+      /** @type {DocumentFragment} */ (content).firstElementChild
+    ).cloneNode(true)
   )
-}
-
-/**
- * Rejects a value that cannot contain a mounted component. A mount target
- * is an element or a document fragment. A shadow root is a document
- * fragment.
- *
- * @param {Element | DocumentFragment | null} target
- * @returns {asserts target is Element | DocumentFragment}
- * @throws {TypeError} When the value is not an element or a fragment.
- */
-export function assertMountTarget(target) {
-  const type = target?.nodeType
-
-  if (type !== 1 && type !== 11) {
-    throw new TypeError(
-      'Lumi mount target must be a DOM element or a document fragment',
-    )
-  }
 }

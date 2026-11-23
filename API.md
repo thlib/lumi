@@ -132,9 +132,10 @@ The `source` option accepts parsed DOM in one of these forms:
 - A `DocumentFragment`. Its children are cloned.
 - An `Element`. The element itself is cloned.
 
-A source must provide exactly one root element. That root is the component
-boundary used for scoped selectors and nested rendering. Lumi never consumes,
-moves, or inserts the source itself.
+A source must have a root element. That root is the component boundary used
+for scoped selectors and nested rendering. When a source has more than one
+root element, the component uses the first one, and the development version
+gives a warning. Lumi never consumes, moves, or inserts the source itself.
 
 ```js
 const definition = component({
@@ -151,15 +152,17 @@ The bindings array is optional.
 its single root element, resolves the bindings, and returns a mounted
 component. The mounted component owns the target contents for its lifetime. If
 connecting a binding fails, Lumi removes the clone and restores the preceding
-target contents.
+target contents. The error then goes to the caller of `mount`.
 
 The target is an element or a document fragment. A shadow root is a document
 fragment. When you insert a document fragment into a document, the component
 root moves with the other child nodes of the fragment, and the component
 stays mounted. The target and an element or
-template source may be direct `querySelector` results. A clear error is thrown if either is missing or the source does not
-provide exactly one root element. A connected and a detached element have the
-same source semantics: `mount` clones them and does not adopt them.
+template source may be direct `querySelector` results. If the target or the
+source is missing, the development version gives a clear error, and the
+production version gives the error of the browser. A connected and a detached
+element have the same source semantics: `mount` clones them and does not
+adopt them.
 
 ### `mounted.update(data)`
 
@@ -191,9 +194,14 @@ native coercion does not cause a repeated write.
 
 Arbitrary DOM operations are not fully transactional. A native or custom
 element setter can execute application code, mutate browser state, and then
-throw. That work cannot be safely rolled back. If commit fails, the mounted
-component is marked faulted: it may be unmounted, but it cannot be updated
-again. The application must mount a fresh component boundary.
+throw. That work cannot be safely rolled back. If a commit fails, the error
+goes to the caller, and the DOM has the writes that were complete before the
+error. The component stays mounted. The next update compares its values with
+the DOM again and writes the differences.
+
+An update that starts while the same component is in an update gives error
+`E13`. This occurs when a projection or a property setter calls `update` or
+`unmount` on its own component.
 
 Rendering remains synchronous and explicit, with no retained subscriptions
 to the data object.
@@ -201,8 +209,8 @@ to the data object.
 ### `mounted.unmount()`
 
 `unmount` destroys connected bindings, unmounts owned child components, and
-removes the component root. Repeated calls have no effect. Updating after
-unmount throws.
+removes the component root. Repeated calls have no effect. An update after
+the unmount does nothing.
 
 ## Scalar bindings
 
@@ -317,14 +325,15 @@ Every render projection receives the same context object: `data`, `item`,
 the only binding that interprets an array structurally. `undefined` and `null`
 perform no DOM operation and leave the corresponding state unchanged. Invalid
 `repeat`, `text`, `attr`, `classToggle`, and `style` results also perform no
-operation and produce a deduplicated development warning. TrustedHTML property
-validation remains a preparation-time error.
+operation. The development version gives one warning for each mounted
+declaration and received value category. TrustedHTML property validation
+remains a preparation-time error.
 
 ARIA states, such as `aria-expanded` and `aria-pressed`, use string tokens.
 `attr` uses the same boolean rules for `aria-*` names as for other names. Thus
 `true` writes an empty attribute, and an empty value is not a valid ARIA state.
 Project the string `'true'` or `'false'`, for example `String(open)`. Project
-`false` only to remove the attribute. In development, Lumi writes one warning
+`false` only to remove the attribute. The development version writes one warning
 for each mounted `aria-*` declaration that projects `true`. In TypeScript, a
 literal `aria-*` name does not accept a projection that can return `true`.
 
@@ -465,7 +474,7 @@ target-listener ordering and `stopImmediatePropagation()` behavior matter.
 
 Lumi never translates one event type into another and never silently selects
 capture for a non-bubbling type. `on('input', 'focus', handler)` is not
-rewritten as `focusin`. In development, a component declaration for a
+rewritten as `focusin`. In the development version, a component declaration for a
 well-known non-bubbling type produces a warning suggesting `{at: 'elements'}`
 or `{capture: true}`; custom event names remain valid because a `CustomEvent`
 chooses its own `bubbles` value.
@@ -515,8 +524,8 @@ disconnects every router, removes every element listener, and releases the
 handler, element, and once state. A handler may unmount its own component,
 after which the remaining bindings of that component are not invoked.
 
-A routed handler that throws is reported through the host's uncaught-error
-reporting rather than aborting the other bindings sharing its router. Element
+A routed handler that throws is reported with `reportError()` of the window
+rather than aborting the other bindings sharing its router. Element
 listeners keep native listener error behavior.
 
 Lumi manages events only on DOM it owns. `window`, `document`, media queries,
@@ -618,7 +627,12 @@ have it.
 The key projection receives the new occurrence context. It does not receive
 an element because Lumi must compute the key before it selects an existing
 element. Lumi compares keys with the same equality rules as a JavaScript
-`Map`. Each key must be unique in its repeat region.
+`Map`.
+
+Two items can have the same key. Each item then gets its own element. When
+the list changes, the first item that has the key keeps the element of that
+key, and each other item with the key gets a new element. Use unique keys
+when each element must stay with its item.
 
 Lumi stores keys in internal occurrence state. It does not add key attributes
 to the DOM. An application can use `attr` if it must expose an item identifier
@@ -658,9 +672,13 @@ extends the positional path.
 
 Only `repeat` interprets an array structurally. Nested arrays remain ordinary
 items until a nested `repeat` consumes them. A non-array repeat result or a
-non-text text result is a recoverable no-op: Lumi preserves the existing DOM
-and emits one development warning per mounted declaration and received value
-category.
+non-text text result is a recoverable no-op: Lumi preserves the existing DOM.
+The development version gives one warning per mounted declaration and
+received value category.
+
+A `repeat` selector that matches no element in the component source repeats
+nothing. Its projections do not run. The development version gives a
+warning.
 
 ## Injecting an application binding convention
 
@@ -733,8 +751,11 @@ projection selects the child's data from the parent snapshot:
 child('.profile-slot', profileComponent, page => page.profile)
 ```
 
-The child root is mounted once and persists across parent renders. The
-container must not initially contain another element.
+The child root is mounted once and persists across parent renders. The mount
+replaces the content of the container.
+
+A selector that matches no element mounts no child. The development version
+gives a warning.
 
 ## DOM ownership
 
@@ -776,50 +797,117 @@ with the value that they wrote last, not with the live DOM. The foreign
 state stays until the projection changes. A `prop` binding is different: it
 compares with the live property on each update.
 
-## Errors
+## Development and production versions
 
-An error is thrown when:
+Lumi has two versions with the same API and the same DOM results.
 
-- A component source has zero or multiple root elements.
-- A `child` container selector does not match within the component root.
-  Unmatched scalar selectors are no-ops.
-- A child container already contains an element.
-- A binding selector is not a valid selector.
-- A parent content rule would replace a child subtree.
-- A property binding attempts to replace its mounted component root through
-  `outerHTML`.
-- An update is recursive or targets an unmounted or faulted component.
-- A DOM property cannot be assigned.
-- A generic binding targets an event handler or `srcdoc`.
-- An `innerHTML` or `outerHTML` projection is not genuine `TrustedHTML`, or
-  the mounted document cannot authenticate it.
-- A keyed repeat produces a duplicate key. Lumi validates all keys before it
-  changes the live DOM.
-- An event declaration has a non-string type or selector, a handler that is
-  not callable, options that are not an object, an unsupported option name, or
-  an invalid `at`, `capture`, `passive`, or `freq` value. The message
-  identifies the event type, the selector, and the invalid property:
+| Version | File | Contents |
+| --- | --- | --- |
+| Development | `dist/lumi.dev.js`, and the package source | All checks, all warnings, and a sentence for each error |
+| Production | `dist/lumi.js` | The checks that prevent an incorrect DOM, and a code for each error |
 
-  ```text
-  Invalid Lumi event binding for "ended" on "video": options.at must be
-  "component" or "elements"
-  ```
+Select a version as follows:
 
-An event selector is validated when the component connects, even when it
-currently has no matches, so an invalid declaration fails mount atomically.
+- With a bundler, `import '@thlibjs/lumi'` gives the development version. A
+  bundler that sets the `production` export condition gets the production
+  version. Vite and webpack set this condition for a production build. For
+  esbuild, use `--conditions=production`.
+- Without a build step, load `dist/lumi.dev.js` during development and
+  `dist/lumi.js` in production.
 
-If application projection code throws, Lumi rethrows an error that identifies
-the binding kind, selector, and one-based matched position. A key projection
-error also identifies the item position. The original thrown value is
-available as its `cause`.
+Use the development version while you write an application. It finds
+mistakes that the production version does not report.
 
-Selector syntax errors remain native `DOMException`s from the browser.
+### Warnings
+
+Only the development version gives warnings. Each warning starts with
+`Lumi:` and goes to `console.warn`. The DOM result is the same in the two
+versions.
+
+| Situation | Result in the two versions |
+| --- | --- |
+| A projection gives a value that the binding cannot write | The DOM state stays |
+| An `aria-*` attribute gets the value `true` | An empty attribute |
+| A `repeat` or `child` selector matches no element | The binding does nothing |
+| The third argument of `repeat` is not a key projection or a list | The argument has no effect |
+| A component source has more than one root element | The component uses the first one |
+| An `on` declaration has a part that is not valid | An option that is not valid gets its default value |
+| A component event type usually does not bubble | The listener stays on the component |
+| A projection gives an error | The error goes to the caller |
+
+### Errors
+
+Lumi gives an error only when it cannot make a correct DOM. In the
+development version, the message has the code and a sentence:
+
+```text
+Lumi E5: repeat ".row" matches the component root. A repeat must match a descendant.
+```
+
+In the production version, the message has the code and the details:
+
+```text
+Lumi E5 .row
+```
+
+These errors are in the two versions:
+
+| Code | Cause | Details |
+| --- | --- | --- |
+| `E1` | An `attr` or `prop` binding names an event handler, for example `onclick`. Use `on`. | Binding kind, name |
+| `E2` | An `attr` or `prop` binding names `srcdoc`. | Binding kind, name |
+| `E3` | An `innerHTML` or `outerHTML` projection gave a value, but the document has no Trusted Types API. | Property name |
+| `E4` | An `innerHTML` or `outerHTML` projection gave a value that is not genuine `TrustedHTML`. | Property name |
+| `E5` | A `repeat` selector matches the component root. | Selector |
+| `E6` | The element of a `repeat` contains the container of a child component. | Selector |
+| `E7` | A binding in the list of a `repeat` matches an element outside that repeat. | Selector |
+| `E8` | A binding in the list of a `repeat` matches an element in a different repeat. | Selector |
+| `E9` | A `text`, `innerHTML`, or `outerHTML` binding contains the container of a child component. | Selector |
+| `E10` | An `outerHTML` binding matches the component root. | Selector |
+| `E11` | A `text`, `innerHTML`, or `outerHTML` binding contains the element of a `repeat`. | Selector |
+| `E12` | An `outerHTML` binding matches an element that markup created. The element must be in the component source. | Selector |
+| `E13` | An update or an unmount started while the component was in an update. | None |
+
+`E1` and `E2` occur when the application makes the binding. `E3`, `E4`, and
+`E12` occur in the preparation of an update, before a change to the live
+DOM. `E5` to `E11` occur in `mount`, and the target keeps its content.
+
+These errors are only in the development version. In each of these
+situations, the production version gives the error of the browser:
+
+| Code | Cause |
+| --- | --- |
+| `E20` | The mount target is not an element or a document fragment. |
+| `E21` | The component source is not a `<template>`, a document fragment, or an element. |
+| `E22` | The component source has no root element. |
+| `E23` | The list of a `repeat` contains a binding that is not a `repeat`, `text`, `attr`, `prop`, `classToggle`, or `style` binding. |
+| `E24` | The component of a `child` binding does not come from `component()`. |
+
+### Errors that are not from Lumi
+
+- If application projection code throws, the caller of `update` gets that
+  error, not a different error. The live DOM stays as it was. The development
+  version also gives a warning that identifies the binding, the selector, and
+  the one-based matched position.
+- A selector that is not valid gives the `DOMException` of the browser. An
+  event selector is examined when the component connects, even when it
+  matches no element, so an invalid declaration fails the mount.
+- A DOM property that cannot be assigned gives the error of the browser.
+
+### Changes that other code makes to the DOM
+
+Other code can remove or move an element that Lumi owns. Lumi gives no error
+for such a change:
+
+- A binding target that is not at its position gets no update.
+- A repeated list whose position marker was removed gets no update.
+- Repeated elements that other code moved go back to the order of the data.
 
 ## Browser requirements
 
 Lumi targets current browsers with native support for ES modules,
 `<template>`, Shadow DOM, selectors, `importNode`, `classList`,
-`addEventListener`, `Map`, `Set`, `Reflect`, and `moveBefore()`.
+`addEventListener`, `Map`, `Set`, `reportError()`, and `moveBefore()`.
 
 Lumi calls browser APIs directly. It has no fallback code for a browser that
 does not have an API. For such a browser, the application loads a shim before

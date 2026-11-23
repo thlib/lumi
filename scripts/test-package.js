@@ -62,6 +62,17 @@ try {
     'the browser bundle sourcemap is missing from the package',
   )
 
+  // dist/lumi.js is the production build. dist/lumi.dev.js is the
+  // development build, with the checks, the warnings, and the message texts.
+  assert.ok(
+    packedPaths.includes('dist/lumi.dev.js'),
+    'the development bundle is missing from the package',
+  )
+  assert.ok(
+    packedPaths.includes('dist/lumi.dev.js.map'),
+    'the development bundle sourcemap is missing from the package',
+  )
+
   assert.ok(
     packedPaths.includes('src/shims/move-before.js'),
     'the moveBefore shim is missing from the package',
@@ -109,6 +120,22 @@ try {
       'the browser bundle does not expose the package export surface',
     )
 
+    const development = await import('@thlibjs/lumi/dist/lumi.dev.js')
+    assert.deepEqual(
+      Object.keys(development).sort(),
+      Object.keys(lumi).sort(),
+      'the development bundle does not expose the package export surface',
+    )
+
+    // The package entry is the development version. The "production"
+    // condition selects the production build.
+    const invalid = () => lumi.attr('button', 'onclick', () => '')
+    assert.throws(invalid, /^Error: Lumi E1: attribute binding "onclick"/)
+    assert.throws(
+      () => bundle.attr('button', 'onclick', () => ''),
+      /^Error: Lumi E1 attribute onclick$/,
+    )
+
     const shim = await import('@thlibjs/lumi/shims/move-before.js')
     assert.equal(typeof shim.installMoveBefore, 'function')
 
@@ -121,6 +148,24 @@ try {
     cwd: temporary,
     stdio: 'inherit',
   })
+
+  writeFileSync(join(temporary, 'production.mjs'), `
+    import assert from 'node:assert/strict'
+    import {attr} from '@thlibjs/lumi'
+
+    assert.throws(
+      () => attr('button', 'onclick', () => ''),
+      /^Error: Lumi E1 attribute onclick$/,
+    )
+  `)
+  execFileSync(
+    process.execPath,
+    ['--conditions=production', 'production.mjs'],
+    {
+      cwd: temporary,
+      stdio: 'inherit',
+    },
+  )
 
   copyFileSync(
     join(repository, 'type-test', 'package-consumer.ts'),

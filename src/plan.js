@@ -26,13 +26,13 @@ import {
   tasksByDepth,
 } from './dom.js'
 import {
-  duplicateKey,
   matchIntegerKeys,
   stableOccurrences,
 } from './keyed.js'
+import {DEV} from './internal/dev.js'
 import {warn} from './internal/diagnostics.js'
+import {fail} from './internal/fail.js'
 import { noValue } from './internal/no-value.js'
-import { projectionError } from './internal/projection-error.js'
 import {itemContext, rootContext} from './internal/projection-context.js'
 import { isStructuralBinding } from './internal/structural.js'
 
@@ -93,9 +93,10 @@ const unusedValues = new WeakMap()
  * @property {WeakMap<Element, CachedValue>} values The last value that a
  * property binding gave to each element. Other bindings do not use it.
  * @property {boolean} requiresTrustedHTML
- * @property {Set<string> | null} warnings The categories of the warnings
- * that the declaration has reported.
- * @property {Window | null} view
+ * @property {Set<string>} [warnings] The categories of the warnings that
+ * the declaration has reported. Only the development version uses it.
+ * @property {Window | null} [view] The window that gets the warnings. Only
+ * the development version uses it.
  * @property {(projected: unknown) => unknown} normalize
  * @property {(element: Element, value: unknown) => Element | void} apply
  * Writes a value. A property binding gives the element that has the value.
@@ -243,10 +244,12 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
     structural: isStructuralBinding(descriptor),
     values: kind === 'property' ? new WeakMap() : unusedValues,
     requiresTrustedHTML: writesMarkup(descriptor),
-    warnings: null,
-    view: root.ownerDocument.defaultView,
     normalize: projected => projected ?? noValue,
     apply: () => {},
+  }
+
+  if (DEV) {
+    runtime.view = root.ownerDocument.defaultView
   }
 
   /**
@@ -268,12 +271,18 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
     case 'repeat':
       runtime.normalize = projected => {
         if (!Array.isArray(projected)) {
-          return ignore(runtime, projected, 'an array')
+          if (DEV) {
+            ignored(runtime, projected, 'an array')
+          }
+          return noValue
         }
 
         for (let i = 0; i < projected.length; i += 1) {
           if (!Object.hasOwn(projected, i)) {
-            return ignore(runtime, projected, 'a dense array', 'sparse array')
+            if (DEV) {
+              ignored(runtime, projected, 'a dense array', 'sparse array')
+            }
+            return noValue
           }
         }
         return projected
@@ -296,17 +305,11 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
           }
 
           if (trustedTypes === null) {
-            throw new TypeError(
-              `Lumi property "${name}" requires TrustedHTML, but the `
-              + 'mounted document does not expose the Trusted Types API',
-            )
+            fail(3, name)
           }
 
           if (!trustedTypes(projected)) {
-            throw new TypeError(
-              `Lumi property "${name}" projection must return TrustedHTML; `
-              + `received ${projectionValueType(projected)}`,
-            )
+            fail(4, name)
           }
 
           return projected
@@ -334,12 +337,12 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
           const before = element.previousSibling
           const after = element.nextSibling
           const parent = element.parentNode
+          const sink = /** @type {Record<string, unknown>} */ (
+            /** @type {unknown} */ (element)
+          )
 
-          if (!Reflect.set(element, name, value)) {
-            throw new TypeError(
-              `Lumi could not set property "${name}" on <${element.localName}>`,
-            )
-          }
+          // A property that cannot be set gives the native error.
+          sink[name] = value
 
           if (runtime.structural) {
             /** @type {TextSink} */ (element)[writtenText] = undefined
@@ -373,21 +376,25 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
       break
     }
     case 'attribute': {
-      // Decided once per declaration so the update path pays one boolean test.
-      const isAria = /^aria-/i.test(name)
       runtime.normalize = projected => {
         if (!isTextValue(projected)) {
-          return ignore(runtime, projected, textValues)
+          if (DEV) {
+            ignored(runtime, projected, textValues)
+          }
+          return noValue
         }
 
-        if (isAria && projected === true) {
-          warnOnce(
-            runtime,
-            'ARIA boolean true',
-            `projected true into "${name}"; true writes an empty attribute, `
-            + 'but ARIA states are string tokens. Project the string \'true\' '
-            + 'or \'false\' instead, for example String(value).',
-          )
+        if (DEV) {
+          if (projected === true && /^aria-/i.test(name)) {
+            warnOnce(
+              runtime,
+              'ARIA boolean true',
+              `the projection gave true for "${name}". The value true `
+              + 'writes an empty attribute, but an ARIA state is a string. '
+              + 'Give the string "true" or "false", for example '
+              + 'String(value).',
+            )
+          }
         }
         return projected === false
           ? false
@@ -410,9 +417,14 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
     }
     case 'class': {
       runtime.normalize = projected => {
-        return typeof projected === 'boolean'
-          ? projected
-          : ignore(runtime, projected, 'a boolean')
+        if (typeof projected === 'boolean') {
+          return projected
+        }
+
+        if (DEV) {
+          ignored(runtime, projected, 'a boolean')
+        }
+        return noValue
       }
 
       // Keep native DOMTokenList errors for invalid tokens. Valid fixed
@@ -450,9 +462,14 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
     }
     case 'style': {
       runtime.normalize = projected => {
-        return typeof projected === 'string'
-          ? projected
-          : ignore(runtime, projected, 'a string')
+        if (typeof projected === 'string') {
+          return projected
+        }
+
+        if (DEV) {
+          ignored(runtime, projected, 'a string')
+        }
+        return noValue
       }
 
       // The CSSStyleDeclaration property for a standard CSS property name.
@@ -467,18 +484,7 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
        * @param {Element} element
        * @returns {Record<string, unknown> & CSSStyleDeclaration}
        */
-      const styleOf = element => {
-        if (!('style' in element)) {
-          throw new TypeError(
-            'Lumi style binding requires a styled element, '
-            + `received <${element.localName}>`,
-          )
-        }
-
-        return /** @type {Record<string, unknown> & CSSStyleDeclaration} */ (
-          element.style
-        )
-      }
+      const styleOf = element => /** @type {any} */ (element).style
 
       useDomValue(
         element => {
@@ -526,11 +532,22 @@ const writtenText = Symbol('lumi.text')
  * @returns {string | typeof noValue}
  */
 function normalizeText(runtime, projected) {
-  return typeof projected === 'string'
-    ? projected
-    : isTextValue(projected)
-      ? String(projected)
-      : ignore(/** @type {DomBindingRuntime<any>} */ (runtime), projected, textValues)
+  if (typeof projected === 'string') {
+    return projected
+  }
+
+  if (isTextValue(projected)) {
+    return String(projected)
+  }
+
+  if (DEV) {
+    ignored(
+      /** @type {DomBindingRuntime<any>} */ (runtime),
+      projected,
+      textValues,
+    )
+  }
+  return noValue
 }
 
 /**
@@ -614,34 +631,31 @@ function projectionValueType(value) {
 }
 
 /**
- * Gives `noValue` for a projected value that a binding cannot write, so the
- * existing DOM state stays. A nullish value asks for that result. Each
- * other value is a recoverable mismatch, reported one time per mounted
- * declaration and received category.
+ * Reports a projected value that a binding cannot write. The binding keeps
+ * the DOM state for such a value. A nullish value asks for that result, so
+ * it gets no report. Only the development version calls this function.
  *
  * @template Data
  * @param {DomBindingRuntime<Data>} runtime
  * @param {unknown} value
  * @param {string} expected
  * @param {string} [category]
- * @returns {typeof noValue}
  */
-function ignore(runtime, value, expected, category) {
+function ignored(runtime, value, expected, category) {
   if (value !== null && value !== undefined) {
     category ??= projectionValueType(value)
     warnOnce(
       runtime,
       category,
-      `ignored ${category}; expected ${expected}. `
-      + 'The existing DOM state was preserved.',
+      `the projection gave ${category}. The binding needs ${expected} and `
+      + 'keeps the DOM state.',
     )
   }
-
-  return noValue
 }
 
 /**
- * Reports one diagnostic per mounted declaration and category.
+ * Gives one warning for each mounted declaration and category. Only the
+ * development version calls this function.
  *
  * @template Data
  * @param {DomBindingRuntime<Data>} runtime
@@ -649,17 +663,16 @@ function ignore(runtime, value, expected, category) {
  * @param {string} message
  */
 function warnOnce(runtime, category, message) {
-  if (runtime.warnings?.has(category) === true) {
-    return
-  }
-
   runtime.warnings ??= new Set()
-  runtime.warnings.add(category)
-  warn(
-    `Lumi ${runtime.descriptor.kind} binding `
-    + `"${runtime.descriptor.selector}" ${message}`,
-    runtime.view,
-  )
+
+  if (!runtime.warnings.has(category)) {
+    runtime.warnings.add(category)
+    warn(
+      `${runtime.descriptor.kind} "${runtime.descriptor.selector}": `
+      + message,
+      runtime.view,
+    )
+  }
 }
 
 /**
@@ -689,6 +702,8 @@ function isTextValue(value) {
  *   projectedValue: unknown,
  *   domValue: unknown
  * }>} values
+ * @property {Window | null} [view] The window that gets the warnings. Only
+ * the development version uses it.
  * @property {(projected: unknown) => unknown} normalize
  * @property {(element: Element, value: unknown) => Element | void} apply
  */
@@ -721,7 +736,7 @@ function isTextValue(value) {
  * @property {SinkSpec[]} ownSinks
  * @property {ScopeSpec} scope
  * @property {ReadonlyArray<unknown> | null} acceptedKeys The keys of the
- * last item list that passed the duplicate check.
+ * last item list.
  * @property {boolean} keepsContexts Whether a plan keeps the context of each
  * occurrence. Only dynamic planning reads the contexts.
  * @property {ReadonlyArray<SinkSpec>} sinks The sinks of one occurrence,
@@ -817,7 +832,10 @@ function connectPlanner(
   const scope = compileScope(
     blueprintRoot,
     runtimes,
-    ownedSubtreePaths.map(path => elementAtPath(blueprintRoot, path)),
+    // The copy of the source has the element of each path.
+    /** @type {Element[]} */ (
+      ownedSubtreePaths.map(path => elementAtPath(blueprintRoot, path))
+    ),
     needsDynamicPlanning,
   )
   /** @type {ScopeState | null} */
@@ -951,27 +969,28 @@ function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
     }
 
     const targets = queryRuntimeElements(root, runtime, ownedSubtrees)
+    const selector = runtime.descriptor.selector
 
-    if (targets.length === 0) {
-      throw new TypeError(
-        `Lumi repeat selector "${runtime.descriptor.selector}" must match `
-        + 'the component source',
-      )
+    // A repeat that matches no element repeats nothing.
+    if (DEV) {
+      if (targets.length === 0) {
+        warn(
+          `repeat "${selector}" matches no element in the component `
+          + 'source. It repeats nothing.',
+          runtime.view,
+        )
+      }
     }
 
     for (let matchIndex = 0; matchIndex < targets.length; matchIndex += 1) {
       const target = /** @type {Element} */ (targets[matchIndex])
 
       if (target === root) {
-        throw new TypeError(
-          'Lumi cannot repeat a mounted component root',
-        )
+        fail(5, selector)
       }
 
       if (ownedSubtrees.some(owned => target.contains(owned))) {
-        throw new Error(
-          'Lumi repeat cannot replace a child subtree',
-        )
+        fail(6, selector)
       }
 
       // The last repeat declaration owns the number of occurrences at
@@ -1013,7 +1032,7 @@ function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
     const parent = nearestRegion(target, regions, strict, runtime.scope)
 
     if (runtime.scope !== undefined && parent === null) {
-      throw new Error('Lumi repeat binding escaped its owning repeat')
+      fail(7, runtime.descriptor.selector)
     }
 
     return parent
@@ -1048,22 +1067,16 @@ function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
         runtime.scope !== undefined
         && nearestRegion(target, regions, false) !== parent
       ) {
-        throw new Error(
-          'Lumi repeat binding crossed a repeat it does not own',
-        )
+        fail(8, runtime.descriptor.selector)
       }
 
       if (isStructuralBinding(runtime.descriptor)) {
         if (ownedSubtrees.some(owned => target.contains(owned))) {
-          throw new Error(
-            'Lumi content binding cannot replace a child subtree',
-          )
+          fail(9, runtime.descriptor.selector)
         }
 
         if (runtime.descriptor.name === 'outerHTML' && target === root) {
-          throw new TypeError(
-            'Lumi cannot replace a mounted component root with outerHTML',
-          )
+          fail(10, runtime.descriptor.selector)
         }
       }
 
@@ -1091,9 +1104,7 @@ function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
         isStructuralBinding(runtime.descriptor)
         && scope.regions.some(region => target.contains(region.target))
       ) {
-        throw new Error(
-          'Lumi repeat cannot overlap a content-owning binding',
-        )
+        fail(11, runtime.descriptor.selector)
       }
 
       scope.sinks.push(sink)
@@ -1298,25 +1309,6 @@ function sameKey(left, right) {
 
 /**
  * @param {RegionSpec} spec
- * @param {ReadonlyArray<unknown>} keys
- * @param {number} count The number of keys to examine
- */
-function rejectDuplicateKey(spec, keys, count) {
-  const index = duplicateKey(keys, count)
-
-  if (index !== -1) {
-    const firstIndex = keys.findIndex(key => sameKey(key, keys[index]))
-
-    throw new TypeError(
-      `Lumi repeat key for "${spec.runtime.descriptor.selector}" `
-      + `is duplicated at item positions ${firstIndex + 1} `
-      + `and ${index + 1}`,
-    )
-  }
-}
-
-/**
- * @param {RegionSpec} spec
  * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
  * @returns {RegionPlan}
  */
@@ -1356,16 +1348,14 @@ function prepareRegion(spec, context) {
     : new Array(nestedCount * length)
   const contexts = spec.keepsContexts ? new Array(length) : null
   const project = spec.runtime.descriptor.key
-  // Keys that are equal to the accepted keys, position for position, are
-  // unique. The key list starts at the first key that is different, so an
-  // update with the same keys builds no list and makes no check.
+  // The key list starts at the first key that is different from the
+  // accepted keys, so an update with the same keys builds no list. Two
+  // items can have the same key. Each item then gets its own occurrence.
   const acceptedKeys = spec.acceptedKeys
   /** @type {unknown[] | null} */
   let keys = null
-  // The number of keys in the list.
-  let keyCount = 0
 
-  try {
+  {
     for (let index = 0; index < length; index += 1) {
       const occurrenceContext = itemContext(context, entries[index], index)
 
@@ -1376,18 +1366,7 @@ function prepareRegion(spec, context) {
       if (project !== undefined) {
         // The key projection does not get an occurrence element, because
         // reconciliation has not selected the element.
-        let key
-
-        try {
-          key = project(occurrenceContext)
-        } catch (error) {
-          throw projectionError(
-            spec.runtime.descriptor,
-            spec.matchIndex,
-            error,
-            index,
-          )
-        }
+        const key = project(occurrenceContext)
 
         if (
           keys === null
@@ -1408,7 +1387,6 @@ function prepareRegion(spec, context) {
 
         if (keys !== null) {
           keys[index] = key
-          keyCount = index + 1
         }
       }
 
@@ -1423,17 +1401,6 @@ function prepareRegion(spec, context) {
         )
       }
     }
-  } catch (error) {
-    // One check of all keys comes after the projections. A duplicate key
-    // comes before a projection that failed later, so its error has priority.
-    if (keys !== null) {
-      rejectDuplicateKey(spec, keys, keyCount)
-    }
-    throw error
-  }
-
-  if (keys !== null) {
-    rejectDuplicateKey(spec, keys, keyCount)
   }
 
   /** @type {ReadonlyArray<unknown> | null} */
@@ -1471,11 +1438,28 @@ function prepareRegion(spec, context) {
  * @returns {unknown}
  */
 function projectValue(runtime, element, matchIndex, context) {
-  try {
-    return runtime.descriptor.project(context, element)
-  } catch (error) {
-    throw projectionError(runtime.descriptor, matchIndex, error)
+  if (DEV) {
+    let isComplete = false
+
+    // The error of a projection goes to the caller as it is. The warning
+    // gives the declaration that has the projection.
+    try {
+      const projected = runtime.descriptor.project(context, element)
+
+      isComplete = true
+      return projected
+    } finally {
+      if (!isComplete) {
+        warn(
+          `${runtime.descriptor.kind} "${runtime.descriptor.selector}": the `
+          + `projection for match ${matchIndex + 1} gave an error.`,
+          runtime.view,
+        )
+      }
+    }
   }
+
+  return runtime.descriptor.project(context, element)
 }
 
 /**
@@ -1503,9 +1487,9 @@ function prepareDynamicOperations(
   const planningRoot = /** @type {Element} */ (
     blueprintRoot.ownerDocument.importNode(blueprintRoot, true)
   )
-  const ownedSubtrees = ownedSubtreePaths.map(path => {
-    return elementAtPath(planningRoot, path)
-  })
+  const ownedSubtrees = /** @type {Element[]} */ (
+    ownedSubtreePaths.map(path => elementAtPath(planningRoot, path))
+  )
   // The targets that each declaration has planned.
   /** @type {Map<Runtime, WeakSet<Element>>} */
   const handledByRuntime = new Map(
@@ -1602,10 +1586,7 @@ function prepareDynamicOperations(
       runtime.descriptor.kind === 'property'
       && runtime.descriptor.name === 'outerHTML'
     ) {
-      throw new TypeError(
-        'Lumi outerHTML binding targets created during array planning '
-        + 'must exist in the component source',
-      )
+      fail(12, runtime.descriptor.selector)
     }
 
     const value = runtime.normalize(projected)
@@ -1669,22 +1650,19 @@ function prepareDynamicOperations(
  * @param {ApplyValue} apply
  */
 function commitDynamicOperations(root, operations, ownedSubtreePaths, apply) {
-  const ownedSubtrees = ownedSubtreePaths.map(path => {
-    return elementAtPath(root, path)
-  })
+  const ownedSubtrees = /** @type {Element[]} */ (
+    ownedSubtreePaths.map(path => elementAtPath(root, path)).filter(Boolean)
+  )
 
   for (const { runtime, matchIndex, matchCount, value } of operations) {
     const elements = queryRuntimeElements(root, runtime, ownedSubtrees)
     const element = elements[matchIndex]
 
-    if (elements.length !== matchCount || element === undefined) {
-      throw new Error(
-        'Lumi DOM changed while committing selector '
-        + `"${runtime.descriptor.selector}"`,
-      )
+    // Other code can change the DOM that Lumi owns. A target that is then
+    // not at its position gets no update.
+    if (elements.length === matchCount && element !== undefined) {
+      apply(runtime, element, value)
     }
-
-    apply(runtime, element, value)
   }
 }
 
@@ -1701,19 +1679,16 @@ function isStructuralRuntime(runtime) {
  * @param {WeakMap<Element, import('./types.js').ProjectionContext<unknown, unknown>>} contextByElement
  */
 function findContext(el, contextByElement) {
-  let current = /** @type {Element | null} */ (el)
-
-  while (current !== null) {
+  // The root of the copy has a context, so the walk finds one.
+  for (let current = el; ; current = /** @type {Element} */ (
+    current.parentElement
+  )) {
     const context = contextByElement.get(current)
 
     if (context !== undefined) {
       return context
     }
-
-    current = current.parentElement
   }
-
-  throw new Error('Lumi lost a dynamic projection context')
 }
 
 /**
@@ -1721,7 +1696,8 @@ function findContext(el, contextByElement) {
  * is applied to the inert copy. Only a component with a markup write does
  * this traversal.
  *
- * @param {ReadonlyArray<RegionState>} states The regions of one scope.
+ * @param {ReadonlyArray<RegionState | undefined>} states The regions of one
+ * scope. The inert copy has all regions.
  * @param {ReadonlyArray<RegionPlan>} plans
  * @param {number} offset The position of the plan of the first region.
  * @param {Map<Runtime, WeakSet<Element>>} handledByRuntime
@@ -1778,9 +1754,9 @@ class ScopeState {
   constructor(element) {
     this.element = element
     // Null until the scope gets its first values.
-    /** @type {Element[] | null} */
+    /** @type {Array<Element | undefined> | null} */
     this.sinks = null
-    /** @type {RegionState[]} */
+    /** @type {Array<RegionState | undefined>} */
     this.regions = noRegionStates
     // The values of the last update, at `offset` in the value list of that
     // plan. A binding that remembers its value compares with these.
@@ -1803,16 +1779,17 @@ class ScopeState {
       return
     }
 
-    /** @type {Element[]} */
+    // Other code can change the DOM that Lumi owns. A target that is then
+    // not at its position has no element here, and it gets no update.
+    /** @type {Array<Element | undefined>} */
     const found = new Array(sinkCount + regionCount)
     locateElements(this.element, spec.locator, found)
 
     if (regionCount > 0) {
       this.regions = spec.regions.map((region, index) => {
-        return new RegionState(
-          /** @type {Element} */ (found[sinkCount + index]),
-          region,
-        )
+        const target = found[sinkCount + index]
+
+        return target && new RegionState(target, region)
       })
       // The first occurrence of a region can go away. Do not keep it here.
       found.length = sinkCount
@@ -1857,15 +1834,15 @@ class ScopeState {
             this.connect(spec)
           }
 
-          apply(
-            sink.runtime,
-            index < ownCount
-              ? this.element
-              : /** @type {Element} */ (
-                /** @type {Element[]} */ (this.sinks)[index - ownCount]
-              ),
-            value,
-          )
+          const element = index < ownCount
+            ? this.element
+            : /** @type {Array<Element | undefined>} */ (
+              this.sinks
+            )[index - ownCount]
+
+          if (element !== undefined) {
+            apply(sink.runtime, element, value)
+          }
         }
       }
 
@@ -1880,7 +1857,7 @@ class ScopeState {
     const regions = this.regions
 
     for (let index = 0; index < regions.length; index += 1) {
-      /** @type {RegionState} */ (regions[index]).apply(
+      regions[index]?.apply(
         /** @type {RegionPlan} */ (plans[planOffset + index]),
         apply,
       )
@@ -1889,7 +1866,7 @@ class ScopeState {
 
   destroy() {
     for (const region of this.regions) {
-      region.destroy()
+      region?.destroy()
     }
   }
 
@@ -2032,14 +2009,19 @@ class RegionState {
       return
     }
 
+    // The previous index of each key. When two previous occurrences have
+    // the same key, only the first one is here. The other one is not used
+    // again, and the loop after the match removes it.
     /** @type {Map<unknown, number>} */
     const available = new Map()
+    // 1 for each previous occurrence that the new list uses.
+    const used = new Uint8Array(previous.length)
     let pristineIndex = -1
 
     if (previousKeys === null) {
       pristineIndex = previous.length - 1
     } else {
-      for (let index = 0; index < previous.length; index += 1) {
+      for (let index = previous.length - 1; index >= 0; index -= 1) {
         available.set(previousKeys[index], index)
       }
     }
@@ -2054,12 +2036,15 @@ class RegionState {
     let ordered = true
 
     for (let index = 0; index < count; index += 1) {
-      const key = keys[index]
-      let source = available.get(key)
+      let source = available.get(keys[index])
 
-      if (source !== undefined) {
-        available.delete(key)
-      } else if (pristineIndex !== -1) {
+      // One occurrence serves one item. A second item with the same key
+      // gets a new occurrence.
+      if (source !== undefined && used[source] === 1) {
+        source = undefined
+      }
+
+      if (source === undefined && pristineIndex !== -1) {
         source = pristineIndex
         pristineIndex = -1
       }
@@ -2070,6 +2055,7 @@ class RegionState {
       } else {
         next[index] = /** @type {ScopeState} */ (previous[source])
         sources[index] = source
+        used[source] = 1
 
         if (source < lastSource) {
           ordered = false
@@ -2078,11 +2064,10 @@ class RegionState {
       }
     }
 
-    if (pristineIndex !== -1) {
-      previous[pristineIndex]?.remove()
-    }
-    for (const source of available.values()) {
-      previous[source]?.remove()
+    for (let index = 0; index < previous.length; index += 1) {
+      if (used[index] === 0) {
+        previous[index]?.remove()
+      }
     }
 
     this.placeInOrder(next, ordered ? null : stableOccurrences(sources))
@@ -2100,8 +2085,9 @@ class RegionState {
   placeInOrder(next, stable) {
     const parent = this.anchor.parentNode
 
+    // Other code can remove the anchor. The region then gets no update.
     if (parent === null) {
-      throw new Error('Lumi array binding anchor lost its parent')
+      return
     }
 
     let reference = /** @type {Node} */ (this.anchor)

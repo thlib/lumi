@@ -29,6 +29,53 @@ function createDocument() {
 }
 
 /**
+ * Records the warnings that go to the global console.
+ *
+ * @template Result
+ * @param {() => Result} operation
+ * @returns {{ result: Result, warnings: string[] }}
+ */
+function recordGlobalWarnings(operation) {
+  /** @type {string[]} */
+  const warnings = []
+  const original = console.warn
+
+  console.warn = (/** @type {unknown[]} */ ...args) => {
+    warnings.push(args.map(String).join(' '))
+  }
+
+  try {
+    return { result: operation(), warnings }
+  } finally {
+    console.warn = original
+  }
+}
+
+/**
+ * Records the warnings that go to the console of a window.
+ *
+ * @template Result
+ * @param {import('jsdom').DOMWindow} window
+ * @param {() => Result} operation
+ * @returns {{ result: Result, warnings: string[] }}
+ */
+function recordWindowWarnings(window, operation) {
+  /** @type {string[]} */
+  const warnings = []
+  const original = window.console.warn
+
+  window.console.warn = (/** @type {unknown[]} */ ...args) => {
+    warnings.push(args.map(String).join(' '))
+  }
+
+  try {
+    return { result: operation(), warnings }
+  } finally {
+    window.console.warn = original
+  }
+}
+
+/**
  * jsdom does not implement Trusted Types. This test-only factory preserves
  * the API's nominal check: only values created by one of its policies pass
  * isHTML(), so ordinary objects and strings cannot impersonate TrustedHTML.
@@ -501,7 +548,7 @@ test('a repeat stops at an open shadow root', () => {
   assert.deepEqual(privateItems(), ['Private'])
 })
 
-test('a child component does not mount into a shadow root', () => {
+test('a child selector does not match in a shadow root', () => {
   const { document, window } = createDocument()
 
   class ShadowHost extends window.HTMLElement {
@@ -521,14 +568,24 @@ test('a child component does not mount into a shadow root', () => {
   target.innerHTML = '<p>Before</p>'
   document.body.append(target)
 
-  assert.throws(
-    () => component({
+  // A child selector that matches no element mounts no child.
+  const { result: mounted, warnings } = recordGlobalWarnings(() => {
+    return component({
       source: createTemplate(document, '<shadow-host></shadow-host>'),
       bindings: [child('.child-slot', childComponent, data => data)],
-    }).mount(target),
-    /selector "\.child-slot" did not match/,
+    }).mount(target)
+  })
+
+  assert.deepEqual(warnings, [
+    'Lumi: child ".child-slot" matches no element. No child is mounted.',
+  ])
+  mounted.update('Value')
+  assert.equal(
+    mounted.root.shadowRoot?.innerHTML,
+    '<div class="child-slot"></div>',
   )
-  assert.equal(target.innerHTML, '<p>Before</p>')
+  mounted.unmount()
+  assert.equal(target.childNodes.length, 0)
 })
 
 test('ignores an open shadow root attached between updates', () => {
@@ -733,9 +790,9 @@ test('mounts on a shadow root', () => {
   assert.throws(
     () => component({
       source: template,
-      bindings: [repeat('.missing', () => [])],
+      bindings: [repeat('section', () => [])],
     }).mount(shadow),
-    /must match the component source/,
+    /^Error: Lumi E5: repeat "section" matches the component root\./,
   )
   assert.equal(shadow.innerHTML, '<style>p { margin: 0 }</style><p>Before</p>')
 
@@ -786,7 +843,7 @@ test('mounts on a document fragment', () => {
   for (const target of [null, document, document.createTextNode('text')]) {
     assert.throws(
       () => view.mount(/** @type {Element} */ (/** @type {unknown} */ (target))),
-      /mount target must be a DOM element or a document fragment/,
+      /^Error: Lumi E20: the mount target must be an element or a document fragment\.$/,
     )
   }
 })
@@ -1019,7 +1076,7 @@ test('moves keyed repeat occurrences without exposing keys in the DOM', () => {
   )
 })
 
-test('rejects duplicate repeat keys before changing the live DOM', () => {
+test('renders one element for each item with a duplicate repeat key', () => {
   const {document} = createDocument()
   const template = createTemplate(document, `
     <section>
@@ -1048,26 +1105,24 @@ test('rejects duplicate repeat keys before changing the live DOM', () => {
   })
   const items = Array.from(mounted.root.querySelectorAll('.item'))
 
-  assert.throws(
-    () => mounted.update({
-      status: 'Rejected',
-      items: [
-        {id: 1, name: 'Changed'},
-        {id: 1, name: 'Duplicate'},
-      ],
-    }),
-    /repeat key for "\.item" is duplicated at item positions 1 and 2/,
-  )
-  assert.equal(mounted.root.querySelector('.status')?.textContent, 'Ready')
+  mounted.update({
+    status: 'Duplicate',
+    items: [
+      {id: 1, name: 'Changed'},
+      {id: 1, name: 'Duplicate'},
+    ],
+  })
+  assert.equal(mounted.root.querySelector('.status')?.textContent, 'Duplicate')
   assert.deepEqual(
     Array.from(
       mounted.root.querySelectorAll('.item'),
       element => element.textContent,
     ),
-    ['First', 'Second'],
+    ['Changed', 'Duplicate'],
   )
+  // The first item with the key keeps the element of the key.
   assert.strictEqual(mounted.root.querySelectorAll('.item')[0], items[0])
-  assert.strictEqual(mounted.root.querySelectorAll('.item')[1], items[1])
+  assert.notStrictEqual(mounted.root.querySelectorAll('.item')[1], items[1])
 
   mounted.update({
     status: 'Recovered',
@@ -1077,7 +1132,7 @@ test('rejects duplicate repeat keys before changing the live DOM', () => {
     ],
   })
   assert.equal(mounted.root.querySelector('.status')?.textContent, 'Recovered')
-  assert.strictEqual(mounted.root.querySelectorAll('.item')[0], items[1])
+  assert.equal(mounted.root.querySelectorAll('.item').length, 2)
   assert.strictEqual(mounted.root.querySelectorAll('.item')[1], items[0])
 })
 
@@ -1108,7 +1163,7 @@ test('keeps repeat key projection failures recoverable', () => {
 
   assert.throws(
     () => mounted.update({items: [{id: 'fail'}]}),
-    /repeat key projection for "\.item".*item 1 failed: Key is unavailable/,
+    /^Error: Key is unavailable$/,
   )
   assert.strictEqual(mounted.root.querySelector('.item'), item)
   assert.equal(item?.textContent, 'ready')
@@ -1427,7 +1482,7 @@ test('rejects repeat at the mounted component root', () => {
       source: template,
       bindings: [repeat('output', ({data}) => /** @type {unknown[]} */ ((/** @type {{value: unknown[]}} */ (data)).value))],
     }).mount(document.createElement('div')),
-    /cannot repeat a mounted component root/,
+    /^Error: Lumi E5: repeat "output" matches the component root\. A repeat must match a descendant\.$/,
   )
 })
 
@@ -2027,18 +2082,20 @@ test('warns once and preserves DOM for invalid repeat and text values', () => {
     )
     assert.equal(mounted.root.querySelector('.label')?.textContent, 'Ready')
     assert.equal(warnings.length, 2)
-    assert.ok(warnings.some(msg => {
-      return /repeat binding ".item" ignored/.test(msg)
-    }))
-    assert.ok(warnings.some(msg => {
-      return /text binding ".label" ignored/.test(msg)
-    }))
+    assert.ok(warnings.includes(
+      'Lumi: repeat ".item": the projection gave type object. The binding '
+      + 'needs an array and keeps the DOM state.',
+    ))
+    assert.ok(warnings.includes(
+      'Lumi: text ".label": the projection gave an array. The binding '
+      + 'needs a string, number, or boolean and keeps the DOM state.',
+    ))
   } finally {
     window.console.warn = originalWarn
   }
 })
 
-test('rejects invalid repeat structure while mounting', () => {
+test('rejects a repeat of the component root while mounting', () => {
   const {document} = createDocument()
   const template = createTemplate(document, '<output></output>')
 
@@ -2047,15 +2104,42 @@ test('rejects invalid repeat structure while mounting', () => {
       source: template,
       bindings: [repeat('output', () => [])],
     }).mount(document.createElement('div')),
-    /cannot repeat a mounted component root/,
+    /^Error: Lumi E5: repeat "output" matches the component root\./,
   )
-  assert.throws(
-    () => component({
+})
+
+test('a repeat that matches no element repeats nothing', () => {
+  const {document, window} = createDocument()
+  const template = createTemplate(
+    document,
+    '<section><output class="value">Default</output></section>',
+  )
+  let projections = 0
+  const {result: mounted, warnings} = recordWindowWarnings(window, () => {
+    return component({
       source: template,
-      bindings: [repeat('.missing', () => [])],
-    }).mount(document.createElement('div')),
-    /must match the component source/,
-  )
+      bindings: [
+        repeat('.missing', () => {
+          projections += 1
+          return ['one', 'two']
+        }, [text('.label', () => 'Label')]),
+        text('.value', ({data}) => /** @type {string} */ (data)),
+      ],
+    }).mount(document.createElement('div'))
+  })
+
+  assert.deepEqual(warnings, [
+    'Lumi: repeat ".missing" matches no element in the component source. '
+    + 'It repeats nothing.',
+  ])
+
+  // The other bindings of the component work.
+  mounted.update('Ready')
+  mounted.update('Changed')
+
+  assert.equal(projections, 0)
+  assert.equal(mounted.root.outerHTML, '<section><output class="value">Changed</output></section>')
+  mounted.unmount()
 })
 
 test('allows application code to inject standard JSONPath nodelists', () => {
@@ -2392,7 +2476,7 @@ test('rejects parent content writes that would replace a child subtree', () => {
         ),
       ],
     }).mount(target),
-    /content binding cannot replace a child subtree/,
+    /^Error: Lumi E9: content binding "\.shell" contains the container of a child component\.$/,
   )
   assert.equal(target.innerHTML, '<p>Before</p>')
 
@@ -2408,7 +2492,7 @@ test('rejects parent content writes that would replace a child subtree', () => {
         text('.profile-slot', () => 'Replacement'),
       ],
     }).mount(target),
-    /content binding cannot replace a child subtree/,
+    /Lumi E9: content binding "\.profile-slot" contains the container/,
   )
   assert.equal(target.innerHTML, '<p>Before</p>')
 })
@@ -2445,7 +2529,7 @@ test('rejects strings and forged objects for TrustedHTML properties', () => {
 
   assert.throws(
     () => mounted.update({ markup: '<strong>Unsafe</strong>' }),
-    /property "innerHTML" projection must return TrustedHTML; received type string/,
+    /^Error: Lumi E4: property "innerHTML" must get TrustedHTML\. The projection gave a different value\.$/,
   )
   assert.equal(
     mounted.root.querySelector('.markup')?.textContent,
@@ -2460,7 +2544,7 @@ test('rejects strings and forged objects for TrustedHTML properties', () => {
         },
       },
     }),
-    /property "innerHTML" projection must return TrustedHTML; received type object/,
+    /Lumi E4: property "innerHTML" must get TrustedHTML/,
   )
   assert.equal(
     mounted.root.querySelector('.markup')?.textContent,
@@ -2706,7 +2790,7 @@ test('fails closed when TrustedHTML cannot be authenticated', () => {
 
   assert.throws(
     () => mounted.update({}),
-    /requires TrustedHTML.*does not expose the Trusted Types API/,
+    /^Error: Lumi E3: property "innerHTML" must get TrustedHTML, but the document has no Trusted Types API\.$/,
   )
   assert.equal(mounted.root.innerHTML, '')
 })
@@ -2714,15 +2798,15 @@ test('fails closed when TrustedHTML cannot be authenticated', () => {
 test('keeps iframe documents and native handlers out of generic bindings', () => {
   assert.throws(
     () => prop('button', () => () => {}, 'onclick'),
-    /use on\(\)/,
+    /^Error: Lumi E1: property binding "onclick" is an event handler\. Use on\(\)\.$/,
   )
   assert.throws(
     () => attr('button', 'onclick', () => 'run()'),
-    /use on\(\)/,
+    /^Error: Lumi E1: attribute binding "onclick" is an event handler\. Use on\(\)\.$/,
   )
   assert.throws(
     () => attr('iframe', 'srcdoc', () => '<script>run()</script>'),
-    /trusted-content API/,
+    /^Error: Lumi E2: attribute binding "srcdoc" is not permitted\./,
   )
 })
 
@@ -2775,8 +2859,8 @@ test('does not commit scalar writes when preparation fails', () => {
   assert.equal(second?.textContent, 'After second')
 })
 
-test('adds binding context when a projection throws', () => {
-  const { document } = createDocument()
+test('a projection error goes to the caller with a warning for its binding', () => {
+  const { document, window } = createDocument()
   const template = createTemplate(document, `
     <section>
       <output class="value"></output>
@@ -2798,19 +2882,20 @@ test('adds binding context when a projection throws', () => {
 
   /** @type {unknown} */
   let error
+  const { warnings } = recordWindowWarnings(window, () => {
+    try {
+      mounted.update({})
+    } catch (caught) {
+      error = caught
+    }
+  })
 
-  try {
-    mounted.update({})
-  } catch (caught) {
-    error = caught
-  }
-
-  assert.ok(error instanceof Error)
-  assert.match(
-    error.message,
-    /Lumi text projection for "\.value" at matched position 2 failed: Value is unavailable/,
-  )
-  assert.equal(error.cause, failure)
+  // The caller gets the error of the projection, not a different error.
+  assert.strictEqual(error, failure)
+  assert.deepEqual(warnings, [
+    'Lumi: text ".value": the projection for match 2 gave an error.',
+  ])
+  assert.equal(mounted.root.textContent?.trim(), '')
 })
 
 test('rejects incompatible values and treats nullish projections as no-ops', () => {
@@ -3070,7 +3155,7 @@ test('discards custom binding work when later preparation fails', () => {
   assert.equal(mounted.root.textContent, 'After')
 })
 
-test('faults a component when an arbitrary DOM setter fails during commit', () => {
+test('an update after a failed commit writes the values again', () => {
   const { document } = createDocument()
   const template = createTemplate(document, `
     <section>
@@ -3108,10 +3193,29 @@ test('faults a component when an arbitrary DOM setter fails during commit', () =
     mounted.root.querySelector('output')?.textContent,
     'Partially committed',
   )
+  // The component has no fault state. The next update does the writes
+  // again, and the setter gives its error again.
   assert.throws(
     () => mounted.update({ text: 'Retry', value: 'retry' }),
-    /faulted Lumi component/,
+    /DOM setter failed/,
   )
+  assert.equal(mounted.root.querySelector('output')?.textContent, 'Retry')
+
+  /** @type {unknown} */
+  let written
+  Object.defineProperty(button, 'lumiProbe', {
+    configurable: true,
+    get() {
+      return written
+    },
+    set(value) {
+      written = value
+    },
+  })
+
+  mounted.update({ text: 'Recovered', value: 'recovered' })
+  assert.equal(mounted.root.querySelector('output')?.textContent, 'Recovered')
+  assert.equal(written, 'recovered')
 
   mounted.unmount()
   assert.equal(target.childElementCount, 0)
@@ -3162,13 +3266,15 @@ test('finishes unmount cleanup when a binding destroy throws', () => {
   )
   assert.deepEqual(destroyed, ['last', 'throwing', 'first'])
   assert.equal(target.childElementCount, 0)
-  assert.throws(() => mounted.update({}), /unmounted/)
+
+  // An update after the unmount does nothing.
+  mounted.update({})
 
   mounted.unmount()
   assert.deepEqual(destroyed, ['last', 'throwing', 'first'])
 })
 
-test('rejects invalid component sources and stale renders', () => {
+test('rejects invalid component sources and ignores stale updates', () => {
   const { document } = createDocument()
   const invalidTemplate = createTemplate(
     document,
@@ -3178,13 +3284,24 @@ test('rejects invalid component sources and stale renders', () => {
 
   assert.throws(
     () => component({source: null}).mount(target),
-    /component source/,
+    /^Error: Lumi E21: the component source must be a <template>, a document fragment, or an element\.$/,
+  )
+  assert.throws(
+    () => component({source: createTemplate(document, 'Text')}).mount(target),
+    /^Error: Lumi E22: the component source must have a root element\.$/,
   )
 
-  assert.throws(
-    () => component({ source: invalidTemplate }).mount(target),
-    /exactly one root element/,
-  )
+  // A source with more than one root element gives its first element.
+  const { result: first, warnings } = recordGlobalWarnings(() => {
+    return component({ source: invalidTemplate }).mount(target)
+  })
+
+  assert.deepEqual(warnings, [
+    'Lumi: the component source has 2 root elements. The component uses '
+    + 'the first one.',
+  ])
+  assert.equal(target.innerHTML, '<p>First</p>')
+  first.unmount()
 
   const missingTargetTemplate = createTemplate(document, '<p>Text</p>')
   const unmatched = render({}, {
@@ -3194,10 +3311,10 @@ test('rejects invalid component sources and stale renders', () => {
   })
   assert.equal(unmatched.root.textContent, 'Text')
   unmatched.unmount()
-  assert.throws(
-    () => unmatched.update({}),
-    /unmounted/,
-  )
+
+  // An update after the unmount does nothing.
+  unmatched.update({})
+  assert.equal(target.childNodes.length, 0)
 
   target.innerHTML = '<p>Before</p>'
   assert.throws(
@@ -3211,7 +3328,7 @@ test('rejects invalid component sources and stale renders', () => {
         ),
       ],
     }).mount(target),
-    /cannot replace a mounted component root/,
+    /^Error: Lumi E10: outerHTML binding "p" matches the component root\.$/,
   )
   assert.equal(target.innerHTML, '<p>Before</p>')
   target.replaceChildren()
@@ -3221,7 +3338,7 @@ test('rejects invalid component sources and stale renders', () => {
       target: null,
       source: missingTargetTemplate,
     }),
-    /mount target/,
+    /Lumi E20: the mount target/,
   )
 
   assert.throws(

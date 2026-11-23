@@ -93,42 +93,50 @@ test('an update with the same keys restores an outside reorder', () => {
   assert.deepEqual(names(), ['1', '2', '3'])
 })
 
-test('a duplicate key after an unchanged start is rejected', () => {
-  const {mounted, names} = mountItems()
+test('a duplicate key after an unchanged start gets its own element', () => {
+  const {mounted, names, elements} = mountItems()
 
   mounted.update(items([1, 2, 3]))
+  const before = elements()
 
-  assert.throws(
-    () => mounted.update(items([1, 2, 2])),
-    /duplicated at item positions 2 and 3/,
-  )
-  assert.deepEqual(names(), ['1', '2', '3'])
+  mounted.update(items([1, 2, 2]))
+
+  assert.deepEqual(names(), ['1', '2', '2'])
+  assert.deepEqual(elements().slice(0, 2), before.slice(0, 2))
+  assert.equal(elements().length, 3)
 })
 
-test('a duplicate key after all accepted keys is rejected', () => {
-  const {mounted, names} = mountItems()
+test('a duplicate key after all accepted keys gets its own element', () => {
+  const {mounted, names, elements} = mountItems()
 
   mounted.update(items([1, 2, 3]))
+  const before = elements()
 
-  assert.throws(
-    () => mounted.update(items([1, 2, 3, 1])),
-    /duplicated at item positions 1 and 4/,
-  )
-  assert.deepEqual(names(), ['1', '2', '3'])
+  mounted.update(items([1, 2, 3, 1]))
+  assert.deepEqual(names(), ['1', '2', '3', '1'])
+  assert.deepEqual(elements().slice(0, 3), before)
 
   mounted.update(items([1, 2, 3, 4]))
   assert.deepEqual(names(), ['1', '2', '3', '4'])
+  assert.deepEqual(elements().slice(0, 3), before)
 })
 
-test('a rejected key list does not change the accepted keys', () => {
-  const {mounted, names} = mountItems()
+test('duplicate keys are accepted keys for the next update', () => {
+  const {mounted, names, elements} = mountItems()
 
   mounted.update(items([1, 2]))
-  assert.throws(() => mounted.update(items([2, 2])), /duplicated/)
-  assert.throws(() => mounted.update(items([2, 2])), /duplicated/)
+  mounted.update(items([2, 2]))
+  const duplicates = elements()
+
+  assert.deepEqual(names(), ['2', '2'])
+
+  mounted.update([{id: 2, name: 'first'}, {id: 2, name: 'second'}])
+  assert.deepEqual(elements(), duplicates)
+  assert.deepEqual(names(), ['first', 'second'])
 
   mounted.update(items([2, 1]))
   assert.deepEqual(names(), ['2', '1'])
+  assert.equal(elements().length, 2)
 })
 
 test('a shorter list with the same first keys keeps those elements', () => {
@@ -141,10 +149,10 @@ test('a shorter list with the same first keys keeps those elements', () => {
   assert.deepEqual(elements(), before.slice(0, 2))
   assert.deepEqual(names(), ['1', '2'])
 
-  assert.throws(
-    () => mounted.update(items([1, 2, 1])),
-    /duplicated at item positions 1 and 3/,
-  )
+  mounted.update(items([1, 2, 1]))
+
+  assert.deepEqual(elements().slice(0, 2), before.slice(0, 2))
+  assert.deepEqual(names(), ['1', '2', '1'])
 })
 
 test('NaN keys are equal to each other', () => {
@@ -156,13 +164,14 @@ test('NaN keys are equal to each other', () => {
 
   assert.deepEqual(elements(), before)
   assert.deepEqual(names(), ['NaN', '1'])
-  assert.throws(
-    () => mounted.update(items([NaN, NaN])),
-    /duplicated at item positions 1 and 2/,
-  )
+
+  mounted.update(items([NaN, NaN]))
+
+  assert.strictEqual(elements()[0], before[0])
+  assert.deepEqual(names(), ['NaN', 'NaN'])
 })
 
-test('each nested keyed list has its own duplicate check', () => {
+test('each nested keyed list accepts duplicate keys', () => {
   const {document, template} = createSource(
     '<div><section class="group"><span class="member"></span></section></div>',
   )
@@ -193,11 +202,8 @@ test('each nested keyed list has its own duplicate check', () => {
   mounted.update([[1, 2], [1, 2]])
   assert.deepEqual(members(), [['1', '2'], ['1', '2']])
 
-  assert.throws(
-    () => mounted.update([[1, 2], [1, 1]]),
-    /duplicated at item positions 1 and 2/,
-  )
-  assert.deepEqual(members(), [['1', '2'], ['1', '2']])
+  mounted.update([[1, 2], [1, 1]])
+  assert.deepEqual(members(), [['1', '2'], ['1', '1']])
 
   mounted.update([[2, 1], [3]])
   assert.deepEqual(members(), [['2', '1'], ['3']])

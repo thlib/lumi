@@ -13,6 +13,7 @@ import {
   queryElements,
   queryOwnedElements,
 } from './dom.js'
+import {DEV} from './internal/dev.js'
 import {warn} from './internal/diagnostics.js'
 
 const eventBindingDescriptor = Symbol('Lumi event binding descriptor')
@@ -29,7 +30,6 @@ const eventOptions = {
   passive: null,
   freq: ['always', 'once'],
 }
-const optionNames = Object.keys(eventOptions)
 
 /**
  * Native event types that normally do not bubble. Lumi never rewrites an
@@ -37,15 +37,15 @@ const optionNames = Object.keys(eventOptions)
  * this list only powers a development diagnostic. Custom events may reuse any
  * of these type strings with their own bubbles value.
  *
- * @type {ReadonlySet<string>}
+ * The list starts and ends with a space, so a search for a type between
+ * two spaces finds only a complete type.
  */
-const nonBubblingEventTypes = new Set(
-  ('abort beforetoggle blur canplay canplaythrough durationchange emptied '
-    + 'ended error focus invalid load loadeddata loadedmetadata loadstart '
-    + 'mouseenter mouseleave pause play playing pointerenter pointerleave '
-    + 'progress ratechange resize scroll seeked seeking stalled suspend '
-    + 'timeupdate toggle unload volumechange waiting').split(' '),
-)
+const nonBubblingEventTypes = ' abort beforetoggle blur canplay '
+  + 'canplaythrough durationchange emptied ended error focus invalid load '
+  + 'loadeddata loadedmetadata loadstart mouseenter mouseleave pause play '
+  + 'playing pointerenter pointerleave progress ratechange resize scroll '
+  + 'seeked seeking stalled suspend timeupdate toggle unload volumechange '
+  + 'waiting '
 
 /**
  * One validated event declaration. Descriptors belong to the declaration, not
@@ -119,7 +119,6 @@ const nonBubblingEventTypes = new Set(
  * @param {(event: NativeEvent<Type>, element: SelectorElement<Selector>) => void} handler
  * @param {import('./types.js').EventBindingOptions} [options]
  * @returns {import('./types.js').Binding<Data>}
- * @throws {TypeError} When the declaration is not a valid event binding.
  */
 export function on(selector, type, handler, options) {
   const descriptor = createEventDescriptor(selector, type, handler, options)
@@ -241,17 +240,17 @@ export function connectEventBindings(root, descriptors, ownedSubtrees = []) {
         }
       }
 
-      try {
-        descriptor.handle(nativeEvent, element)
-      } catch (error) {
-        // Native listener error behavior applies to element attachment.
-        if (!isRouted) {
-          throw error
+      if (isRouted) {
+        // Native dispatch reports a listener exception and continues with
+        // the remaining listeners. A shared listener does the same.
+        try {
+          descriptor.handle(nativeEvent, element)
+        } catch (error) {
+          (root.ownerDocument.defaultView ?? globalThis).reportError(error)
         }
-
-        // Native dispatch reports a listener exception without stopping the
-        // remaining listeners. A shared listener preserves that isolation.
-        reportEventError(root, error)
+      } else {
+        // A listener on the element has the native error behavior.
+        descriptor.handle(nativeEvent, element)
       }
     }
   }
@@ -385,141 +384,91 @@ function componentPath(nativeEvent, root, ownedSubtrees) {
 }
 
 /**
- * Reports a routed handler exception the way an uncaught event-handler error
- * is reported, without letting it abort unrelated handlers.
+ * Makes the descriptor of one event declaration. An option that is absent
+ * or not valid gets its default value.
  *
- * @param {Element} root
- * @param {unknown} error
- */
-function reportEventError(root, error) {
-  const view = /** @type {any} */ (root.ownerDocument.defaultView)
-
-  if (typeof view?.reportError === 'function') {
-    view.reportError(error)
-    return
-  }
-
-  /** @type {unknown} */
-  const schedule = view === null ? globalThis.setTimeout : view.setTimeout
-
-  if (typeof schedule === 'function') {
-    schedule(() => {
-      throw error
-    })
-    return
-  }
-
-  console.error(error)
-}
-
-/**
- * Validates one event declaration.
+ * The development version gives a warning for each part of a declaration
+ * that is not valid.
  *
  * @param {string} selector
  * @param {string} type
  * @param {unknown} handler
- * @param {unknown} options
+ * @param {any} options
  * @returns {EventBindingDescriptor}
  */
-function createEventDescriptor(selector, type, handler, options = {}) {
-  if (typeof selector !== 'string' || selector.trim().length === 0) {
-    throw new TypeError(
-      'Lumi event binding selector must be a non-empty string',
-    )
-  }
+function createEventDescriptor(selector, type, handler, options) {
+  const at = options?.at === 'elements' ? 'elements' : 'component'
+  const capture = !!options?.capture
 
-  if (typeof type !== 'string' || type.length === 0) {
-    throw new TypeError(
-      `Lumi event binding on "${selector}" requires a non-empty event type`,
-    )
-  }
+  if (DEV) {
+    /** @param {string} problem */
+    const invalid = problem => warn(`on "${selector}" "${type}": ${problem}`)
 
-  /** @param {string} reason */
-  const invalid = reason => {
-    return new TypeError(
-      `Invalid Lumi event binding for "${type}" on "${selector}": ${reason}`,
-    )
-  }
-
-  /**
-   * @param {ReadonlyArray<string>} values
-   * @returns {string} The quoted values, for example `"a", "b" or "c"`.
-   */
-  const list = values => {
-    return values
-      .map(value => `"${value}"`)
-      .join(', ')
-      .replace(/, (?=[^,]*$)/, ' or ')
-  }
-
-  if (typeof handler !== 'function') {
-    throw invalid('handler must be a function')
-  }
-
-  if (
-    typeof options !== 'object'
-    || options === null
-    || Array.isArray(options)
-  ) {
-    throw invalid('options must be an object')
-  }
-
-  for (const name of Object.keys(options)) {
-    if (!optionNames.includes(name)) {
-      // The native listener option is the likeliest mistake, so name its
-      // replacement instead of only listing the supported options.
-      throw invalid(
-        name === 'once'
-          ? 'options.once is not a supported event option; '
-            + 'use freq: "once" for a binding-level once'
-          : `options.${name} is not a supported event option; `
-            + `use ${list(optionNames)}`,
-      )
+    if (typeof selector !== 'string' || selector.trim() === '') {
+      invalid('the selector must be a string that is not empty.')
     }
-  }
 
-  /** @type {Record<string, unknown>} */
-  const descriptor = { type, selector, handle: handler }
+    if (typeof type !== 'string' || type === '') {
+      invalid('the event type must be a string that is not empty.')
+    }
 
-  for (const name of optionNames) {
-    const allowed = eventOptions[name] ?? null
-    const value = /** @type {Record<string, unknown>} */ (options)[name]
+    if (typeof handler !== 'function') {
+      invalid('the handler must be a function.')
+    }
 
-    if (value === undefined) {
-      descriptor[name] = allowed === null ? false : allowed[0]
-    } else if (
-      allowed === null
-        ? typeof value === 'boolean'
-        : allowed.includes(/** @type {string} */ (value))
+    const isObject = typeof options === 'object' && options !== null
+
+    if (options !== undefined && !isObject) {
+      invalid('the options must be an object. They have no effect.')
+    }
+
+    for (const [name, value] of Object.entries(isObject ? options : {})) {
+      const allowed = eventOptions[name]
+
+      if (allowed === undefined) {
+        invalid(
+          `the option "${name}" is not known and has no effect.`
+          + (name === 'once' ? ' Use freq: "once".' : ''),
+        )
+      } else if (
+        value !== undefined
+        && (
+          allowed === null
+            ? typeof value !== 'boolean'
+            : !allowed.includes(value)
+        )
+      ) {
+        invalid(
+          `the option "${name}" must be `
+          + (allowed === null ? 'a boolean' : `"${allowed.join('" or "')}"`)
+          + '.',
+        )
+      }
+    }
+
+    // A well-known native event type that does not bubble cannot reach a
+    // component listener. A custom event can use any type string and
+    // select its own bubbles value, so this is not an error.
+    if (
+      at === 'component'
+      && !capture
+      && nonBubblingEventTypes.includes(` ${type} `)
     ) {
-      descriptor[name] = value
-    } else {
-      throw invalid(
-        `options.${name} must be `
-        + (allowed === null ? 'a boolean' : list(allowed)),
+      invalid(
+        'this event type usually does not bubble. Use {at: "elements"} for '
+        + 'listeners on the matching elements, or {capture: true} for a '
+        + 'capture listener on the component.',
       )
     }
   }
 
-  // A well-known native event type that does not bubble normally cannot
-  // reach a component listener. This stays a warning because a custom event
-  // may reuse any type string and choose its own bubbles value.
-  if (
-    descriptor.at === 'component'
-    && !descriptor.capture
-    && nonBubblingEventTypes.has(type)
-  ) {
-    warn(
-      `Lumi component event "${type}" normally does not bubble.\n`
-      + '\nUse:\n'
-      + '  {at: "elements"}\n'
-      + 'for native listeners on matching elements, or:\n'
-      + '  {capture: true}\n'
-      + 'for intentional component capture.',
-    )
-  }
-
-  return /** @type {EventBindingDescriptor} */ (
-    /** @type {unknown} */ (Object.freeze(descriptor))
-  )
+  return Object.freeze({
+    type,
+    selector,
+    handle: /** @type {EventBindingDescriptor['handle']} */ (handler),
+    at,
+    capture,
+    passive: !!options?.passive,
+    freq: options?.freq === 'once' ? 'once' : 'always',
+  })
 }

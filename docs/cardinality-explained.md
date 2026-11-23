@@ -46,8 +46,8 @@ in internal state. It does not write the key to the DOM. When the array order
 changes, Lumi moves the existing keyed element and its occurrence state.
 
 The key projection receives the occurrence context but does not receive an
-element. Each key must be unique in its immediate repeat region. A duplicate
-key rejects the complete update before Lumi changes the live DOM.
+element. Two items can have the same key. Each item then gets its own
+element, and the first item that has the key keeps the element of that key.
 
 ## Context
 
@@ -96,9 +96,9 @@ occurrence.
 ## Invalid runtime values
 
 A nullish or non-array `repeat` result, and invalid `text`, `attr`,
-`classToggle`, or `style` results, leave the current DOM untouched. In
-development Lumi emits one warning per mounted declaration and received value
-category. This makes malformed runtime data recoverable rather than turning it
+`classToggle`, or `style` results, leave the current DOM untouched. The
+development version of Lumi gives one warning per mounted declaration and
+received value category. This makes malformed runtime data recoverable rather than turning it
 into a render-time exception.
 
 For the complete contract, see [API.md](../API.md#repeated-occurrences).

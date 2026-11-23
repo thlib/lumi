@@ -1,7 +1,9 @@
 // @ts-check
 
-import { assertMountTarget, cloneSourceRoot } from './dom.js'
+import { cloneSourceRoot } from './dom.js'
 import { connectEventBindings, getEventBindingDescriptor } from './events.js'
+import {DEV} from './internal/dev.js'
+import {fail} from './internal/fail.js'
 import {
   connectDomBindings,
   flattenDomBindingDescriptors,
@@ -33,11 +35,13 @@ const prepareByMounted = new WeakMap()
 export function prepareMounted(mounted, data) {
   const prepare = prepareByMounted.get(mounted)
 
-  if (prepare === undefined) {
-    throw new TypeError('Expected a mounted Lumi component')
+  if (DEV && prepare === undefined) {
+    fail(24)
   }
 
-  return prepare(data)
+  return /** @type {(data: unknown) => import('./types.js').PreparedUpdate} */ (
+    prepare
+  )(data)
 }
 
 /**
@@ -52,16 +56,25 @@ export function component(options) {
 
   return Object.freeze({
     mount(target) {
-      assertMountTarget(target)
-      const root = cloneSourceRoot(options.source)
-      const previousChildren = Array.from(target.childNodes)
-      target.replaceChildren(root)
+      if (DEV && target?.nodeType !== 1 && target?.nodeType !== 11) {
+        fail(20)
+      }
 
+      const container = /** @type {Element | DocumentFragment} */ (target)
+      const root = cloneSourceRoot(options.source)
+      const previousChildren = Array.from(container.childNodes)
+      let mounted
+
+      container.replaceChildren(root)
+
+      // An error in a binding goes to the caller. The target then gets its
+      // previous content again.
       try {
-        return connectComponent(root, bindings)
-      } catch (error) {
-        target.replaceChildren(...previousChildren)
-        throw error
+        return mounted = connectComponent(root, bindings)
+      } finally {
+        if (mounted === undefined) {
+          container.replaceChildren(...previousChildren)
+        }
       }
     },
   })
@@ -74,9 +87,7 @@ export function component(options) {
  * @returns {import('./types.js').MountedComponent<Data>}
  */
 function connectComponent(root, bindings) {
-  let isMounted = true
   let isRendering = false
-  let isFaulted = false
 
   /** @type {Array<import('./types.js').ConnectedBinding<Data>>} */
   const connected = []
@@ -97,68 +108,62 @@ function connectComponent(root, bindings) {
     isRendering = false
   }
 
-  /** @type {import('./types.js').PreparedUpdate} */
+  /**
+   * A settled update has no prepared work, so a second commit or a discard
+   * does nothing.
+   *
+   * @type {import('./types.js').PreparedUpdate}
+   */
   const preparedUpdate = {
     commit() {
-      if (!isRendering) {
-        throw new Error('Cannot commit a settled Lumi update')
-      }
-
       let commitIndex = 0
 
+      // An error in a commit goes to the caller. The prepared work that is
+      // not committed is discarded.
       try {
         for (; commitIndex < prepared.length; commitIndex += 1) {
           prepared[commitIndex]?.commit()
         }
-      } catch (error) {
-        isFaulted = true
-        discardPrepared(prepared, commitIndex)
-        throw error
       } finally {
+        discardPrepared(prepared, commitIndex)
         settle()
       }
     },
 
     discard() {
-      if (isRendering) {
-        try {
-          discardPrepared(prepared)
-        } finally {
-          settle()
-        }
-      }
+      discardPrepared(prepared)
+      settle()
     },
   }
 
   /**
+   * An unmounted component has no connected bindings, so its update does
+   * nothing.
+   *
    * @param {Data} data
    * @returns {import('./types.js').PreparedUpdate}
    */
   function prepare(data) {
-    if (!isMounted) {
-      throw new Error('Cannot update an unmounted Lumi component')
-    }
-
-    if (isFaulted) {
-      throw new Error(
-        'Cannot update a faulted Lumi component; unmount it and mount again',
-      )
-    }
-
     if (isRendering) {
-      throw new Error('Cannot update a Lumi component recursively')
+      fail(13)
     }
 
     isRendering = true
 
+    let isPrepared = false
+
+    // An error in a projection goes to the caller, and the DOM stays as it
+    // was.
     try {
       for (const binding of connected) {
         prepared.push(binding.prepare(data))
       }
-    } catch (error) {
-      discardPrepared(prepared)
-      settle()
-      throw error
+      isPrepared = true
+    } finally {
+      if (!isPrepared) {
+        discardPrepared(prepared)
+        settle()
+      }
     }
 
     return preparedUpdate
@@ -168,6 +173,8 @@ function connectComponent(root, bindings) {
   function update(data) {
     prepare(data).commit()
   }
+
+  let isConnected = false
 
   try {
     for (const binding of bindings) {
@@ -213,9 +220,11 @@ function connectComponent(root, bindings) {
         connectEventBindings(root, eventBindings, ownedSubtrees),
       )
     }
-  } catch (error) {
-    destroyConnected(connected)
-    throw error
+    isConnected = true
+  } finally {
+    if (!isConnected) {
+      destroyConnected(connected)
+    }
   }
 
   const mounted = {
@@ -223,24 +232,15 @@ function connectComponent(root, bindings) {
     update,
 
     unmount() {
-      if (!isMounted) {
-        return
-      }
-
       if (isRendering) {
-        throw new Error('Cannot unmount a Lumi component during an update')
+        fail(13)
       }
 
-      const cleanupError = destroyConnected(connected)
-
+      // A second unmount finds no connected binding and no parent.
       try {
-        root.remove()
+        destroyConnected(connected)
       } finally {
-        isMounted = false
-      }
-
-      if (cleanupError !== undefined) {
-        throw cleanupError
+        root.remove()
       }
     },
   }
@@ -254,41 +254,32 @@ function connectComponent(root, bindings) {
 }
 
 /**
- * Destroys every connected binding even when one cleanup operation fails.
- * The first failure is returned after all bindings have had a chance to clean
- * up.
+ * Destroys the connected bindings in reverse order and empties the list.
+ * When one binding gives an error, the remaining bindings are destroyed
+ * before the error goes to the caller.
  *
- * @param {ReadonlyArray<{destroy: () => void}>} connected
- * @returns {unknown}
+ * @param {Array<{destroy: () => void}>} connected
  */
 function destroyConnected(connected) {
-  /** @type {unknown} */
-  let firstError
-
-  for (let index = connected.length - 1; index >= 0; index -= 1) {
-    try {
-      connected[index]?.destroy()
-    } catch (error) {
-      firstError ??= error
+  try {
+    while (connected.length > 0) {
+      connected.pop()?.destroy()
+    }
+  } finally {
+    if (connected.length > 0) {
+      destroyConnected(connected)
     }
   }
-
-  return firstError
 }
 
 /**
- * Discards prepared work in reverse binding order. Cleanup remains best-effort
- * so one failing discard cannot strand later prepared child components.
+ * Discards prepared work in reverse binding order.
  *
  * @param {ReadonlyArray<import('./types.js').PreparedUpdate>} prepared
  * @param {number} [start]
  */
 function discardPrepared(prepared, start = 0) {
   for (let index = prepared.length - 1; index >= start; index -= 1) {
-    try {
-      prepared[index]?.discard?.()
-    } catch {
-      // Preserve the projection or commit error that triggered cleanup.
-    }
+    prepared[index]?.discard?.()
   }
 }

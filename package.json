@@ -27,10 +27,17 @@
   "exports": {
     ".": {
       "types": "./dist/lumi.d.ts",
-      "import": "./src/index.js",
+      "production": "./dist/lumi.js",
       "default": "./src/index.js"
     },
-    "./dist/lumi.js": "./dist/lumi.js",
+    "./dist/lumi.js": {
+      "types": "./dist/lumi.d.ts",
+      "default": "./dist/lumi.js"
+    },
+    "./dist/lumi.dev.js": {
+      "types": "./dist/lumi.d.ts",
+      "default": "./dist/lumi.dev.js"
+    },
     "./shims/move-before.js": {
       "types": "./src/shims/move-before.d.ts",
       "default": "./src/shims/move-before.js"
@@ -60,7 +67,7 @@
     "lint": "pnpm run build && tsc -p jsconfig.json",
     "benchmark": "node benchmark/performance-baseline.js",
     "benchmark:spa": "node benchmark/spa-comparison.js",
-    "test": "node --test test/*.test.js",
+    "test": "pnpm run build && node --test test/*.test.js",
     "test:browser": "playwright test",
     "test:package": "node scripts/test-package.js",
     "prepack": "pnpm run build"

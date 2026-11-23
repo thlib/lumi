@@ -658,9 +658,9 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
         }
 
         if (!Object.is(current, projectedValue)) {
-          const before = element.previousSibling
-          const after = element.nextSibling
-          const parent = element.parentNode
+          const parent = replacements === null ? null : element.parentNode
+          const before = parent === null ? null : element.previousSibling
+          const after = parent === null ? null : element.nextSibling
           const sink = /** @type {Record<string, unknown>} */ (
             /** @type {unknown} */ (element)
           )
@@ -690,10 +690,13 @@ function createDomBindingRuntime(descriptor, index, root, trustedTypes) {
           }
         }
 
-        runtime.values.set(element, {
-          projectedValue,
-          domValue: /** @type {any} */ (element)[name],
-        })
+        const domValue = /** @type {any} */ (element)[name]
+        if (previous !== undefined && replacements === null) {
+          previous.projectedValue = projectedValue
+          previous.domValue = domValue
+        } else {
+          runtime.values.set(element, {projectedValue, domValue})
+        }
 
         return element
       }

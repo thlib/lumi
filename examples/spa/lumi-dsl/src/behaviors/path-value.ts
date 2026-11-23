@@ -9,22 +9,22 @@ export function pathMatches(
   context: PathContext,
   path: string | undefined,
 ): unknown[] {
-  if (path === '$.item') {
-    return [context.item]
+  const value = readSimplePath(context, path)
+  if (value === complexPath) {
+    return jsonPath(context, path)
   }
-
-  if (path !== undefined && isSimplePath(path)) {
-    return simplePathMatches(context, path)
-  }
-
-  return jsonPath(context, path)
+  return value === missing ? [] : [value]
 }
 
 export function pathScalar(
   context: PathContext,
   path: string | undefined,
 ): unknown {
-  return pathMatches(context, path)[0]
+  const value = readSimplePath(context, path)
+  if (value === complexPath) {
+    return jsonPath(context, path)[0]
+  }
+  return value === missing ? undefined : value
 }
 
 export function pathText(
@@ -98,27 +98,43 @@ export function declarationPath(
   return declaration.slice(prefix.length)
 }
 
-function isSimplePath(path: string): boolean {
-  return /^\$\.(?:data|item)(?:\.[A-Za-z_$][\w$]*)*$/.test(path)
-}
+const missing = Symbol()
+const complexPath = Symbol()
+const simplePath = /^\$\.(?:data|item)(?:\.[A-Za-z_$][\w$]*)*$/
+let lastPath: string | undefined
+let cachedFields: readonly string[] | null = null
 
-function simplePathMatches(
-  context: PathContext,
-  path: string,
-): unknown[] {
+function readSimplePath(context: PathContext, path: string | undefined): unknown {
+  if (path === '$.item') {
+    return context.item
+  }
+
+  // Consecutive rows often read the same path.
+  if (path !== lastPath) {
+    cachedFields = path !== undefined && simplePath.test(path)
+      ? path.slice(2).split('.')
+      : null
+    lastPath = path
+  }
+
+  // A getter can read another path and replace the cached fields.
+  const fields = cachedFields
+  if (fields === null) {
+    return complexPath
+  }
+
   let value: unknown = context
+  for (let index = 0; index < fields.length; index += 1) {
+    const property = fields[index]!
 
-  for (const property of path.slice(2).split('.')) {
     if (
       value === null
       || (typeof value !== 'object' && typeof value !== 'function')
       || !Object.hasOwn(value, property)
     ) {
-      return []
+      return missing
     }
-
     value = Reflect.get(value, property)
   }
-
-  return [value]
+  return value
 }

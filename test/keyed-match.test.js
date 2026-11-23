@@ -206,6 +206,24 @@ test('each item with a duplicate key gets its own element', () => {
   }
 })
 
+test('duplicate integer keys keep their elements in occurrence order after a collision', () => {
+  const {mounted, elements} = mountList()
+
+  // These keys start at the same slot in an eight-slot table.
+  mounted.update([13, 0, 13, 0])
+  const previous = elements()
+  mounted.update([0, 0, 0, 13, 13])
+  const next = elements()
+
+  assert.equal(next.length, 5)
+  assert.strictEqual(next[0], previous[1])
+  assert.strictEqual(next[1], previous[3])
+  assert.ok(next[2] && !previous.includes(next[2]))
+  assert.strictEqual(next[3], previous[0])
+  assert.strictEqual(next[4], previous[2])
+  mounted.unmount()
+})
+
 test('an element stays with one of the items that have its key', () => {
   for (const [first, second] of [[1, 2], ['a', 'b']]) {
     const {mounted, elements} = mountList()

@@ -49,21 +49,27 @@ export function matchIntegerKeys(previousKeys, keys) {
 
   const shift = Math.clz32(size) + 1
   const mask = size - 1
-  // A slot holds the previous index + 1. Zero is an empty slot.
+  // A positive slot holds the next unused index + 1. Zero is empty.
   const table = new Int32Array(size)
-  const previous = new Int32Array(previousCount)
+  /** @type {Int32Array | undefined} */
+  let nextSame
 
-  for (let index = 0; index < previousCount; index += 1) {
+  // Build the list of occurrences of each key from the end.
+  for (let index = previousCount - 1; index >= 0; index -= 1) {
     const key = previousKeys[index]
 
     if (!isIntegerKey(key)) {
       return null
     }
-    previous[index] = key
 
     let slot = Math.imul(key, 0x9e3779b1) >>> shift
 
-    while (table[slot] !== 0) {
+    for (let entry; (entry = /** @type {number} */ (table[slot])) !== 0;) {
+      if (previousKeys[entry - 1] === key) {
+        nextSame ??= new Int32Array(previousCount)
+        nextSame[index] = entry
+        break
+      }
       slot = (slot + 1) & mask
     }
     table[slot] = index + 1
@@ -85,9 +91,13 @@ export function matchIntegerKeys(previousKeys, keys) {
     let source = -1
 
     for (let entry; (entry = /** @type {number} */ (table[slot])) !== 0;) {
-      if (previous[entry - 1] === key && flags[count + entry - 1] === 0) {
-        flags[count + entry - 1] = 1
-        source = entry - 1
+      if (previousKeys[Math.abs(entry) - 1] === key) {
+        if (entry > 0) {
+          source = entry - 1
+          flags[count + source] = 1
+          // A negative entry keeps the probe chain after the last match.
+          table[slot] = nextSame?.[source] || -entry
+        }
         break
       }
       slot = (slot + 1) & mask
@@ -131,11 +141,39 @@ export function stableOccurrences(sources) {
  */
 function markStable(sources, stable) {
   const length = sources.length
+  // Only the last survivor of a decreasing prefix needs to stay in place.
+  let last = -1
+  let previous = 0x7fffffff
+  let index = 0
+
+  for (; index < length; index += 1) {
+    const source = /** @type {number} */ (sources[index])
+
+    if (source === -1) {
+      continue
+    }
+    if (source > previous) {
+      break
+    }
+    last = index
+    previous = source
+  }
+
+  if (index === length) {
+    if (last !== -1) {
+      stable[last] = 1
+    }
+    return
+  }
+
   const tails = new Int32Array(length)
   const predecessors = new Int32Array(length)
-  let longest = 0
+  // A decreasing prefix has one tail. Continue the search from that tail.
+  let longest = 1
+  tails[0] = last
+  predecessors[last] = -1
 
-  for (let index = 0; index < length; index += 1) {
+  for (; index < length; index += 1) {
     const source = /** @type {number} */ (sources[index])
 
     if (source === -1) {
@@ -146,10 +184,8 @@ function markStable(sources, stable) {
     let low = longest
     let high = longest - 1
 
-    if (
-      longest > 0
-      && /** @type {number} */ (sources[/** @type {number} */ (tails[high])]) >= source
-    ) {
+    const lastTail = /** @type {number} */ (tails[high])
+    if (/** @type {number} */ (sources[lastTail]) >= source) {
       low = 0
     }
 
@@ -174,7 +210,7 @@ function markStable(sources, stable) {
     }
   }
 
-  let index = longest > 0 ? /** @type {number} */ (tails[longest - 1]) : -1
+  index = /** @type {number} */ (tails[longest - 1])
 
   while (index !== -1) {
     stable[index] = 1

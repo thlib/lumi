@@ -105,7 +105,7 @@
       </section>
     </div>
 
-    <div id="profile" data-hidden="$.data.teamProfileHidden" hidden>
+    <div id="profile" data-repeat="$.data.profile[*]">
       <a class="back-link" href="#/teams">
         <span aria-hidden="true">←</span>
         All team members
@@ -113,30 +113,30 @@
 
       <article class="panel member-profile-card">
         <div class="header">
-          <span class="avatar large" data-attr="data-person: $.data.selectedMember.id" data-path="$.data.selectedMember.initials">AL</span>
+          <span class="avatar large" data-attr="data-person: $.item.id" data-path="$.item.initials">AL</span>
           <div>
-            <p class="eyebrow team" data-path="$.data.selectedMember.team">Team</p>
-            <h1 class="name" data-path="$.data.selectedMember.name">Member name</h1>
-            <span class="role" data-path="$.data.selectedMember.role">Role</span>
+            <p class="eyebrow team" data-path="$.item.team">Team</p>
+            <h1 class="name" data-path="$.item.name">Member name</h1>
+            <span class="role" data-path="$.item.role">Role</span>
           </div>
         </div>
 
-        <p class="bio" data-path="$.data.selectedMember.bio">Team member biography.</p>
+        <p class="bio" data-path="$.item.bio">Team member biography.</p>
 
         <dl class="member-details">
           <div>
             <dt>Email</dt>
             <dd>
-              <a class="email" data-attr="href: $.data.selectedMember.mailto" data-path="$.data.selectedMember.email">name@luminate.example</a>
+              <a class="email" data-attr="href: $.item.mailto" data-path="$.item.email">name@luminate.example</a>
             </dd>
           </div>
           <div>
             <dt>Country</dt>
-            <dd class="country" data-path="$.data.selectedMember.country">Country</dd>
+            <dd class="country" data-path="$.item.country">Country</dd>
           </div>
           <div>
             <dt>Team</dt>
-            <dd class="team" data-path="$.data.selectedMember.team">Team</dd>
+            <dd class="team" data-path="$.item.team">Team</dd>
           </div>
         </dl>
       </article>

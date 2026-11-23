@@ -43,7 +43,7 @@ test('text and TrustedHTML properties work with Trusted Types enforced', async (
       source: template,
       bindings: [
         text('output', ({data}) => /** @type {{text: string}} */ (data).text),
-        prop('.markup', ({data}) => /** @type {{markup: unknown}} */ (data).markup, 'innerHTML'),
+        prop('.markup', 'innerHTML', ({data}) => /** @type {{markup: unknown}} */ (data).markup),
       ],
     }).mount(document.querySelector('#test-root'))
     const createHTML = Reflect.get(policy, 'createHTML')
@@ -130,7 +130,7 @@ test('a bound input value is restored from authoritative data', async ({
     /** @type {import('../../src/index.js').ComponentOptions<{ title: string }>} */
     const options = {
       source: template,
-      bindings: [prop('input', ({data}) => data.title, 'value')],
+      bindings: [prop('input', 'value', ({data}) => data.title)],
     }
     const mounted = component(options)
       .mount(document.querySelector('#test-root'))
@@ -427,7 +427,7 @@ test('a custom element receives only necessary writes and one lifecycle', async 
     const options = {
       source: template,
       bindings: [
-        prop('contract-probe', ({data}) => data.value, 'value'),
+        prop('contract-probe', 'value', ({data}) => data.value),
         attr('contract-probe', 'status', ({data}) => data.status),
       ],
     }

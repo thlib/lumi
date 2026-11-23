@@ -63,12 +63,12 @@ test('bindings stop at an open shadow root', async ({ page }) => {
         // This write changes the later matches, so the plan uses a copy.
         prop(
           '.shell',
+          'innerHTML',
           () => Reflect.apply(
             Reflect.get(policy, 'createHTML'),
             policy,
             ['<output class="value">Planned</output>'],
           ),
-          'innerHTML',
         ),
         text('.value', ({data}) => /** @type {string} */ (data)),
       ],

@@ -77,6 +77,11 @@ try {
     packedPaths.includes('src/shims/move-before.js'),
     'the moveBefore shim is missing from the package',
   )
+  assert.ok(
+    packedPaths.includes('src/check.js')
+      && packedPaths.includes('src/check.d.ts'),
+    'the selector check is missing from the package',
+  )
 
   writeFileSync(join(temporary, 'package.json'), JSON.stringify({
     private: true,
@@ -138,6 +143,11 @@ try {
 
     const shim = await import('@thlibjs/lumi/shims/move-before.js')
     assert.equal(typeof shim.installMoveBefore, 'function')
+
+    // The selector check is a separate module, outside the bundle.
+    const check = await import('@thlibjs/lumi/check.js')
+    assert.equal(typeof check.unmatchedSelectors, 'function')
+    assert.equal('unmatchedSelectors' in lumi, false)
 
     await assert.rejects(
       import('@thlibjs/lumi/types'),

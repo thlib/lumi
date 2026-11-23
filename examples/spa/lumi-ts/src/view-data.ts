@@ -7,6 +7,7 @@ import type {
   Toast,
 } from '../../data.js'
 import type {
+  LargeRecord,
   RecordFilter,
   RecordSortDirection,
 } from '../../data-20k.js'
@@ -53,16 +54,15 @@ export interface ProjectsData {
 
 export interface RecordsData {
   filter: RecordFilter
-  rows: readonly string[]
+  rows: readonly LargeRecord[]
   sort: RecordSortDirection
   sortIndicator: string
   summary: string
 }
 
 export interface TeamsData {
-  hasSelectedMember: boolean
   memberCount: string
   members: readonly Member[]
-  selectedMember: Member
+  profile: readonly Member[]
   toasts: readonly Toast[]
 }

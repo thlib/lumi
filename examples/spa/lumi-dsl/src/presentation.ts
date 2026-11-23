@@ -12,6 +12,7 @@ import type {
   Route,
   Toast,
 } from '../../data'
+import type {LargeRecord} from '../../data-20k'
 import type {PageData} from './page'
 
 type CurrentAttribute = 'page' | false
@@ -75,13 +76,12 @@ export interface Presentation {
     delta: string
     gamma: string
   }
-  recordRows: readonly string[]
+  recordRows: readonly LargeRecord[]
   recordSort: PageData['recordSort']
   recordSortIndicator: string
   recordSummary: string
-  selectedMember: SelectedMemberView
+  profile: readonly SelectedMemberView[]
   teamDirectoryHidden: boolean
-  teamProfileHidden: boolean
   toasts: readonly Toast[]
   userInitials: string
   userName: string
@@ -119,11 +119,6 @@ export function present(data: PageData): Presentation {
   const selectedMember = data.members.find(
     member => member.id === data.selectedMemberId,
   )
-  const profileMember = selectedMember ?? data.members[0]
-
-  if (profileMember === undefined) {
-    throw new Error('The teams view requires at least one member')
-  }
 
   const records = data.route === 'records'
     ? orderLargeRecords(
@@ -168,16 +163,15 @@ export function present(data: PageData): Presentation {
       delta: String(data.recordFilter === 'delta'),
       gamma: String(data.recordFilter === 'gamma'),
     },
-    recordRows: records.map(record => record.label),
+    recordRows: records,
     recordSort: data.recordSort,
     recordSortIndicator: data.recordSort === 'ascending' ? '↑' : '↓',
     recordSummary: `${records.length.toLocaleString('en-US')} records shown`,
-    selectedMember: {
-      ...profileMember,
-      mailto: `mailto:${profileMember.email}`,
-    },
+    // The profile is in the DOM only when a member is selected.
+    profile: selectedMember === undefined
+      ? []
+      : [{...selectedMember, mailto: `mailto:${selectedMember.email}`}],
     teamDirectoryHidden: selectedMember !== undefined,
-    teamProfileHidden: selectedMember === undefined,
     toasts: data.toasts,
     userInitials: 'FF',
     userName: 'Freddy Fraggin',

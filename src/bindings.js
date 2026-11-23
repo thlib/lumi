@@ -1,14 +1,12 @@
 // @ts-check
 
-import { findElement } from './dom.js'
-import { prepareMounted } from './component.js'
+import {definitions} from './internal/definitions.js'
 import {warn} from './internal/diagnostics.js'
 import {DEV} from './internal/dev.js'
 import {fail} from './internal/fail.js'
 import {
   createDomBinding,
   getDomBindingDescriptor,
-  ownedDomSubtrees,
 } from './plan.js'
 
 /**
@@ -152,14 +150,14 @@ export function text(selector, project) {
  * @template [Value=unknown]
  * @template {string} [Selector=string]
  * @param {Selector} selector
- * @param {ContextProjection<Item, Data, Value | null | undefined, SelectorElement<Selector>>} project
  * @param {string} name
+ * @param {ContextProjection<Item, Data, Value | null | undefined, SelectorElement<Selector>>} project
  * @returns {import('./types.js').Binding<Data>}
  * @throws {Error} E1 or E2 when name is an event handler or srcdoc. An
  * innerHTML or outerHTML projection that does not return TrustedHTML gives
  * E3 or E4 in the update.
  */
-export function prop(selector, project, name) {
+export function prop(selector, name, project) {
   assertSafeBindingName('property', name)
 
   return createDomBinding({
@@ -252,46 +250,36 @@ export function style(selector, name, project) {
   })
 }
 
-/** @type {import('./types.js').PreparedUpdate} */
-const noUpdate = {commit() {}}
-
 /**
- * Mounts one nested component and projects parent data into it.
+ * Puts one nested component into each selected container and projects
+ * parent data into it.
  *
- * The selected container owns the child root. The mount replaces the content
- * of the container. A selector that matches no element mounts no child.
+ * The container owns the root of the child component. The child replaces
+ * the content of the container. A selector that matches no element puts in
+ * no child. A nullish projection keeps the child as it is.
  *
- * @template ParentData
+ * In the binding list of a `repeat`, each occurrence gets its own child, and
+ * the projection receives the context of that occurrence.
+ *
+ * @template Item
+ * @template Data
  * @template ChildData
  * @param {string} selector
  * @param {import('./types.js').Component<ChildData>} childComponent
- * @param {(data: ParentData) => ChildData} project
- * @returns {import('./types.js').Binding<ParentData>}
+ * @param {ContextProjection<Item, Data, ChildData | null | undefined>} project
+ * @returns {import('./types.js').Binding<Data>}
  */
 export function child(selector, childComponent, project) {
-  return {
-    connect(root) {
-      const container = findElement(root, selector)
-
-      if (container === null) {
-        if (DEV) {
-          warn(`child "${selector}" matches no element. No child is mounted.`)
-        }
-
-        return {prepare: () => noUpdate, destroy() {}}
-      }
-
-      const mounted = childComponent.mount(container)
-
-      return {
-        [ownedDomSubtrees]: [container],
-        prepare(data) {
-          return prepareMounted(mounted, project(data))
-        },
-        destroy() {
-          mounted.unmount()
-        },
-      }
-    },
+  if (DEV && !definitions.has(childComponent)) {
+    fail(24)
   }
+
+  return createDomBinding({
+    kind: 'child',
+    selector,
+    project: /** @type {(context: import('./types.js').ProjectionContext<Item, Data>, el: Element) => unknown} */ (
+      /** @type {unknown} */ (project)
+    ),
+    component: childComponent,
+  })
 }

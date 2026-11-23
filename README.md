@@ -27,6 +27,67 @@ Call `update(data)` to render a snapshot, then call it again when the snapshot c
 
 Lumi does not fetch data. That is a different problem.
 
+## Example
+
+The template is native HTML with default content:
+
+```html
+<template id="counter">
+  <section>
+    <output>count is <span>0</span></output>
+    <button type="button">Increment</button>
+    <ul>
+      <li>Item</li>
+    </ul>
+  </section>
+</template>
+
+<div id="counter-slot"></div>
+```
+
+The bindings are plain JavaScript. Each binding connects a CSS selector to a
+function of the data:
+
+```js
+import {component, on, prop, repeat, text} from '@thlibjs/lumi'
+
+let data = {count: 0, items: []}
+
+const counter = component({
+  source: document.querySelector('#counter'),
+  bindings: [
+    text('output span', ({data}) => data.count),
+    prop('button', 'disabled', ({data}) => data.count >= 5),
+    repeat('li', ({data}) => data.items, [
+      text(':scope', ({item}) => item),
+    ]),
+    on('button', 'click', () => {
+      const count = data.count + 1
+      data = {count, items: [...data.items, `Item ${count}`]}
+      counter.update(data)
+    }),
+  ],
+}).mount(document.querySelector('#counter-slot'))
+
+counter.update(data)
+```
+
+Each update writes only the DOM state that changed. The elements stay the
+same elements, so the browser keeps their focus, selection, and form state.
+
+## Speed
+
+The repository has the same application in Lumi, Vue, React, Lit, and
+Angular. A benchmark exercises each one in headless Chromium: first render,
+route updates, filter updates, and a filter of a keyed list of 20,000 rows.
+
+> [**View the latest SPA performance comparison →**](./benchmark/results/spa-performance.md)
+
+The report has the results, the environment, and the method. The
+[benchmark source](./benchmark/spa-comparison.js) and the
+[raw samples](./benchmark/results/spa-performance.json) are also available.
+Run the benchmark with `pnpm benchmark:spa`.
+
 ## Install
 
 Install Lumi from npm when the application uses a build step:
@@ -48,7 +109,7 @@ Without a build step, load the browser bundle from a CDN:
 ```
 
 `dist/lumi.js` is the production version: one minified ES module of
-approximately 8 kB when compressed with gzip. One request replaces the module
+approximately 9 kB when compressed with gzip. One request replaces the module
 graph. Its source map resolves to the published source, so developer tools
 show the original code. Use a fixed version because an unpinned CDN URL
 follows the latest release.
@@ -62,7 +123,54 @@ Lumi has no fallback code for a browser that does not have an API that Lumi
 uses. Safari needs a shim for `moveBefore()`. Refer to
 [Browser requirements](API.md#browser-requirements).
 
-## The idea
+## Documentation
+
+- [API.md](./API.md): the functions, the update lifecycle, the types, the
+  errors, and the browser requirements.
+- [DESIGN.md](./DESIGN.md): the architecture, the ownership boundaries, the
+  exclusions, and the open questions.
+- [How array cardinality works](./docs/cardinality-explained.md): the
+  mechanism of `repeat`.
+- [Component sources in separate HTML files](./docs/html-sources.md): a
+  source in its own `.html` file with no added Lumi code.
+- [Renderer decisions](./docs/renderer-decisions.md): the reasons for the
+  decisions in the renderer.
+
+## Demos
+
+- [Native bindings counter](https://thlib.github.io/lumi/examples/counter-native/)
+  ([source](./examples/counter-native)): direct Lumi bindings with native HTML.
+- [JSONPath counter](https://thlib.github.io/lumi/examples/counter/)
+  ([source](./examples/counter)): an optional `data-path` convention with an
+  RFC 9535 JSONPath adapter.
+- [Native-module SPA](https://thlib.github.io/lumi/examples/spa/lumi-native/)
+  ([source](./examples/spa/lumi-native)): inline templates and one unbundled
+  demo module.
+- [Component-build SPA](https://thlib.github.io/lumi/examples/spa/lumi-build/)
+  ([source](./examples/spa/lumi-build)): bundled native component documents.
+- [TypeScript component-build SPA](https://thlib.github.io/lumi/examples/spa/lumi-ts/)
+  ([source](./examples/spa/lumi-ts)): native templates with colocated
+  TypeScript behavior modules.
+- [Data-attribute DSL SPA](https://thlib.github.io/lumi/examples/spa/lumi-dsl/)
+  ([source](./examples/spa/lumi-dsl)): a data-attribute DSL with typed behavior
+  modules.
+- [Framework comparison SPAs](https://github.com/thlib/lumi/tree/main/examples/spa):
+  equivalent React, Vue, Lit, and Angular applications. They share the SPA
+  content and visual design without importing Lumi. Live examples:
+  [React](https://thlib.github.io/lumi/examples/spa/react/),
+  [Vue](https://thlib.github.io/lumi/examples/spa/vue/),
+  [Lit](https://thlib.github.io/lumi/examples/spa/lit/), and
+  [Angular](https://thlib.github.io/lumi/examples/spa/angular/).
+
+To run the examples locally, start a web server from the repository root:
+
+```sh
+python -m http.server 8008
+```
+
+## Why Lumi exists
+
+### The idea
 
 * **Modern browsers provide far more than they used to.** Many capabilities that once required libraries, preprocessors, or framework abstractions are now built into HTML, CSS, JavaScript, and browser APIs.
 * **Native browser behavior is highly optimized.** When applications work with the platform rather than recreate it, they benefit from browser-managed performance, accessibility, semantics, focus, events, validation, lifecycle, and interoperability.
@@ -79,18 +187,7 @@ uses. Safari needs a shim for `moveBefore()`. Refer to
 
 Something should solve that narrow problem. Its purpose is not to replace HTML, CSS, JavaScript, or the browser with another application model. It should provide the missing declarative connection between data and the DOM while leaving the underlying platform visible and directly usable.
 
-## The model
-
-The model separates concerns that tend to become entangled in frontend code:
-
-- Let HTML describe the document. Let small, replaceable tools connect data or behavior to it.
-- HTML describes native semantic structure.
-- CSS controls presentation and layout.
-- Plain JavaScript functions project data into declared DOM state.
-- The application owns data and business decisions.
-- Native events carry user intent back to the application, which may produce new data and update again.
-
-## What broader approaches get wrong
+### What broader approaches get wrong
 
 When an application only needs declarative DOM updates, broader approaches
 commonly add unnecessary machinery:
@@ -122,182 +219,14 @@ requiring that model merely to obtain efficient declarative rendering. Lumi
 isolates that rendering capability while leaving the browser and application
 in control of the surrounding responsibilities.
 
-## Principles
-
-- Do not impose a template language. Templates are HTML, styles are CSS, and
-  rendering rules are ordinary JavaScript or TypeScript. Independent tools may
-  add their own binding conventions without changing the core API.
-- Ship standards-based JavaScript that works directly in modern browsers and ordinary bundlers.
-- Accept plain data. Data contains values, not DOM nodes, markup, or
-  callbacks.
-- Preserve real DOM nodes and the browser-managed state attached to them.
-- Use native events, bubbling, forms, focus behavior, layout, Shadow DOM, and
-  slots rather than imitating the browser.
-
-## Implementation
-
-The experimental implementation is plain JavaScript with no runtime
-dependencies.
-
-It currently supports parsed-DOM source mounting, scalar bindings, positional
-and keyed repetition from array projections, and nested components. Bindings
-stop at each shadow root, as native selectors do. Managed event bindings route
-native events at the component boundary, or follow matching elements when a binding declares
-`{at: 'elements'}`, without introducing a synthetic event system.
-
-Mounting replaces the target's existing contents with a fresh clone of the
-component source. A source may be a native `<template>`, `DocumentFragment`,
-or `Element`; Lumi always clones it and never infers adoption from its form or
-connection state. Array repetition preserves identity by position unless
-the application gives `repeat` an explicit key projection. Lumi does not
-infer keys from item properties or object identity.
-
-Every render projection receives a context containing the whole presentation
-snapshot and the current occurrence. `repeat` changes cardinality; other
-bindings project one value into the current occurrence.
-[How array cardinality works](./docs/cardinality-explained.md) walks through
-that mechanism.
-[Component sources in separate HTML files](./docs/html-sources.md) shows how
-to keep a source in its own `.html` file with no added Lumi code.
-
-The supported package surface is the functions and types exported from
-`@thlibjs/lumi`. Its public functions and lifecycle are documented in
-[API.md](./API.md). Other package modules and lifecycle shapes are renderer
-internals and may change independently.
-
-Lumi is implemented in JavaScript and ships generated TypeScript declarations.
-TypeScript applications can type a component's presentation snapshot at its
-definition boundary:
-
-```ts
-import {
-  component,
-  text,
-  type ComponentOptions,
-} from '@thlibjs/lumi'
-
-type CounterData = {
-  count: number
-}
-
-const options: ComponentOptions<CounterData> = {
-  source: document.querySelector('#counter'),
-  bindings: [
-    text('output', ({data}, output) => {
-      // data is CounterData; output is HTMLOutputElement.
-      return data.count
-    }),
-  ],
-}
-
-const counter = component(options).mount(
-  document.querySelector('#counter-slot'),
-)
-
-counter.update({count: 1})
-```
-
-Bare HTML, SVG, and MathML tag selectors receive the corresponding native DOM
-element type. Complex selectors receive `Element`, matching the safe fallback
-used by the browser's selector APIs. The declaration build and a package-level
-TypeScript consumer contract run as part of `pnpm run lint`.
-
-## Demos
-
-- [Native bindings counter](https://thlib.github.io/lumi/examples/counter-native/)
-  ([source](./examples/counter-native)): direct Lumi bindings with native HTML.
-- [JSONPath counter](https://thlib.github.io/lumi/examples/counter/)
-  ([source](./examples/counter)): an optional `data-path` convention with an
-  RFC 9535 JSONPath adapter.
-- [Native-module SPA](https://thlib.github.io/lumi/examples/spa/lumi-native/)
-  ([source](./examples/spa/lumi-native)): inline templates and one unbundled
-  demo module.
-- [Component-build SPA](https://thlib.github.io/lumi/examples/spa/lumi-build/)
-  ([source](./examples/spa/lumi-build)): bundled native component documents.
-- [TypeScript component-build SPA](https://thlib.github.io/lumi/examples/spa/lumi-ts/)
-  ([source](./examples/spa/lumi-ts)): native templates with colocated
-  TypeScript behavior modules.
-- [Data-attribute DSL SPA](https://thlib.github.io/lumi/examples/spa/lumi-dsl/)
-  ([source](./examples/spa/lumi-dsl)): a data-attribute DSL with typed behavior
-  modules.
-- [Framework comparison SPAs](https://github.com/thlib/lumi/tree/main/examples/spa):
-  equivalent React, Vue, Lit, and Angular applications. They share the SPA
-  content and visual design without importing Lumi. Live examples:
-  [React](https://thlib.github.io/lumi/examples/spa/react/),
-  [Vue](https://thlib.github.io/lumi/examples/spa/vue/),
-  [Lit](https://thlib.github.io/lumi/examples/spa/lit/), and
-  [Angular](https://thlib.github.io/lumi/examples/spa/angular/).
-
-## SPA benchmark
-
-The equivalent SPAs are exercised through the same verified route and project
-filter workload in headless Chromium. A separate benchmark row measures
-filtering the unvirtualized 20,000-row Records page so its heavier DOM work does
-not change the established workload's meaning.
-
-> [**View the latest SPA performance comparison →**](./benchmark/results/spa-performance.md)
-
-The generated report is the source of truth for current results, environment
-details, and methodology. The [benchmark source](./benchmark/spa-comparison.js)
-and [raw samples](./benchmark/results/spa-performance.json) are also available.
-Run it locally with `pnpm benchmark:spa`.
-
-The two Lumi variants make their authoring and runtime tradeoffs explicit.
-Lumi native uses a browser-loaded module graph. Lumi build associates native
-component documents by filename during bundling, without runtime `define()`
-calls. Both are measured independently by the SPA benchmark.
-
-## Application binding conventions
-
-Applications can package repeated projection conventions as ordinary functions
-that return Lumi bindings. For example, an application may give `data-field`
-attributes direct-property semantics:
-
-```js
-import {component, text} from '@thlibjs/lumi'
-
-function bindFields() {
-  return text(
-    '[data-field]',
-    ({data}, el) => data[el.dataset.field],
-  )
-}
-
-const counter = component({
-  source: template,
-  bindings: [bindFields()],
-})
-```
-
-`data-field` and `bindFields` belong to the application. Lumi sees only the
-binding returned by its public `text()` function. A missing or nullish
-projected field is a no-op. A different application can inject another
-metadata convention, use external binding maps, or write projections directly
-without changing Lumi.
-
-To run the examples locally, start a web server from the repository root:
-
-```sh
-python -m http.server 8008
-```
-
-Run the JSDOM unit suite and the portable browser contracts with:
-
-```sh
-pnpm test
-pnpm exec playwright install chromium firefox webkit
-pnpm run test:browser --project=chromium --project=firefox --project=webkit
-```
+[Why not React, Vue, or Angular?](./DESIGN.md#why-not-react-vue-or-angular)
+compares the update models.
 
 ## Status
 
 The implementation is experimental. Its public API may change while the design
 is validated. Lumi follows Semantic Versioning; before 1.0, breaking public API
 changes may be released in a minor version.
-
-The complete architecture, boundaries, event model, intentional exclusions,
-acceptance criteria, and open questions are documented in
-[DESIGN.md](./DESIGN.md).
 
 ## Contributing and security
 

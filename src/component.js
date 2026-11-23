@@ -1,48 +1,15 @@
 // @ts-check
 
-import { cloneSourceRoot } from './dom.js'
+import { sourceRoot } from './dom.js'
 import { connectEventBindings, getEventBindingDescriptor } from './events.js'
+import {definitions} from './internal/definitions.js'
 import {DEV} from './internal/dev.js'
 import {fail} from './internal/fail.js'
 import {
   connectDomBindings,
   flattenDomBindingDescriptors,
   getDomBindingDescriptor,
-  ownedDomSubtrees,
 } from './plan.js'
-
-/**
- * Internal preparation entry points for mounted components. Keeping these in
- * a WeakMap lets nested bindings prepare child updates without adding a
- * method to Lumi's public mounted-component contract.
- *
- * @type {WeakMap<object, (data: unknown) => import('./types.js').PreparedUpdate>}
- */
-const prepareByMounted = new WeakMap()
-
-/**
- * Prepares one nested component update without committing its DOM writes.
- *
- * This is an internal renderer operation and is intentionally not exported
- * from the package entry point.
- *
- * @internal
- * @template Data
- * @param {import('./types.js').MountedComponent<Data>} mounted
- * @param {Data} data
- * @returns {import('./types.js').PreparedUpdate}
- */
-export function prepareMounted(mounted, data) {
-  const prepare = prepareByMounted.get(mounted)
-
-  if (DEV && prepare === undefined) {
-    fail(24)
-  }
-
-  return /** @type {(data: unknown) => import('./types.js').PreparedUpdate} */ (
-    prepare
-  )(data)
-}
 
 /**
  * Defines a reusable component without changing its source.
@@ -54,14 +21,20 @@ export function prepareMounted(mounted, data) {
 export function component(options) {
   const bindings = options.bindings ?? []
 
-  return Object.freeze({
+  const definition = Object.freeze({
+    /**
+     * @param {Element | DocumentFragment | null} target
+     * @returns {import('./types.js').MountedComponent<Data>}
+     */
     mount(target) {
       if (DEV && target?.nodeType !== 1 && target?.nodeType !== 11) {
         fail(20)
       }
 
       const container = /** @type {Element | DocumentFragment} */ (target)
-      const root = cloneSourceRoot(options.source)
+      const root = /** @type {Element} */ (
+        sourceRoot(options.source).cloneNode(true)
+      )
       const previousChildren = Array.from(container.childNodes)
       let mounted
 
@@ -78,6 +51,9 @@ export function component(options) {
       }
     },
   })
+
+  definitions.set(definition, options)
+  return definition
 }
 
 /**
@@ -97,8 +73,9 @@ function connectComponent(root, bindings) {
   let domBindingIndex
   /** @type {Array<import('./events.js').EventBindingDescriptor>} */
   const eventBindings = []
-  /** @type {Element[]} */
-  const ownedSubtrees = []
+  // The containers of the child components, in the mounted DOM.
+  /** @type {WeakSet<Element> | null} */
+  let containers = null
   /** @type {Array<import('./types.js').PreparedUpdate>} */
   const prepared = []
 
@@ -191,25 +168,21 @@ function connectComponent(root, bindings) {
         domBindingIndex ??= connected.length
         domBindings.push(descriptor)
       } else {
-        const connectedBinding = binding.connect(root)
-        connected.push(connectedBinding)
-        ownedSubtrees.push(
-          .../** @type {{[ownedDomSubtrees]?: Element[]}} */ (
-            connectedBinding
-          )[ownedDomSubtrees] ?? [],
-        )
+        connected.push(binding.connect(root))
       }
     }
 
     if (domBindingIndex !== undefined) {
+      const descriptors = flattenDomBindingDescriptors(domBindings)
+
+      if (descriptors.some(descriptor => descriptor.kind === 'child')) {
+        containers = new WeakSet()
+      }
+
       connected.splice(
         domBindingIndex,
         0,
-        connectDomBindings(
-          root,
-          flattenDomBindingDescriptors(domBindings),
-          ownedSubtrees,
-        ),
+        connectDomBindings(root, descriptors, containers),
       )
     }
 
@@ -217,7 +190,7 @@ function connectComponent(root, bindings) {
       // Managed listeners follow the committed DOM, so the event manager
       // commits last and releases its listeners first on unmount.
       connected.push(
-        connectEventBindings(root, eventBindings, ownedSubtrees),
+        connectEventBindings(root, eventBindings, containers),
       )
     }
     isConnected = true
@@ -227,7 +200,7 @@ function connectComponent(root, bindings) {
     }
   }
 
-  const mounted = {
+  return {
     root,
     update,
 
@@ -244,13 +217,6 @@ function connectComponent(root, bindings) {
       }
     },
   }
-
-  prepareByMounted.set(
-    mounted,
-    data => prepare(/** @type {Data} */ (data)),
-  )
-
-  return mounted
 }
 
 /**

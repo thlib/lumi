@@ -10,9 +10,19 @@ export type ProjectionContext<Item, Data = unknown> = Readonly<{
   parent: ProjectionContext<unknown, Data> | null
 }>
 
-/** A binding connects one declared data-to-DOM relationship. */
-export type Binding<Data> = {
+/** Carries the item type of a binding. It is not a property at run time. */
+declare const itemType: unique symbol
+
+/**
+ * A binding connects one declared data-to-DOM relationship.
+ *
+ * `Item` is the type of `context.item` in the projection of the binding. The
+ * binding list of a `repeat` gives this type to its bindings, so a projection
+ * in the list needs no type argument. `Binding<Data>` accepts each item type.
+ */
+export type Binding<Data, Item = any> = {
   connect: (root: Element) => ConnectedBinding<Data>
+  readonly [itemType]?: (item: Item) => void
 }
 
 /** The connected work owned by one binding. */
@@ -54,10 +64,16 @@ export type ComponentSource = HTMLTemplateElement | DocumentFragment | Element
 
 export type ComponentOptions<Data> = {
   source: ComponentSource | null
+  /**
+   * A binding at the component boundary can have each item type, because a
+   * binding outside the list of a `repeat` gets its context from the
+   * position of its element.
+   */
   bindings?: ReadonlyArray<Binding<Data>>
 }
 
 export type Component<Data> = {
+  /** Puts a copy of the component source into the target. */
   mount: (target: Element | DocumentFragment | null) => MountedComponent<Data>
 }
 
@@ -90,8 +106,8 @@ export function repeat<
     ReadonlyArray<Item> | null | undefined,
     SelectorElement<Selector>
   >,
-  bindings?: ReadonlyArray<Binding<Data>>,
-): Binding<Data>
+  bindings?: ReadonlyArray<Binding<Data, Item>>,
+): Binding<Data, Parent>
 
 export function repeat<
   Item,
@@ -107,8 +123,8 @@ export function repeat<
     SelectorElement<Selector>
   >,
   key: KeyProjection<Item, Data>,
-  bindings?: ReadonlyArray<Binding<Data>>,
-): Binding<Data>
+  bindings?: ReadonlyArray<Binding<Data, Item>>,
+): Binding<Data, Parent>
 
 export function text<
   Item,
@@ -122,7 +138,7 @@ export function text<
     TextValue | null | undefined,
     SelectorElement<Selector>
   >,
-): Binding<Data>
+): Binding<Data, Item>
 
 export function prop<
   Item,
@@ -131,14 +147,14 @@ export function prop<
   Selector extends string = string,
 >(
   selector: Selector,
+  name: string,
   project: ContextProjection<
     Item,
     Data,
     Value | null | undefined,
     SelectorElement<Selector>
   >,
-  name: string,
-): Binding<Data>
+): Binding<Data, Item>
 
 /**
  * ARIA states are string tokens. For a literal `aria-*` name, the projection
@@ -163,7 +179,7 @@ export function attr<
     | undefined,
     SelectorElement<Selector>
   >,
-): Binding<Data>
+): Binding<Data, Item>
 
 export function classToggle<
   Item,
@@ -178,7 +194,7 @@ export function classToggle<
     boolean | null | undefined,
     SelectorElement<Selector>
   >,
-): Binding<Data>
+): Binding<Data, Item>
 
 export function style<
   Item,
@@ -193,13 +209,18 @@ export function style<
     string | null | undefined,
     SelectorElement<Selector>
   >,
-): Binding<Data>
+): Binding<Data, Item>
 
-export function child<ParentData, ChildData>(
+/**
+ * In the binding list of a `repeat`, each occurrence gets its own child
+ * component, and the projection receives the context of that occurrence. A
+ * nullish projection keeps the child component as it is.
+ */
+export function child<Item, Data = unknown, ChildData = unknown>(
   selector: string,
   childComponent: Component<ChildData>,
-  project: (data: ParentData) => ChildData,
-): Binding<ParentData>
+  project: ContextProjection<Item, Data, ChildData | null | undefined>,
+): Binding<Data, Item>
 
 export function component<Data>(options: ComponentOptions<Data>): Component<Data>
 

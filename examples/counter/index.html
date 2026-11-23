@@ -28,13 +28,13 @@
           ),
           prop(
             '[data-increment]',
-            ({data}) => data.count >= data.maximum,
             'disabled',
+            ({data}) => data.count >= data.maximum,
           ),
           prop(
             '[data-decrement]',
-            ({data}) => data.count <= 0,
             'disabled',
+            ({data}) => data.count <= 0,
           ),
           on('[data-increment]', 'click', () => {
             const count = data.count + 1

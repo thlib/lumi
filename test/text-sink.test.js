@@ -225,7 +225,7 @@ test('text wins after an earlier content property for the same element', () => {
   const options = {
     source: createTemplate(document, '<p><span class="v">0</span></p>'),
     bindings: [
-      prop('.v', ({data}) => data.property, 'textContent'),
+      prop('.v', 'textContent', ({data}) => data.property),
       text('.v', ({data}) => data.text),
     ],
   }
@@ -245,7 +245,7 @@ test('text writes a remembered value again after a content property', () => {
   const options = {
     source: createTemplate(document, '<p><span class="v">0</span></p>'),
     bindings: [
-      prop('.v', ({data}) => data.property, 'textContent'),
+      prop('.v', 'textContent', ({data}) => data.property),
       text('.v', ({data}) => data.text),
     ],
   }

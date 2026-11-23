@@ -190,7 +190,7 @@ for (const {name, bind, values: [first, second], write, read} of writers) {
 
 test('a property binding compares with the live property', () => {
   const {mounted, target} = mountTarget([
-    prop('.v', ({data}) => /** @type {{title: string}} */ (data).title, 'title'),
+    prop('.v', 'title', ({data}) => /** @type {{title: string}} */ (data).title),
   ])
 
   mounted.update({title: 'one'})
@@ -253,7 +253,7 @@ test('a binding does not remember a state that another binding writes', () => {
     {
       name: 'a property, then the attribute that it reflects',
       bindings: [
-        prop('.v', from(data => data.first), 'title'),
+        prop('.v', 'title', from(data => data.first)),
         attr('.v', 'title', () => 'fixed'),
       ],
       read: target => target.getAttribute('title'),
@@ -271,7 +271,7 @@ test('a binding does not remember a state that another binding writes', () => {
     {
       name: 'a content property, then text',
       bindings: [
-        prop('.v', from(data => data.first), 'textContent'),
+        prop('.v', 'textContent', from(data => data.first)),
         text('.v', () => 'fixed'),
       ],
       read: target => target.textContent,

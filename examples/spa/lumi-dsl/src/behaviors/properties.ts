@@ -7,11 +7,11 @@ import type {Presentation} from '../presentation'
 export const propertyBehaviors: ReadonlyArray<Binding<Presentation>> = [
   prop<unknown, Presentation, boolean>(
     '[data-hidden]',
+    'hidden',
     (context, element) => pathBoolean(
       context,
       element.getAttribute('data-hidden') ?? undefined,
       'data-hidden',
     ),
-    'hidden',
   ),
 ]

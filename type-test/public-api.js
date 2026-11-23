@@ -29,7 +29,7 @@ const options = {
   source: template,
   bindings: [
     text('output', (/** @type {CounterContext} */ {data}) => data.count),
-    prop('output', (/** @type {CounterContext} */ {data}) => data.count, 'value'),
+    prop('output', 'value', (/** @type {CounterContext} */ {data}) => data.count),
     attr('output', 'aria-label', (/** @type {CounterContext} */ {data}) => data.count),
     on('output', 'click', (nativeEvent, output) => {
       const click = /** @type {MouseEvent} */ (nativeEvent)
@@ -111,7 +111,7 @@ classToggle('output', 'active', () => [true, false])
 style('output', 'color', () => ['red', 'blue'])
 
 // Property bindings intentionally preserve arbitrary inferred value types.
-prop('output', () => ({ mode: 'compact' }), 'lumiConfig')
+prop('output', 'lumiConfig', () => ({ mode: 'compact' }))
 
 const mounted = component(options).mount(document.body)
 mounted.update({ count: 1 })

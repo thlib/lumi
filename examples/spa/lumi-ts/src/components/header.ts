@@ -14,15 +14,15 @@ export default {
     navOpen: data.navOpen,
   }),
   bindings: [
-    text<HeaderData, HeaderData>('.workspace-switcher .name', ({data}) => data.workspace),
-    text<HeaderData, HeaderData>('.user-menu .name', ({data}) => data.userName),
-    text<HeaderData, HeaderData>('.user-menu .avatar', ({data}) => data.userInitials),
-    attr<HeaderData, HeaderData>(
+    text('.workspace-switcher .name', ({data}) => data.workspace),
+    text('.user-menu .name', ({data}) => data.userName),
+    text('.user-menu .avatar', ({data}) => data.userInitials),
+    attr(
       '[aria-controls="navigation"]',
       'aria-expanded',
       ({data}) => String(data.navOpen),
     ),
-    on<string, 'click', HeaderData>('[aria-controls="navigation"]', 'click', () => {
+    on('[aria-controls="navigation"]', 'click', () => {
       update(data => ({...data, navOpen: !data.navOpen}))
     }),
   ],

@@ -83,9 +83,9 @@ const writers = [
     name: 'prop',
     closed: '<section><p class="row" hidden><span class="label">default</span></p></section>',
     open: '<section><p class="row"><span class="label">default</span></p></section>',
-    writer: prop('.row', (
+    writer: prop('.row', 'hidden', (
       /** @type {{data: RowData}} */ { data },
-    ) => !data.open, 'hidden'),
+    ) => !data.open),
     reader: '.row:not([hidden]) .label',
   },
   {

@@ -9,7 +9,6 @@
  */
 
 import {
-  isInsideOwnedSubtree,
   queryElements,
   queryOwnedElements,
 } from './dom.js'
@@ -155,10 +154,11 @@ export function getEventBindingDescriptor(binding) {
  * @template Data
  * @param {Element} root
  * @param {ReadonlyArray<EventBindingDescriptor>} descriptors
- * @param {ReadonlyArray<Element>} [ownedSubtrees]
+ * @param {WeakSet<Element> | null} [containers] The containers of the child
+ * components of this component.
  * @returns {import('./types.js').ConnectedBinding<Data>}
  */
-export function connectEventBindings(root, descriptors, ownedSubtrees = []) {
+export function connectEventBindings(root, descriptors, containers = null) {
   let isConnected = true
   /** @type {Map<unknown, ListenerGroup>} */
   const groupsByKey = new Map()
@@ -208,7 +208,7 @@ export function connectEventBindings(root, descriptors, ownedSubtrees = []) {
   function dispatch(group, nativeEvent) {
     const isRouted = group.descriptor.at === 'component'
     const path = isRouted
-      ? componentPath(nativeEvent, root, ownedSubtrees)
+      ? componentPath(nativeEvent, root, containers)
       : []
 
     for (const runtime of group.runtimes) {
@@ -288,7 +288,7 @@ export function connectEventBindings(root, descriptors, ownedSubtrees = []) {
       const { type, capture, passive, selector } = group.descriptor
       const current = group.targets
       /** @type {Set<EventTarget>} */
-      const next = new Set(queryOwnedElements(root, selector, ownedSubtrees))
+      const next = new Set(queryOwnedElements(root, selector, containers))
 
       for (const target of current) {
         if (!next.has(target)) {
@@ -345,10 +345,10 @@ export function connectEventBindings(root, descriptors, ownedSubtrees = []) {
  *
  * @param {Event} nativeEvent
  * @param {Element} root
- * @param {ReadonlyArray<Element>} ownedSubtrees
+ * @param {WeakSet<Element> | null} containers
  * @returns {Element[]}
  */
-function componentPath(nativeEvent, root, ownedSubtrees) {
+function componentPath(nativeEvent, root, containers) {
   /** @type {Element[]} */
   const path = []
   // Whether the event started in a shadow tree below the component root.
@@ -368,11 +368,19 @@ function componentPath(nativeEvent, root, ownedSubtrees) {
       // Only a shadow root is a fragment between an event target and the
       // component root.
       crossesShadowRoot = true
-    } else if (
-      node.nodeType === 1
-      && !isInsideOwnedSubtree(node, ownedSubtrees)
-    ) {
+    } else if (node.nodeType === 1) {
       path.push(node)
+    }
+  }
+
+  if (containers !== null) {
+    // The targets below the container that is nearest to the root belong
+    // to a child component.
+    for (let index = path.length - 1; index >= 0; index -= 1) {
+      if (containers.has(/** @type {Element} */ (path[index]))) {
+        path.splice(0, index)
+        break
+      }
     }
   }
 

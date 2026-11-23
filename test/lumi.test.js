@@ -221,12 +221,12 @@ function classToggle(selector, name, project) {
 /**
  * @template Data
  * @param {string} selector
- * @param {(data: Data, el: Element) => unknown} project
  * @param {string} name
+ * @param {(data: Data, el: Element) => unknown} project
  * @returns {import('../src/types.js').Binding<Data>}
  */
-function prop(selector, project, name) {
-  return contextualProp(selector, ({data}, el) => project(data, el), name)
+function prop(selector, name, project) {
+  return contextualProp(selector, name, ({data}, el) => project(data, el))
 }
 
 /**
@@ -350,8 +350,8 @@ test('renders scalar bindings into persistent native DOM', () => {
       textData('.value', data => data.count),
       prop(
         '.increment',
-        data => data.count >= data.maximum,
         'disabled',
+        data => data.count >= data.maximum,
       ),
       attr('.counter', 'aria-busy', data => String(data.isActive)),
       classToggle('.counter', 'active', data => data.isActive),
@@ -428,11 +428,11 @@ test('scalar bindings stop at an open shadow root', () => {
       // This write changes the later matches, so the plan uses a copy.
       prop(
         '.panel',
+        'innerHTML',
         () => trustedHTML(
           document,
           '<output class="value">Planned</output>',
         ),
-        'innerHTML',
       ),
       textData('.value', data => data.count),
       attr('.value', 'title', data => data.title),
@@ -572,7 +572,7 @@ test('a child selector does not match in a shadow root', () => {
   const { result: mounted, warnings } = recordGlobalWarnings(() => {
     return component({
       source: createTemplate(document, '<shadow-host></shadow-host>'),
-      bindings: [child('.child-slot', childComponent, data => data)],
+      bindings: [child('.child-slot', childComponent, ({data}) => data)],
     }).mount(target)
   })
 
@@ -640,7 +640,7 @@ test('a property write that attaches a shadow root keeps the matches', () => {
       </section>
     `),
     bindings: [
-      prop('shadow-maker', () => true, 'active'),
+      prop('shadow-maker', 'active', () => true),
       textData('.value', () => 'Updated'),
     ],
   }).mount(document.body)
@@ -1357,9 +1357,9 @@ test('expands nested arrays through nested repeat targets', () => {
       repeat('.name', ({item}) => /** @type {string[]} */ (/** @type {unknown} */ (item))),
       text('.name', ({item}) => item),
       text('.shared', ({data}) => /** @type {{shared: string}} */ (data).shared),
-      contextualProp('.name', ({data, path}) => {
+      contextualProp('.name', 'hidden', ({data, path}) => {
         return data.hidden[path[0] ?? 0]?.[path[1] ?? 0]
-      }, 'hidden'),
+      }),
     ],
     },
   )
@@ -1450,9 +1450,9 @@ test('validates complete array coordinates before changing live DOM', () => {
       repeat('.group', ({data}) => /** @type {{groups: string[][]}} */ (data).groups),
       repeat('.name', ({item}) => /** @type {string[]} */ (/** @type {unknown} */ (item))),
       text('.name', ({item}) => item),
-      contextualProp('.name', ({data, path}) => {
+      contextualProp('.name', 'hidden', ({data, path}) => {
         return data.hidden[path[0] ?? 0]?.[path[1] ?? 0]
-      }, 'hidden'),
+      }),
     ],
   })
   mounted.update({
@@ -1555,12 +1555,12 @@ test('applies scalar bindings to every initial selector match', () => {
       textData('.copy', (data, element) => dataFor(data, element).text),
       prop(
         '.markup',
+        'innerHTML',
         (data, element) => {
           return trustedHTML(document, dataFor(data, element).markup)
         },
-        'innerHTML',
       ),
-      prop('.state', (data, element) => dataFor(data, element).value, 'lumiValue'),
+      prop('.state', 'lumiValue', (data, element) => dataFor(data, element).value),
       attr('.state', 'title', (data, element) => dataFor(data, element).title),
       classToggle(
         '.state',
@@ -1617,8 +1617,8 @@ test('resolves descendant bindings after parent structure regardless of declarat
       }),
       prop(
         '.person',
-        data => trustedHTML(document, data.markup),
         'innerHTML',
+        data => trustedHTML(document, data.markup),
       ),
     ],
   })
@@ -1676,21 +1676,21 @@ test('resolves structurally created bindings inside repeat occurrences', () => {
         }),
         contextualProp(
           '.host',
+          'innerHTML',
           ({item}) => trustedHTML(
             document,
             `<${item.format} class="late">Raw</${item.format}>`,
           ),
-          'innerHTML',
         ),
       ]),
       text('.outside-late', ({data}) => data.headline),
       prop(
         '.outside-host',
+        'innerHTML',
         () => trustedHTML(
           document,
           '<h1 class="outside-late">Raw headline</h1>',
         ),
-        'innerHTML',
       ),
     ],
   })
@@ -1799,8 +1799,8 @@ test('uses the last declaration for duplicate and overlapping scalar sinks', () 
     bindings: [
       textData('.shared', data => data.first),
       textData('.value', data => data.last),
-      prop('.value', data => data.first, 'lumiValue'),
-      prop('.value', data => data.last, 'lumiValue'),
+      prop('.value', 'lumiValue', data => data.first),
+      prop('.value', 'lumiValue', data => data.last),
       attr('.value', 'title', data => data.title),
       attr('.value', 'title', () => 'Owned last'),
     ],
@@ -1849,8 +1849,8 @@ test('orders structural properties before descendant selectors', () => {
       }),
       prop(
         '.person',
-        data => trustedHTML(document, data.markup),
         'innerHTML',
+        data => trustedHTML(document, data.markup),
       ),
     ],
   })
@@ -1882,8 +1882,8 @@ test('keeps live parent structure unchanged when a planned descendant fails', ()
       }),
       prop(
         '.person',
-        data => trustedHTML(document, data.markup),
         'innerHTML',
+        data => trustedHTML(document, data.markup),
       ),
     ],
   })
@@ -2208,8 +2208,8 @@ test('does not repeat normalized innerHTML property writes', () => {
     bindings: [
       prop(
         'div',
-        data => trustedHTML(document, data.markup),
         'innerHTML',
+        data => trustedHTML(document, data.markup),
       ),
     ],
   }).mount(document.createElement('div'))
@@ -2283,7 +2283,7 @@ test('does not write an unchanged projected property', () => {
   const options = {
     source: template,
     bindings: [
-      prop('button', data => data.value, 'lumiProbe'),
+      prop('button', 'lumiProbe', data => data.value),
     ],
   }
   const target = document.createElement('div')
@@ -2316,7 +2316,7 @@ test('restores a bound property after the browser changes it', () => {
   /** @type {import('../src/index.js').ComponentOptions<{ value: string }>} */
   const options = {
     source: template,
-    bindings: [prop('input', data => data.value, 'value')],
+    bindings: [prop('input', 'value', data => data.value)],
   }
   const target = document.createElement('div')
   const mounted = component(options).mount(target)
@@ -2351,8 +2351,8 @@ test('does not construct custom elements merely to prepare scalar updates', () =
       textData('.copy', data => data.copy),
       prop(
         'planning-probe',
-        () => trustedHTML(document, '<span class="copy"></span>'),
         'innerHTML',
+        () => trustedHTML(document, '<span class="copy"></span>'),
       ),
     ],
   }).mount(document.createElement('div'))
@@ -2393,7 +2393,7 @@ test('projects parent data into a persistent child component', () => {
   const parentOptions = {
     source: parentTemplate,
     bindings: [
-      child('.child', childComponent, data => data.profile),
+      child('.child', childComponent, ({data}) => data.profile),
     ],
   }
   const target = document.createElement('div')
@@ -2431,8 +2431,8 @@ test('keeps parent scalar selectors outside child-owned subtrees', () => {
         parentProjectionCount += 1
         return 'Parent override'
       }),
-      prop('.profile-slot', () => true, 'hidden'),
-      child('.profile-slot', childComponent, data => data.profile),
+      prop('.profile-slot', 'hidden', () => true),
+      child('.profile-slot', childComponent, ({data}) => data.profile),
     ],
   })
 
@@ -2466,13 +2466,13 @@ test('rejects parent content writes that would replace a child subtree', () => {
       bindings: [
         prop(
           '.shell',
-          () => trustedHTML(document, '<p>Replacement</p>'),
           'innerHTML',
+          () => trustedHTML(document, '<p>Replacement</p>'),
         ),
         child(
           '.profile-slot',
           component({ source: childTemplate }),
-          data => data,
+          ({data}) => data,
         ),
       ],
     }).mount(target),
@@ -2487,7 +2487,7 @@ test('rejects parent content writes that would replace a child subtree', () => {
         child(
           '.profile-slot',
           component({ source: childTemplate }),
-          data => data,
+          ({data}) => data,
         ),
         text('.profile-slot', () => 'Replacement'),
       ],
@@ -2505,8 +2505,8 @@ test('accepts genuine TrustedHTML for innerHTML property bindings', () => {
     bindings: [
       prop(
         'div',
-        data => trustedHTML(document, data.markup),
         'innerHTML',
+        data => trustedHTML(document, data.markup),
       ),
     ],
   }).mount(document.createElement('div'))
@@ -2524,7 +2524,7 @@ test('rejects strings and forged objects for TrustedHTML properties', () => {
   )
   const mounted = component({
     source: template,
-    bindings: [prop('.markup', data => data.markup, 'innerHTML')],
+    bindings: [prop('.markup', 'innerHTML', data => data.markup)],
   }).mount(document.createElement('div'))
 
   assert.throws(
@@ -2570,8 +2570,8 @@ test('accepts genuine TrustedHTML for a non-root outerHTML binding', () => {
     source: template,
     bindings: [prop(
       '.replace',
-      data => data.markup,
       'outerHTML',
+      data => data.markup,
     )],
   }).mount(document.createElement('div'))
 
@@ -2601,11 +2601,11 @@ test('an outerHTML binding keeps the element that replaced its target', () => {
       // The replacement does not match the selector of the binding.
       prop(
         '.slot',
+        'outerHTML',
         data => trustedHTML(
           document,
           `<article><b class="name"></b>${data.value}</article>`,
         ),
-        'outerHTML',
       ),
       // The markup creates this target, so the selector resolves after the
       // write.
@@ -2644,11 +2644,11 @@ test('an outerHTML binding in a repeat follows each occurrence', () => {
       repeat('.row', ({data}) => /** @type {string[]} */ (data), [
         contextualProp(
           '.slot',
+          'outerHTML',
           ({item}) => trustedHTML(
             document,
             `<p class="slot"><b class="name"></b>${item}</p>`,
           ),
-          'outerHTML',
         ),
         text('.name', ({item}) => /** @type {string} */ (item).toUpperCase()),
       ]),
@@ -2734,7 +2734,7 @@ test('does not inspect Trusted Types for bindings without HTML sinks', () => {
     source: template,
     bindings: [
       textData('output', data => data.text),
-      prop('button', data => data.disabled, 'disabled'),
+      prop('button', 'disabled', data => data.disabled),
     ],
   }).mount(document.createElement('div'))
 
@@ -2766,7 +2766,7 @@ test('resolves Trusted Types once for a component with HTML sinks', () => {
 
   const mounted = component({
     source: template,
-    bindings: [prop('div', () => markup, 'innerHTML')],
+    bindings: [prop('div', 'innerHTML', () => markup)],
   }).mount(document.createElement('div'))
 
   assert.equal(factoryReads, 1)
@@ -2785,7 +2785,7 @@ test('fails closed when TrustedHTML cannot be authenticated', () => {
   Reflect.deleteProperty(window, 'trustedTypes')
   const mounted = component({
     source: template,
-    bindings: [prop('div', () => markup, 'innerHTML')],
+    bindings: [prop('div', 'innerHTML', () => markup)],
   }).mount(document.createElement('div'))
 
   assert.throws(
@@ -2797,7 +2797,7 @@ test('fails closed when TrustedHTML cannot be authenticated', () => {
 
 test('keeps iframe documents and native handlers out of generic bindings', () => {
   assert.throws(
-    () => prop('button', () => () => {}, 'onclick'),
+    () => prop('button', 'onclick', () => () => {}),
     /^Error: Lumi E1: property binding "onclick" is an event handler\. Use on\(\)\.$/,
   )
   assert.throws(
@@ -2945,13 +2945,13 @@ test('rejects incompatible values and treats nullish projections as no-ops', () 
       textData('.copy', data => unchecked(data.text)),
       prop(
         '.markup',
+        'innerHTML',
         data => {
           const markup = unchecked(data.html)
           return typeof markup === 'string'
             ? trustedHTML(document, markup)
             : markup
         },
-        'innerHTML',
       ),
       attr('.control', 'title', data => unchecked(data.title)),
       classToggle('.control', 'active', data => unchecked(data.active)),
@@ -3095,7 +3095,7 @@ test('preserves arbitrary values for property bindings', () => {
   const mounted = render({ config }, {
     target: document.createElement('div'),
     source: template,
-    bindings: [prop('div', data => data.config, 'lumiConfig')],
+    bindings: [prop('div', 'lumiConfig', data => data.config)],
   })
 
   assert.strictEqual(Reflect.get(mounted.root, 'lumiConfig'), config)
@@ -3168,7 +3168,7 @@ test('an update after a failed commit writes the values again', () => {
     source: template,
     bindings: [
       textData('output', data => data.text),
-      prop('button', data => data.value, 'lumiProbe'),
+      prop('button', 'lumiProbe', data => data.value),
     ],
   }).mount(target)
   const button = /** @type {HTMLButtonElement} */ (
@@ -3323,8 +3323,8 @@ test('rejects invalid component sources and ignores stale updates', () => {
       bindings: [
         prop(
           'p',
-          () => trustedHTML(document, '<p>Replacement</p>'),
           'outerHTML',
+          () => trustedHTML(document, '<p>Replacement</p>'),
         ),
       ],
     }).mount(target),

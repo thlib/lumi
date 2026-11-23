@@ -13,22 +13,28 @@
  * that is equal to its record needs no DOM access. A new repeated element is
  * a copy of one inert element that already has the values.
  *
+ * A child component is a part of the plan of its parent. The planner compiles
+ * each child definition one time for a mounted component, and each container
+ * gets a copy of the compiled source.
+ *
  * @internal
  */
 
 import {
   createLocator,
-  elementAtPath,
   elementPath,
   locateElements,
   markCreated,
   queryOwnedElements,
+  sourceRoot,
   tasksByDepth,
 } from './dom.js'
+import {connectEventBindings, getEventBindingDescriptor} from './events.js'
 import {
   matchIntegerKeys,
   stableOccurrences,
 } from './keyed.js'
+import {definitions} from './internal/definitions.js'
 import {DEV} from './internal/dev.js'
 import {warn} from './internal/diagnostics.js'
 import {fail} from './internal/fail.js'
@@ -37,11 +43,6 @@ import {itemContext, rootContext} from './internal/projection-context.js'
 import { isStructuralBinding } from './internal/structural.js'
 
 const domBindingDescriptor = Symbol('Lumi DOM binding descriptor')
-/**
- * The key of the containers that a connected binding owns. The DOM inside
- * an owned container belongs to a nested component.
- */
-export const ownedDomSubtrees = Symbol('Lumi owned DOM subtrees')
 const classWhitespace = '[\\t\\n\\f\\r ]'
 const textValues = 'a string, number, or boolean'
 // The cache of a binding that never caches a value.
@@ -60,7 +61,7 @@ const unusedValues = new WeakMap()
  */
 
 /**
- * @typedef {'repeat' | 'text' | 'property' | 'attribute' | 'class' | 'style'} DomBindingKind
+ * @typedef {'repeat' | 'child' | 'text' | 'property' | 'attribute' | 'class' | 'style'} DomBindingKind
  */
 
 /**
@@ -71,6 +72,7 @@ const unusedValues = new WeakMap()
  * @property {(input: any, el: Element) => unknown} project
  * @property {((input: any) => unknown) | undefined} [key]
  * @property {string} [name]
+ * @property {object} [component] The component of a `child` binding.
  * @property {DomBindingDescriptor<Data>} [scope]
  * @property {ReadonlyArray<DomBindingDescriptor<Data>>} [bindings]
  */
@@ -90,6 +92,9 @@ const unusedValues = new WeakMap()
  * contents of its element.
  * @property {DomBindingRuntime<Data> | undefined} [scope] The repeat
  * declaration that owns this declaration. The planner sets it.
+ * @property {Compiled} [child] The compiled component of a `child` binding.
+ * @property {WeakSet<Element> | null} [owner] The mounted containers of the
+ * component that has a `child` binding.
  * @property {WeakMap<Element, CachedValue>} values The last value that a
  * property binding gave to each element. Other bindings do not use it.
  * @property {boolean} requiresTrustedHTML
@@ -166,44 +171,331 @@ export function flattenDomBindingDescriptors(
 }
 
 /**
+ * The compiled form of one component: the mounted component itself, or the
+ * component of a `child` binding. All copies of a child component use one
+ * compiled form.
+ *
+ * @typedef {object} Compiled
+ * @property {Element} root The element that has the selector matches. This
+ * is an inert copy of the source, or the mounted root of a component that
+ * needs no copy.
+ * @property {ScopeSpec} scope
+ * @property {ReadonlyArray<Runtime>} runtimes
+ * @property {boolean} dynamic Whether a markup write makes the selectors
+ * resolve in each update.
+ * @property {WeakSet<Element> | null} containers The mounted containers of
+ * the child components, or null for a component without a child.
+ * @property {ReadonlyArray<import('./events.js').EventBindingDescriptor>} events
+ * The event declarations of a child component.
+ * @property {ReadonlyArray<import('./types.js').Binding<any>>} custom The
+ * bindings of a child component that are not built-in bindings.
+ */
+
+/**
+ * The state that all compiled components of one mounted component share.
+ *
+ * @typedef {object} Planner
+ * @property {Element} root The mounted root. Its window gives the Trusted
+ * Types API and gets the warnings.
+ * @property {Document | null} inert The document of the inert copies.
+ * @property {Map<object, Compiled> | null} children The compiled form of
+ * each child definition. A component without a child has no map.
+ */
+
+/**
  * Connects all built-in DOM declarations of one component to the planner.
  *
  * Each selector resolves one time, in the component source. A repeat makes
- * its occurrences from the source, and a markup write is planned in a copy
- * of the source, so these declarations need an inert copy. All other
- * components resolve their selectors in the mounted root.
+ * its occurrences from the source, a child component goes into a container
+ * of the source, and a markup write is planned in a copy of the source, so
+ * these declarations need an inert copy. All other components resolve their
+ * selectors in the mounted root.
  *
  * @template Data
  * @param {Element} root
  * @param {ReadonlyArray<DomBindingDescriptor<Data>>} descriptors
- * @param {ReadonlyArray<Element>} [ownedSubtrees]
+ * @param {WeakSet<Element> | null} [containers] Receives the mounted
+ * containers of the child components.
  * @returns {import('./types.js').ConnectedBinding<Data>}
  */
-export function connectDomBindings(root, descriptors, ownedSubtrees = []) {
+export function connectDomBindings(
+  root,
+  descriptors,
+  containers = null,
+) {
+  /** @type {Planner} */
+  const planner = {root, inert: null, children: null}
+  const needsCopy = descriptors.some(descriptor => {
+    return descriptor.kind === 'repeat'
+      || descriptor.kind === 'child'
+      || writesMarkup(descriptor)
+  })
+  const compiled = compile(
+    planner,
+    needsCopy ? inertCopy(planner, root) : root,
+    descriptors,
+    containers,
+    [],
+    [],
+  )
+  const scope = compiled.scope
+  /** @type {ScopeState | null} */
+  let state = null
+
+  // A child component at the component boundary is in the DOM from the
+  // mount.
+  if (scope.children.length > 0) {
+    state = new ScopeState(root)
+    state.connect(scope)
+  }
+
+  return {
+    prepare(/** @type {unknown} */ data) {
+      const plan = prepareCompiled(compiled, data)
+
+      return {
+        commit() {
+          if (state === null) {
+            state = new ScopeState(root)
+
+            if (compiled.root === root) {
+              // The selectors resolved in the mounted root, so the targets
+              // are the mounted elements.
+              state.sinks = scope.sinks.map(sink => sink.target)
+            }
+          }
+
+          commitCompiled(compiled, state, plan)
+        },
+      }
+    },
+
+    destroy() {
+      state?.destroy()
+      state = null
+    },
+  }
+}
+
+/**
+ * Imports an element into a document without a browsing context or
+ * custom-element registry. Unlike cloneNode() in the live document, this
+ * cannot invoke custom-element constructors.
+ *
+ * @param {Planner} planner
+ * @param {Element} element
+ * @returns {Element}
+ */
+function inertCopy(planner, element) {
+  planner.inert ??= planner.root.ownerDocument.implementation
+    .createHTMLDocument()
+
+  return /** @type {Element} */ (planner.inert.importNode(element, true))
+}
+
+/**
+ * Compiles the built-in DOM declarations of one component.
+ *
+ * @param {Planner} planner
+ * @param {Element} root The element that gets the selector matches.
+ * @param {ReadonlyArray<DomBindingDescriptor<any>>} descriptors
+ * @param {WeakSet<Element> | null} containers
+ * @param {Compiled['events']} events
+ * @param {Compiled['custom']} custom
+ * @param {Compiled} [compiled] The object that receives the compiled form.
+ * A child component that contains itself finds this object.
+ * @returns {Compiled}
+ */
+function compile(
+  planner,
+  root,
+  descriptors,
+  containers,
+  events,
+  custom,
+  compiled = /** @type {Compiled} */ ({}),
+) {
   const trustedTypes = descriptors.some(writesMarkup)
-    ? trustedTypesFactory(root)
+    ? trustedTypesFactory(planner.root)
     : null
   const runtimes = descriptors.map((descriptor, index) => {
-    return createDomBindingRuntime(descriptor, index, root, trustedTypes)
+    return createDomBindingRuntime(
+      descriptor,
+      index,
+      planner.root,
+      trustedTypes,
+    )
   })
-  const needsCopy = descriptors.some(descriptor => {
-    return descriptor.kind === 'repeat' || writesMarkup(descriptor)
-  })
-
-  return connectPlanner(
-    root,
-    // Import into a document without a browsing context or custom-element
-    // registry. Unlike cloneNode() in the live document, this cannot invoke
-    // custom-element constructors.
-    needsCopy
-      ? /** @type {Element} */ (
-        root.ownerDocument.implementation.createHTMLDocument()
-          .importNode(root, true)
-      )
-      : root,
-    runtimes,
-    ownedSubtrees.map(subtree => elementPath(root, subtree)),
+  const runtimeByDescriptor = new Map(
+    runtimes.map(runtime => [runtime.descriptor, runtime]),
   )
+
+  // A declaration in the binding list of a repeat resolves its selector in
+  // the occurrences of that repeat only.
+  for (const runtime of runtimes) {
+    const owner = runtime.descriptor.scope
+
+    if (owner !== undefined) {
+      runtime.scope = runtimeByDescriptor.get(owner)
+    }
+  }
+
+  compiled.root = root
+  compiled.runtimes = runtimes
+  compiled.dynamic = descriptors.some(writesMarkup)
+  compiled.containers = containers
+  compiled.events = events
+  compiled.custom = custom
+  compiled.scope = compileScope(
+    planner,
+    root,
+    runtimes,
+    containers,
+    compiled.dynamic,
+  )
+
+  return compiled
+}
+
+/**
+ * Gives the compiled form of a child definition. A mounted component
+ * compiles each definition one time.
+ *
+ * @param {Planner} planner
+ * @param {object} component
+ * @returns {Compiled}
+ */
+function compileChild(planner, component) {
+  const children = planner.children ??= new Map()
+  let compiled = children.get(component)
+
+  if (compiled === undefined) {
+    const options = /** @type {import('./types.js').ComponentOptions<any>} */ (
+      definitions.get(component)
+    )
+    /** @type {Array<import('./events.js').EventBindingDescriptor>} */
+    const events = []
+    /** @type {Array<import('./types.js').Binding<any>>} */
+    const custom = []
+    /** @type {Array<DomBindingDescriptor<any>>} */
+    const dom = []
+
+    for (const binding of options.bindings ?? []) {
+      const event = getEventBindingDescriptor(binding)
+      const descriptor = getDomBindingDescriptor(binding)
+
+      if (event !== null) {
+        events.push(event)
+      } else if (descriptor !== null) {
+        dom.push(descriptor)
+      } else {
+        custom.push(binding)
+      }
+    }
+
+    const descriptors = flattenDomBindingDescriptors(dom)
+
+    // The definition is in the map before its own child bindings compile,
+    // so a component that contains itself finds its compiled form.
+    compiled = /** @type {Compiled} */ ({})
+    children.set(component, compiled)
+    compile(
+      planner,
+      inertCopy(planner, sourceRoot(options.source)),
+      descriptors,
+      descriptors.some(descriptor => descriptor.kind === 'child')
+        ? new WeakSet()
+        : null,
+      events,
+      custom,
+      compiled,
+    )
+  }
+
+  return compiled
+}
+
+/**
+ * Prepares the values of one compiled component from its data. The result
+ * needs no mounted element, so a plan can hold the values of a child
+ * component that is not in the DOM yet.
+ *
+ * @param {Compiled} compiled
+ * @param {unknown} data
+ * @returns {ScopePlan}
+ */
+function prepareCompiled(compiled, data) {
+  const plan = prepareScope(compiled.scope, rootContext(data), data)
+
+  if (compiled.dynamic) {
+    plan.operations = prepareDynamicOperations(compiled, plan, data)
+  }
+
+  return plan
+}
+
+/**
+ * Writes the prepared values of one compiled component to its mounted
+ * elements.
+ *
+ * @param {Compiled} compiled
+ * @param {ScopeState} state The state of the mounted root.
+ * @param {ScopePlan} plan
+ */
+function commitCompiled(compiled, state, plan) {
+  const scope = compiled.scope
+
+  if (state.sinks === null) {
+    state.connect(scope)
+  }
+
+  if (!compiled.dynamic) {
+    state.apply(scope, scope.sinks, 0, applyLive, plan.sinks, 0, plan.regions, 0)
+    return
+  }
+
+  // The markup writes of this commit: each runtime, then its element.
+  /** @type {Array<Runtime | Element>} */
+  const markupWrites = []
+
+  /**
+   * Writes one prepared value and records a markup write.
+   *
+   * @type {ApplyValue}
+   */
+  const apply = (runtime, target, value) => {
+    if (value !== noValue) {
+      const element = runtime.apply(target, value)
+
+      if (element !== undefined && writesMarkup(runtime.descriptor)) {
+        markupWrites.push(runtime, element)
+      }
+    }
+  }
+
+  state.apply(scope, scope.sinks, 0, apply, plan.sinks, 0, plan.regions, 0)
+  commitDynamicOperations(
+    state.element,
+    /** @type {DynamicOperation[]} */ (plan.operations),
+    compiled.containers,
+    apply,
+  )
+
+  // A markup write can establish content that the rules for its
+  // descendants refine. The cache gets the final content, so the next
+  // update does not rebuild unchanged markup and discard persistent
+  // descendant nodes.
+  for (let index = 0; index < markupWrites.length; index += 2) {
+    const runtime = /** @type {Runtime} */ (markupWrites[index])
+    const element = /** @type {Element} */ (markupWrites[index + 1])
+    const cached = runtime.values.get(element)
+
+    if (cached !== undefined) {
+      cached.domValue = /** @type {any} */ (element)[
+        /** @type {string} */ (runtime.descriptor.name)
+      ]
+    }
+  }
 }
 
 /**
@@ -566,8 +858,6 @@ function applyText(element, value) {
     return
   }
 
-  sink[writtenText] = text
-
   const first = element.firstChild
   // The text node, when the element has only that node.
   const only = first !== null
@@ -579,7 +869,9 @@ function applyText(element, value) {
   // Without a remembered value, the element has its source content.
   // One read keeps the first update free of a redundant write. An
   // element without a child node, or with one text node, gives its
-  // text without the `textContent` of the element.
+  // text without the `textContent` of the element. The element gets no
+  // record of a text that Lumi did not write, so Lumi keeps no reference
+  // to an element that needs no write.
   if (
     written === undefined
     && (
@@ -592,6 +884,8 @@ function applyText(element, value) {
   ) {
     return
   }
+
+  sink[writtenText] = text
 
   // Keep the text node when the element has only that node. An empty
   // value removes all child nodes, as `textContent` does.
@@ -688,16 +982,20 @@ function isTextValue(value) {
 /**
  * @typedef {object} Runtime
  * @property {{
- *   kind: 'repeat' | 'text' | 'property' | 'attribute' | 'class' | 'style',
+ *   kind: 'repeat' | 'child' | 'text' | 'property' | 'attribute' | 'class' | 'style',
  *   selector: string,
  *   project: (input: unknown, el: Element) => unknown,
  *   key?: ((input: unknown) => unknown) | undefined,
  *   name?: string,
+ *   component?: object,
  *   scope?: Runtime['descriptor']
  * }} descriptor
  * @property {number} index
  * @property {Runtime | undefined} [scope] The repeat declaration that owns
  * this declaration. A declaration at the component boundary has none.
+ * @property {Compiled} [child] The compiled component of a `child` binding.
+ * @property {WeakSet<Element> | null} [owner] The mounted containers of the
+ * component that has a `child` binding.
  * @property {WeakMap<Element, {
  *   projectedValue: unknown,
  *   domValue: unknown
@@ -723,8 +1021,22 @@ function isTextValue(value) {
  * @typedef {object} ScopeSpec
  * @property {SinkSpec[]} sinks
  * @property {RegionSpec[]} regions
+ * @property {ChildSpec[]} children The child components in the scope.
+ * @property {number} slots The number of regions and child components. A
+ * plan and a state hold the regions, then the child components, in one list.
  * @property {import('./dom.js').Locator} locator Finds the sink elements,
- * then the repeat targets, below the element of the scope.
+ * then the repeat targets, then the containers of the child components,
+ * below the element of the scope.
+ */
+
+/**
+ * One container of a child component.
+ *
+ * @typedef {object} ChildSpec
+ * @property {Runtime} runtime
+ * @property {Element} target The container, in the compiled source.
+ * @property {number} matchIndex
+ * @property {number[]} path
  */
 
 /**
@@ -755,7 +1067,18 @@ function isTextValue(value) {
  *
  * @typedef {object} ScopePlan
  * @property {ReadonlyArray<unknown>} sinks
- * @property {ReadonlyArray<RegionPlan>} regions
+ * @property {ReadonlyArray<SlotPlan>} regions The plan of each region, then
+ * the plan of each child component.
+ * @property {DynamicOperation[] | null} operations The values for the
+ * targets that a markup write creates.
+ * @property {unknown} data The data of the component.
+ */
+
+/**
+ * The plan of a region, or the plan of a child component. A child component
+ * with a nullish projection has no plan.
+ *
+ * @typedef {RegionPlan | ScopePlan | null} SlotPlan
  */
 
 /**
@@ -773,8 +1096,9 @@ function isTextValue(value) {
  * @property {ReadonlyArray<unknown>} values The prepared values. Each
  * occurrence has the values of the own sinks, then the values of the sinks
  * in its scope.
- * @property {ReadonlyArray<RegionPlan>} regions The plans of the nested
- * regions: for each occurrence, one plan for each region in its scope.
+ * @property {ReadonlyArray<SlotPlan>} regions The nested plans: for each
+ * occurrence, one plan for each region in its scope, then one plan for each
+ * child component in its scope.
  * @property {boolean} isNoop Whether the projection asked for no operation.
  */
 
@@ -789,141 +1113,6 @@ function isTextValue(value) {
  * @property {number} matchCount
  * @property {unknown} value
  */
-
-/**
- * Creates the planner of one component.
- *
- * Each selector resolves one time, in the blueprint. The plan of an update
- * holds one value for each target, and the commit writes the values to the
- * mounted elements at the same positions. Only the elements that a markup
- * write creates get their selector matches in each update.
- *
- * The renderer knows only ordinary JavaScript values. Projection syntax and
- * data lookup conventions remain application concerns.
- *
- * @param {Element} root
- * @param {Element} blueprintRoot
- * @param {ReadonlyArray<Runtime>} runtimes
- * @param {ReadonlyArray<number[]>} ownedSubtreePaths
- */
-function connectPlanner(
-  root,
-  blueprintRoot,
-  runtimes,
-  ownedSubtreePaths,
-) {
-  const runtimeByDescriptor = new Map(
-    runtimes.map(runtime => [runtime.descriptor, runtime]),
-  )
-
-  // A declaration in the binding list of a repeat resolves its selector in
-  // the occurrences of that repeat only.
-  for (const runtime of runtimes) {
-    const owner = runtime.descriptor.scope
-
-    if (owner !== undefined) {
-      runtime.scope = runtimeByDescriptor.get(owner)
-    }
-  }
-
-  const needsDynamicPlanning = runtimes.some(runtime => {
-    return writesMarkup(runtime.descriptor)
-  })
-  const scope = compileScope(
-    blueprintRoot,
-    runtimes,
-    // The copy of the source has the element of each path.
-    /** @type {Element[]} */ (
-      ownedSubtreePaths.map(path => elementAtPath(blueprintRoot, path))
-    ),
-    needsDynamicPlanning,
-  )
-  /** @type {ScopeState | null} */
-  let state = null
-  // The markup writes of one commit: each runtime, then its element.
-  /** @type {Array<Runtime | Element>} */
-  const markupWrites = []
-
-  /**
-   * Writes one prepared value and records a markup write.
-   *
-   * @type {ApplyValue}
-   */
-  const applyMarkup = (runtime, target, value) => {
-    if (value !== noValue) {
-      const element = runtime.apply(target, value)
-
-      if (element !== undefined && writesMarkup(runtime.descriptor)) {
-        markupWrites.push(runtime, element)
-      }
-    }
-  }
-  const apply = needsDynamicPlanning ? applyMarkup : applyLive
-
-  return {
-    prepare(/** @type {unknown} */ data) {
-      const plan = prepareScope(scope, rootContext(data))
-      const dynamicOperations = needsDynamicPlanning
-        ? prepareDynamicOperations(
-          blueprintRoot,
-          scope,
-          plan,
-          runtimes,
-          ownedSubtreePaths,
-          data,
-        )
-        : []
-      return {
-        commit() {
-          if (state === null) {
-            state = new ScopeState(root)
-
-            if (blueprintRoot === root) {
-              // The selectors resolved in the mounted root, so the targets
-              // are the mounted elements.
-              state.sinks = scope.sinks.map(sink => sink.target)
-            } else {
-              state.connect(scope)
-            }
-          }
-
-          markupWrites.length = 0
-          state.apply(scope, scope.sinks, 0, apply, plan.sinks, 0, plan.regions, 0)
-
-          if (needsDynamicPlanning) {
-            commitDynamicOperations(
-              root,
-              dynamicOperations,
-              ownedSubtreePaths,
-              apply,
-            )
-
-            // A markup write can establish content that the rules for its
-            // descendants refine. The cache gets the final content, so the
-            // next update does not rebuild unchanged markup and discard
-            // persistent descendant nodes.
-            for (let index = 0; index < markupWrites.length; index += 2) {
-              const runtime = /** @type {Runtime} */ (markupWrites[index])
-              const element = /** @type {Element} */ (markupWrites[index + 1])
-              const cached = runtime.values.get(element)
-
-              if (cached !== undefined) {
-                cached.domValue = /** @type {any} */ (element)[
-                  /** @type {string} */ (runtime.descriptor.name)
-                ]
-              }
-            }
-          }
-        },
-      }
-    },
-
-    destroy() {
-      state?.destroy()
-      state = null
-    },
-  }
-}
 
 /**
  * Writes one prepared value to its element.
@@ -948,27 +1137,39 @@ function applyLive(runtime, element, value) {
 /**
  * Compiles static template locations into nested positional regions.
  *
+ * @param {Planner} planner
  * @param {Element} root
  * @param {ReadonlyArray<Runtime>} runtimes
- * @param {ReadonlyArray<Element>} ownedSubtrees
+ * @param {WeakSet<Element> | null} containers Receives the mounted
+ * containers of the child components.
  * @param {boolean} keepsContexts
  * @returns {ScopeSpec}
  */
-function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
+function compileScope(planner, root, runtimes, containers, keepsContexts) {
   /** @type {Map<Element, RegionSpec>} */
   const regionByTarget = new Map()
   /** @returns {ScopeSpec} */
   const createScope = () => {
-    return { sinks: [], regions: [], locator: createLocator([]) }
+    return {
+      sinks: [],
+      regions: [],
+      children: [],
+      slots: 0,
+      locator: createLocator([]),
+    }
   }
   const rootScope = createScope()
+  // A component without a child binding has no set of containers.
+  const children = containers === null
+    ? noChildSpecs
+    : resolveChildren(planner, root, runtimes, containers)
 
   for (const runtime of runtimes) {
     if (runtime.descriptor.kind !== 'repeat') {
       continue
     }
 
-    const targets = queryRuntimeElements(root, runtime, ownedSubtrees)
+    const targets = queryRuntimeElements(root, runtime)
     const selector = runtime.descriptor.selector
 
     // A repeat that matches no element repeats nothing.
@@ -987,10 +1188,6 @@ function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
 
       if (target === root) {
         fail(5, selector)
-      }
-
-      if (ownedSubtrees.some(owned => target.contains(owned))) {
-        fail(6, selector)
       }
 
       // The last repeat declaration owns the number of occurrences at
@@ -1045,6 +1242,23 @@ function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
     ;(parent?.scope ?? rootScope).regions.push(region)
   }
 
+  // A child component in a repeated element is one component for each
+  // occurrence.
+  for (const child of children) {
+    const target = child.target
+    const parent = parentRegion(child.runtime, target, false)
+
+    if (
+      child.runtime.scope !== undefined
+      && nearestRegion(target, regions, false) !== parent
+    ) {
+      fail(8, child.runtime.descriptor.selector)
+    }
+
+    child.path = elementPath(parent?.target ?? root, target)
+    ;(parent?.scope ?? rootScope).children.push(child)
+  }
+
   // The elements that have a sink, and those that have more than one.
   /** @type {Set<Element>} */
   const targeted = new Set()
@@ -1053,11 +1267,14 @@ function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
 
   // The sinks of each scope are in declaration order.
   for (const runtime of runtimes) {
-    if (runtime.descriptor.kind === 'repeat') {
+    if (
+      runtime.descriptor.kind === 'repeat'
+      || runtime.descriptor.kind === 'child'
+    ) {
       continue
     }
 
-    const targets = queryRuntimeElements(root, runtime, ownedSubtrees)
+    const targets = queryRuntimeElements(root, runtime)
 
     for (let matchIndex = 0; matchIndex < targets.length; matchIndex += 1) {
       const target = /** @type {Element} */ (targets[matchIndex])
@@ -1071,7 +1288,7 @@ function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
       }
 
       if (isStructuralBinding(runtime.descriptor)) {
-        if (ownedSubtrees.some(owned => target.contains(owned))) {
+        if (children.some(child => target.contains(child.target))) {
           fail(9, runtime.descriptor.selector)
         }
 
@@ -1118,8 +1335,10 @@ function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
     // that markup that is equal to the current content replaces no element
     // that an earlier declaration changed. The sort is stable.
     scope.sinks.sort((left, right) => markupDepth(left) - markupDepth(right))
+    scope.slots = scope.regions.length + scope.children.length
     scope.locator = createLocator(
-      [...scope.sinks, ...scope.regions].map(spec => spec.path),
+      [...scope.sinks, ...scope.regions, ...scope.children]
+        .map(spec => spec.path),
     )
 
     const sinks = region === null
@@ -1134,7 +1353,7 @@ function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
 
     let fills = region !== null
       && sinks.length > 0
-      && scope.regions.length === 0
+      && scope.slots === 0
 
     for (const sink of sinks) {
       const kind = sink.runtime.descriptor.kind
@@ -1175,6 +1394,73 @@ function compileScope(root, runtimes, ownedSubtrees, keepsContexts) {
   }
 
   return rootScope
+}
+
+/** @type {ChildSpec[]} */
+const noChildSpecs = []
+
+/**
+ * Finds the containers of the child components of one component, and
+ * compiles each child component.
+ *
+ * @param {Planner} planner
+ * @param {Element} root
+ * @param {ReadonlyArray<Runtime>} runtimes
+ * @param {WeakSet<Element>} containers Receives the mounted containers.
+ * @returns {ChildSpec[]} The containers that this component owns.
+ */
+function resolveChildren(planner, root, runtimes, containers) {
+  // The last child declaration for a container owns that container.
+  /** @type {Map<Element, ChildSpec>} */
+  const childByTarget = new Map()
+
+  for (const runtime of runtimes) {
+    if (runtime.descriptor.kind !== 'child') {
+      continue
+    }
+
+    const targets = queryRuntimeElements(root, runtime)
+
+    // A child that matches no element puts in no component.
+    if (DEV) {
+      if (targets.length === 0) {
+        warn(
+          `child "${runtime.descriptor.selector}" matches no element. No `
+          + 'child is mounted.',
+          runtime.view,
+        )
+      }
+    }
+
+    runtime.owner = containers
+    runtime.child = compileChild(
+      planner,
+      /** @type {object} */ (runtime.descriptor.component),
+    )
+
+    for (let matchIndex = 0; matchIndex < targets.length; matchIndex += 1) {
+      const target = /** @type {Element} */ (targets[matchIndex])
+
+      childByTarget.set(target, {runtime, target, matchIndex, path: []})
+    }
+  }
+
+  // A container in a different container belongs to the child component
+  // of that container.
+  const children = [...childByTarget.values()].filter((child, _, all) => {
+    return !all.some(other => {
+      return other !== child && other.target.contains(child.target)
+    })
+  })
+
+  // The child component replaces the content of its container. Without
+  // that content, a selector of this component matches no element in a
+  // container, and a copy of the source has no content to discard.
+  for (const child of children) {
+    child.target.replaceChildren()
+  }
+
+  return children
 }
 
 /**
@@ -1248,24 +1534,48 @@ function markupDepth(sink) {
 /**
  * @param {ScopeSpec} scope
  * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
+ * @param {unknown} data
  * @returns {ScopePlan}
  */
-function prepareScope(scope, context) {
-  return {
-    sinks: prepareSinks(
-      scope.sinks,
-      context,
-      new Array(scope.sinks.length),
-      0,
-    ),
-    regions: scope.regions.map(spec => prepareRegion(spec, context)),
+function prepareScope(scope, context, data) {
+  // The projections of the sinks run before those of the regions.
+  const sinks = prepareSinks(
+    scope.sinks,
+    context,
+    new Array(scope.sinks.length),
+    0,
+  )
+  /** @type {SlotPlan[]} */
+  const regions = scope.regions.map(spec => prepareRegion(spec, context))
+
+  for (const child of scope.children) {
+    regions.push(prepareChild(child, context))
   }
+
+  return {sinks, regions, operations: null, data}
+}
+
+/**
+ * Prepares the values of one child component. The data of the child is the
+ * projection of the context. A nullish projection keeps the child as it is.
+ *
+ * @param {ChildSpec} spec
+ * @param {import('./types.js').ProjectionContext<unknown, unknown>} context
+ * @returns {ScopePlan | null}
+ */
+function prepareChild(spec, context) {
+  const runtime = spec.runtime
+  const data = projectValue(runtime, spec.target, spec.matchIndex, context)
+
+  return data === null || data === undefined
+    ? null
+    : prepareCompiled(/** @type {Compiled} */ (runtime.child), data)
 }
 
 /** @type {unknown[]} */
 const noValues = []
 
-/** @type {RegionPlan[]} */
+/** @type {SlotPlan[]} */
 const noRegionPlans = []
 
 /**
@@ -1334,18 +1644,20 @@ function prepareRegion(spec, context) {
   const ownSinks = spec.ownSinks
   const sinks = spec.scope.sinks
   const nested = spec.scope.regions
+  const children = spec.scope.children
   const ownCount = ownSinks.length
   const valueCount = ownCount + sinks.length
   const nestedCount = nested.length
+  const slots = spec.scope.slots
   // An empty array is never written, so all plans can share one.
   /** @type {unknown[]} */
   const values = valueCount * length === 0
     ? noValues
     : new Array(valueCount * length)
-  /** @type {RegionPlan[]} */
-  const regions = nestedCount * length === 0
+  /** @type {SlotPlan[]} */
+  const regions = slots * length === 0
     ? noRegionPlans
-    : new Array(nestedCount * length)
+    : new Array(slots * length)
   const contexts = spec.keepsContexts ? new Array(length) : null
   const project = spec.runtime.descriptor.key
   // The key list starts at the first key that is different from the
@@ -1395,8 +1707,15 @@ function prepareRegion(spec, context) {
       prepareSinks(sinks, occurrenceContext, values, offset + ownCount)
 
       for (let region = 0; region < nestedCount; region += 1) {
-        regions[index * nestedCount + region] = prepareRegion(
+        regions[index * slots + region] = prepareRegion(
           /** @type {RegionSpec} */ (nested[region]),
+          occurrenceContext,
+        )
+      }
+
+      for (let child = nestedCount; child < slots; child += 1) {
+        regions[index * slots + child] = prepareChild(
+          /** @type {ChildSpec} */ (children[child - nestedCount]),
           occurrenceContext,
         )
       }
@@ -1468,27 +1787,21 @@ function projectValue(runtime, element, matchIndex, context) {
  * selector matches that the static scope does not own. A component without
  * a markup write does not do this work.
  *
- * @param {Element} blueprintRoot
- * @param {ScopeSpec} scope
+ * @param {Compiled} compiled
  * @param {ScopePlan} plan
- * @param {ReadonlyArray<Runtime>} runtimes
- * @param {ReadonlyArray<number[]>} ownedSubtreePaths
  * @param {unknown} data
  * @returns {DynamicOperation[]}
  */
-function prepareDynamicOperations(
-  blueprintRoot,
-  scope,
-  plan,
-  runtimes,
-  ownedSubtreePaths,
-  data,
-) {
+function prepareDynamicOperations(compiled, plan, data) {
+  const scope = compiled.scope
+  // A child binding has no value to write, so it has no operation.
+  const runtimes = compiled.runtimes.filter(runtime => {
+    return runtime.descriptor.kind !== 'child'
+  })
+  // The containers in the copy are empty, as in the compiled source, so no
+  // selector matches an element of a child component.
   const planningRoot = /** @type {Element} */ (
-    blueprintRoot.ownerDocument.importNode(blueprintRoot, true)
-  )
-  const ownedSubtrees = /** @type {Element[]} */ (
-    ownedSubtreePaths.map(path => elementAtPath(planningRoot, path))
+    compiled.root.ownerDocument.importNode(compiled.root, true)
   )
   // The targets that each declaration has planned.
   /** @type {Map<Runtime, WeakSet<Element>>} */
@@ -1563,7 +1876,7 @@ function prepareDynamicOperations(
 
   /** @param {Runtime} runtime */
   const matchesOf = runtime => {
-    return queryRuntimeElements(planningRoot, runtime, ownedSubtrees)
+    return queryRuntimeElements(planningRoot, runtime)
   }
 
   /**
@@ -1646,16 +1959,14 @@ function prepareDynamicOperations(
  *
  * @param {Element} root
  * @param {ReadonlyArray<DynamicOperation>} operations
- * @param {ReadonlyArray<number[]>} ownedSubtreePaths
+ * @param {WeakSet<Element> | null} containers The mounted containers of the
+ * child components. Their content is not in the copy that gave the
+ * operations.
  * @param {ApplyValue} apply
  */
-function commitDynamicOperations(root, operations, ownedSubtreePaths, apply) {
-  const ownedSubtrees = /** @type {Element[]} */ (
-    ownedSubtreePaths.map(path => elementAtPath(root, path)).filter(Boolean)
-  )
-
+function commitDynamicOperations(root, operations, containers, apply) {
   for (const { runtime, matchIndex, matchCount, value } of operations) {
-    const elements = queryRuntimeElements(root, runtime, ownedSubtrees)
+    const elements = queryRuntimeElements(root, runtime, containers)
     const element = elements[matchIndex]
 
     // Other code can change the DOM that Lumi owns. A target that is then
@@ -1696,9 +2007,10 @@ function findContext(el, contextByElement) {
  * is applied to the inert copy. Only a component with a markup write does
  * this traversal.
  *
- * @param {ReadonlyArray<RegionState | undefined>} states The regions of one
- * scope. The inert copy has all regions.
- * @param {ReadonlyArray<RegionPlan>} plans
+ * @param {ReadonlyArray<RegionState | ChildState | undefined>} states The
+ * regions of one scope. The inert copy has all regions and no child
+ * component.
+ * @param {ReadonlyArray<SlotPlan>} plans
  * @param {number} offset The position of the plan of the first region.
  * @param {Map<Runtime, WeakSet<Element>>} handledByRuntime
  * @param {WeakMap<Element, import('./types.js').ProjectionContext<unknown, unknown>>} contextByElement
@@ -1711,9 +2023,15 @@ function trackOccurrences(
   contextByElement,
 ) {
   for (let region = 0; region < states.length; region += 1) {
+    const state = states[region]
+
+    if (!(state instanceof RegionState)) {
+      continue
+    }
+
     const plan = /** @type {RegionPlan} */ (plans[offset + region])
-    const occurrences = /** @type {RegionState} */ (states[region]).occurrences
-    const nestedCount = plan.spec.scope.regions.length
+    const occurrences = state.occurrences
+    const nestedCount = plan.spec.scope.slots
 
     // After the plan is applied, a region has one occurrence for each
     // planned occurrence.
@@ -1756,7 +2074,8 @@ class ScopeState {
     // Null until the scope gets its first values.
     /** @type {Array<Element | undefined> | null} */
     this.sinks = null
-    /** @type {Array<RegionState | undefined>} */
+    // The state of each region, then of each child component.
+    /** @type {Array<RegionState | ChildState | undefined>} */
     this.regions = noRegionStates
     // The values of the last update, at `offset` in the value list of that
     // plan. A binding that remembers its value compares with these.
@@ -1766,15 +2085,16 @@ class ScopeState {
   }
 
   /**
-   * Finds the sink elements and the repeat targets in one walk.
+   * Finds the sink elements, the repeat targets, and the containers of the
+   * child components in one walk.
    *
    * @param {ScopeSpec} spec
    */
   connect(spec) {
     const sinkCount = spec.sinks.length
-    const regionCount = spec.regions.length
+    const slots = spec.slots
 
-    if (sinkCount + regionCount === 0) {
+    if (sinkCount + slots === 0) {
       this.sinks = noElements
       return
     }
@@ -1782,15 +2102,46 @@ class ScopeState {
     // Other code can change the DOM that Lumi owns. A target that is then
     // not at its position has no element here, and it gets no update.
     /** @type {Array<Element | undefined>} */
-    const found = new Array(sinkCount + regionCount)
+    const found = new Array(sinkCount + slots)
     locateElements(this.element, spec.locator, found)
 
-    if (regionCount > 0) {
-      this.regions = spec.regions.map((region, index) => {
+    if (slots > 0) {
+      const regions = spec.regions
+      const regionCount = regions.length
+      /** @type {Array<RegionState | ChildState | undefined>} */
+      const states = new Array(slots)
+
+      for (let index = 0; index < regionCount; index += 1) {
         const target = found[sinkCount + index]
 
-        return target && new RegionState(target, region)
-      })
+        if (target) {
+          const anchor = target.ownerDocument.createComment('lumi')
+
+          target.after(anchor)
+          // The one occurrence is the source element, which has no key.
+          states[index] = new RegionState(
+            /** @type {RegionSpec} */ (regions[index]),
+            anchor,
+            [new ScopeState(target)],
+            null,
+          )
+        }
+      }
+
+      for (let index = regionCount; index < slots; index += 1) {
+        const container = found[sinkCount + index]
+        const child = /** @type {ChildSpec} */ (
+          spec.children[index - regionCount]
+        )
+
+        // A copy in the inert document gets no child component.
+        states[index] = container
+          && container.ownerDocument !== child.target.ownerDocument
+          ? new ChildState(container, child)
+          : undefined
+      }
+
+      this.regions = states
       // The first occurrence of a region can go away. Do not keep it here.
       found.length = sinkCount
     }
@@ -1810,7 +2161,7 @@ class ScopeState {
    * @param {ApplyValue} apply
    * @param {ReadonlyArray<unknown>} values
    * @param {number} offset The position of the value of the first sink.
-   * @param {ReadonlyArray<RegionPlan>} plans
+   * @param {ReadonlyArray<SlotPlan>} plans
    * @param {number} planOffset The position of the plan of the first region.
    */
   apply(spec, sinks, ownCount, apply, values, offset, plans, planOffset) {
@@ -1850,7 +2201,7 @@ class ScopeState {
       this.offset = offset
     }
 
-    if (this.sinks === null && spec.regions.length > 0) {
+    if (this.sinks === null && spec.slots > 0) {
       this.connect(spec)
     }
 
@@ -1858,7 +2209,7 @@ class ScopeState {
 
     for (let index = 0; index < regions.length; index += 1) {
       regions[index]?.apply(
-        /** @type {RegionPlan} */ (plans[planOffset + index]),
+        /** @type {any} */ (plans[planOffset + index]),
         apply,
       )
     }
@@ -1877,20 +2228,80 @@ class ScopeState {
   }
 }
 
+/**
+ * One child component in the mounted DOM: a copy of the compiled source of
+ * the child, in its container.
+ */
+class ChildState {
+  /**
+   * @param {Element} container
+   * @param {ChildSpec} spec
+   */
+  constructor(container, spec) {
+    const compiled = /** @type {Compiled} */ (spec.runtime.child)
+    const root = /** @type {Element} */ (
+      container.ownerDocument.importNode(compiled.root, true)
+    )
+
+    container.replaceChildren(root)
+    // The DOM in the container now belongs to the child component.
+    spec.runtime.owner?.add(container)
+
+    this.compiled = compiled
+    this.state = new ScopeState(root)
+    // Managed listeners follow the committed DOM, so the event manager is
+    // the last binding.
+    /** @type {Array<import('./types.js').ConnectedBinding<any>>} */
+    this.connected = compiled.custom.map(binding => binding.connect(root))
+
+    if (compiled.events.length > 0) {
+      this.connected.push(
+        connectEventBindings(root, compiled.events, compiled.containers),
+      )
+    }
+
+    if (compiled.scope.children.length > 0) {
+      // A child component at the boundary of this child is in the DOM from
+      // this moment.
+      this.state.connect(compiled.scope)
+    }
+  }
+
+  /**
+   * @param {ScopePlan | null} plan
+   */
+  apply(plan) {
+    if (plan !== null) {
+      commitCompiled(this.compiled, this.state, plan)
+
+      for (const binding of this.connected) {
+        binding.prepare(plan.data).commit()
+      }
+    }
+  }
+
+  destroy() {
+    for (const binding of this.connected) {
+      binding.destroy()
+    }
+    this.state.destroy()
+  }
+}
+
 class RegionState {
   /**
-   * @param {Element} target
    * @param {RegionSpec} spec
+   * @param {Comment} anchor The node after the last occurrence.
+   * @param {ScopeState[]} occurrences
+   * @param {ReadonlyArray<unknown> | null} keys The key of each occurrence,
+   * or null for occurrences without a key.
    */
-  constructor(target, spec) {
+  constructor(spec, anchor, occurrences, keys) {
     this.spec = spec
-    this.anchor = target.ownerDocument.createComment('lumi')
-    target.after(this.anchor)
-    this.occurrences = [new ScopeState(target)]
-    // The key of each occurrence. Null until the first keyed plan: then the
-    // one occurrence is the source element, which has no key.
-    /** @type {ReadonlyArray<unknown> | null} */
-    this.keys = null
+    this.anchor = anchor
+    this.occurrences = occurrences
+    // Null until the first keyed plan.
+    this.keys = keys
   }
 
   /**
@@ -1907,7 +2318,7 @@ class RegionState {
     const sinks = spec.sinks
     const valueCount = sinks.length
     const ownCount = spec.ownSinks.length
-    const nestedCount = scope.regions.length
+    const nestedCount = scope.slots
     const values = plan.values
 
     if (plan.keys === null) {
@@ -2288,14 +2699,15 @@ function hasSameKeys(left, right) {
  *
  * @param {Element} root
  * @param {Runtime} runtime
- * @param {ReadonlyArray<Element>} ownedSubtrees
+ * @param {WeakSet<Element> | null} [containers] The containers of the child
+ * components, when the elements of the child components are below `root`.
  * @returns {Element[]}
  */
-function queryRuntimeElements(root, runtime, ownedSubtrees) {
+function queryRuntimeElements(root, runtime, containers) {
   const selector = runtime.descriptor.selector
 
   if (runtime.scope === undefined) {
-    return queryOwnedElements(root, selector, ownedSubtrees)
+    return queryOwnedElements(root, selector, containers)
   }
 
   const elements = new Set()
@@ -2303,12 +2715,12 @@ function queryRuntimeElements(root, runtime, ownedSubtrees) {
   for (const scopeElement of queryRuntimeElements(
     root,
     runtime.scope,
-    ownedSubtrees,
+    containers,
   )) {
     for (const element of queryOwnedElements(
       scopeElement,
       selector,
-      ownedSubtrees,
+      containers,
     )) {
       elements.add(element)
     }

@@ -22,43 +22,42 @@ export default function teams(): DefinitionOptions<PageData, TeamsData> {
       const selectedMember = data.members.find(
         member => member.id === data.selectedMemberId,
       )
-      const profileMember = selectedMember ?? data.members[0]
-
-      if (profileMember === undefined) {
-        throw new Error('The teams view requires at least one member')
-      }
 
       return {
         toasts: data.toasts,
         memberCount: `${data.members.length} members`,
         members: data.members,
-        hasSelectedMember: selectedMember !== undefined,
-        selectedMember: profileMember,
+        // The profile is in the DOM only when a member is selected.
+        profile: selectedMember === undefined ? [] : [selectedMember],
       }
     },
     bindings: [
-      text<TeamsData, TeamsData>('#directory > .heading .count', ({data}) => data.memberCount),
+      text('#directory > .heading .count', ({data}) => data.memberCount),
       repeat<Member, TeamsData>('.member-row', ({data}) => data.members, [
-        text<Member>('.avatar', ({item}) => item.initials),
-        text<Member>('.name', ({item}) => item.name),
-        text<Member>('.email', ({item}) => item.email),
-        text<Member>('.team', ({item}) => item.team),
-        text<Member>('.role', ({item}) => item.role),
-        attr<Member>('.name', 'href', ({item}) => `#/teams/${item.id}`),
-        attr<Member>('.avatar', 'data-person', ({item}) => item.id),
+        text('.avatar', ({item}) => item.initials),
+        text('.name', ({item}) => item.name),
+        text('.email', ({item}) => item.email),
+        text('.team', ({item}) => item.team),
+        text('.role', ({item}) => item.role),
+        attr('.name', 'href', ({item}) => `#/teams/${item.id}`),
+        attr('.avatar', 'data-person', ({item}) => item.id),
       ]),
-      text<TeamsData, TeamsData>('#profile .avatar', ({data}) => data.selectedMember.initials),
-      text<TeamsData, TeamsData>('#profile .name', ({data}) => data.selectedMember.name),
-      text<TeamsData, TeamsData>('#profile .role', ({data}) => data.selectedMember.role),
-      text<TeamsData, TeamsData>('#profile .team', ({data}) => data.selectedMember.team),
-      text<TeamsData, TeamsData>('#profile .country', ({data}) => data.selectedMember.country),
-      text<TeamsData, TeamsData>('#profile .email', ({data}) => data.selectedMember.email),
-      text<TeamsData, TeamsData>('#profile .bio', ({data}) => data.selectedMember.bio),
+      repeat<Member, TeamsData>('#profile', ({data}) => data.profile, [
+        text('.avatar', ({item}) => item.initials),
+        text('.name', ({item}) => item.name),
+        text('.role', ({item}) => item.role),
+        text('.team', ({item}) => item.team),
+        text('.country', ({item}) => item.country),
+        text('.email', ({item}) => item.email),
+        text('.bio', ({item}) => item.bio),
+        attr('.email', 'href', ({item}) => `mailto:${item.email}`),
+        attr('.avatar', 'data-person', ({item}) => item.id),
+      ]),
       repeat<Toast, TeamsData>('.toast', ({data}) => data.toasts, [
-        text<Toast>('.message', ({item}) => item.message),
-        attr<Toast>(':scope', 'data-toast-id', ({item}) => item.id),
+        text('.message', ({item}) => item.message),
+        attr(':scope', 'data-toast-id', ({item}) => item.id),
       ]),
-      on<string, 'submit', TeamsData>('.team-form', 'submit', (e, el) => {
+      on('.team-form', 'submit', (e, el) => {
         if (e.defaultPrevented) {
           return
         }
@@ -81,7 +80,7 @@ export default function teams(): DefinitionOptions<PageData, TeamsData> {
         }, 3200)
         toastTimers.set(toast.id, timer)
       }),
-      on<string, 'click', TeamsData>('.toast', 'click', (_, el) => {
+      on('.toast', 'click', (_, el) => {
         const id = el.getAttribute('data-toast-id')
 
         if (id === null) {
@@ -95,26 +94,8 @@ export default function teams(): DefinitionOptions<PageData, TeamsData> {
           toasts: data.toasts.filter(item => item.id !== id),
         }))
       }),
-      prop<TeamsData, TeamsData, boolean>(
-        '#directory',
-        ({data}) => data.hasSelectedMember,
-        'hidden',
-      ),
-      prop<TeamsData, TeamsData, boolean>(
-        '#profile',
-        ({data}) => !data.hasSelectedMember,
-        'hidden',
-      ),
-      attr<TeamsData, TeamsData>(
-        '#profile .email',
-        'href',
-        ({data}) => `mailto:${data.selectedMember.email}`,
-      ),
-      attr<TeamsData, TeamsData>(
-        '#profile .avatar',
-        'data-person',
-        ({data}) => data.selectedMember.id,
-      ),
+      // The directory stays in the DOM, so its forms keep their state.
+      prop('#directory', 'hidden', ({data}) => data.profile.length > 0),
     ],
   }
 

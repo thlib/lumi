@@ -11,12 +11,12 @@ export default {
   present: data => ({navOpen: data.navOpen}),
   bindings: [
     ...emailValidation,
-    attr<AppShellData, AppShellData>(
+    attr(
       '#shell',
       'data-navigation-state',
       ({data}) => data.navOpen ? 'open' : false,
     ),
-    on<string, 'click', AppShellData>('#backdrop', 'click', () => {
+    on('#backdrop', 'click', () => {
       update(data => ({...data, navOpen: false}))
     }),
   ],

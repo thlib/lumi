@@ -15,3 +15,20 @@ export const repeatBehavior: Binding<Presentation> = repeat<
     element.getAttribute('data-repeat') ?? undefined,
   ),
 )
+
+/**
+ * `data-repeat-by-id` keeps each element with the item that has the same
+ * `id` when the list changes.
+ */
+export const keyedRepeatBehavior: Binding<Presentation> = repeat<
+  {id: unknown},
+  Presentation,
+  unknown
+>(
+  '[data-repeat-by-id]',
+  (context, element) => pathMatches(
+    context,
+    element.getAttribute('data-repeat-by-id') ?? undefined,
+  ) as Array<{id: unknown}>,
+  ({item}) => item.id,
+)

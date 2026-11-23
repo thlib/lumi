@@ -38,6 +38,10 @@
       "types": "./dist/lumi.d.ts",
       "default": "./dist/lumi.dev.js"
     },
+    "./check.js": {
+      "types": "./src/check.d.ts",
+      "default": "./src/check.js"
+    },
     "./shims/move-before.js": {
       "types": "./src/shims/move-before.d.ts",
       "default": "./src/shims/move-before.js"

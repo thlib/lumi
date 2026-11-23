@@ -8,7 +8,7 @@ export default {
   source: document.querySelector('#activity-page'),
   present: data => ({count: `${data.activities.length} updates`}),
   bindings: [
-    text<ActivityPageData, ActivityPageData>(
+    text(
       '#activity > .heading .count',
       ({data}) => data.count,
     ),

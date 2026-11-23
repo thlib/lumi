@@ -24,6 +24,15 @@ projection:
 <span class="avatar" data-attr="data-person: $.item.personId">AL</span>
 ```
 
+`data-repeat` repeats its element one time for each match of its path, by
+position. `data-repeat-by-id` does the same, and keeps each element with the
+item that has the same `id` when the list changes. A path that gives no match
+removes the element, so a list of zero or one item is a conditional region:
+
+```html
+<div id="profile" data-repeat="$.data.profile[*]">…</div>
+```
+
 Structural classes such as `avatar` remain static. Additive semantic
 attributes such as `data-person`, `data-project`, and `data-direction` carry
 dynamic meaning without replacing those classes; the shared stylesheet

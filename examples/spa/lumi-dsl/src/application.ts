@@ -5,7 +5,7 @@ import {pathBehavior} from './behaviors/path'
 import {projectBehaviors} from './behaviors/projects'
 import {propertyBehaviors} from './behaviors/properties'
 import {recordBehaviors} from './behaviors/records'
-import {repeatBehavior} from './behaviors/repeat'
+import {keyedRepeatBehavior, repeatBehavior} from './behaviors/repeat'
 import {toastBehaviors} from './behaviors/toasts'
 import {validationBehaviors} from './behaviors/validation'
 import {composeTemplate} from './template'
@@ -20,6 +20,7 @@ export function mountApplication(
     source: composeTemplate('app-shell'),
     bindings: [
       repeatBehavior,
+      keyedRepeatBehavior,
       pathBehavior,
       ...attributeBehaviors,
       ...propertyBehaviors,

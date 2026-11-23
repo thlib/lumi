@@ -218,7 +218,7 @@ test('a child replaces the content of its container', () => {
           source: childTemplate,
           bindings: [text('output', ({data}) => /** @type {string} */ (data))],
         }),
-        data => data,
+        ({data}) => data,
       ),
     ],
   }).mount(document.body)

@@ -19,15 +19,15 @@ export default {
     }
   },
   bindings: [
-    text<ProjectsData, ProjectsData>('.project-toolbar .summary', ({data}) => data.summary),
-    on<string, 'click', ProjectsData>('[data-filter]', 'click', (_, el) => {
+    text('.project-toolbar .summary', ({data}) => data.summary),
+    on('[data-filter]', 'click', (_, el) => {
       const filter = el.getAttribute('data-filter')
 
       if (filter === 'all' || filter === 'active' || filter === 'planning') {
         update(data => ({...data, filter}))
       }
     }),
-    attr<ProjectsData, ProjectsData>(
+    attr(
       '[data-filter]',
       'aria-pressed',
       ({data}, el) => String(el.getAttribute('data-filter') === data.filter),

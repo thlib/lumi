@@ -12,6 +12,12 @@
  * to this demo.
  */
 
+// Safari does not have moveBefore(), which a keyed repeat uses to move an
+// element. Only a browser that needs the shim loads it.
+if (!('moveBefore' in Element.prototype)) {
+  await import('../../../../src/shims/move-before.js')
+}
+
 export {
   attr,
   classToggle,

@@ -21,8 +21,8 @@
           repeat('ul > li', ({data}) => data.items, [
             text(':scope', ({item}) => item.name),
           ]),
-          prop('.increment', ({data}) => data.count >= data.maximum, 'disabled'),
-          prop('.decrement', ({data}) => data.count <= 0, 'disabled'),
+          prop('.increment', 'disabled', ({data}) => data.count >= data.maximum),
+          prop('.decrement', 'disabled', ({data}) => data.count <= 0),
           on('.increment', 'click', () => {
             const count = data.count + 1
             data = {

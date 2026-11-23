@@ -2,6 +2,7 @@ import {attr, on, repeat, text} from '../app.js'
 import {filterLargeRecords, orderLargeRecords} from '../records.js'
 import {update} from '../page.js'
 
+import type {LargeRecord} from '../../../data-20k.js'
 import type {DefinitionOptions} from '../components.js'
 import type {PageData} from '../page.js'
 import type {RecordsData} from '../view-data.js'
@@ -18,23 +19,26 @@ export default {
       filter: data.recordFilter,
       sort: data.recordSort,
       sortIndicator: data.recordSort === 'ascending' ? '↑' : '↓',
-      rows: records.map(record => record.label),
+      rows: records,
       summary: `${records.length.toLocaleString('en-US')} records shown`,
     }
   },
   bindings: [
-    repeat<string, RecordsData>('.record-row', ({data}) => data.rows, [
-      text<string>(':scope', ({item}) => item),
-    ]),
-    text<RecordsData, RecordsData>('.record-summary', ({data}) => data.summary),
-    text<RecordsData, RecordsData>('.record-sort-indicator', ({data}) => data.sortIndicator),
-    on<string, 'click', RecordsData>('[data-record-sort]', 'click', () => {
+    repeat<LargeRecord, RecordsData>(
+      '.record-row',
+      ({data}) => data.rows,
+      ({item}) => item.id,
+      [text(':scope', ({item}) => item.label)],
+    ),
+    text('.record-summary', ({data}) => data.summary),
+    text('.record-sort-indicator', ({data}) => data.sortIndicator),
+    on('[data-record-sort]', 'click', () => {
       update(data => ({
         ...data,
         recordSort: data.recordSort === 'ascending' ? 'descending' : 'ascending',
       }))
     }),
-    on<string, 'click', RecordsData>('[data-record-filter]', 'click', (_, el) => {
+    on('[data-record-filter]', 'click', (_, el) => {
       const recordFilter = el.getAttribute('data-record-filter')
       if (
         recordFilter === 'all'
@@ -46,11 +50,11 @@ export default {
         update(data => ({...data, recordFilter}))
       }
     }),
-    attr<RecordsData, RecordsData>(
+    attr(
       '[data-record-filter]',
       'aria-pressed',
       ({data}, el) => String(el.getAttribute('data-record-filter') === data.filter),
     ),
-    attr<RecordsData, RecordsData>('[data-record-header]', 'aria-sort', ({data}) => data.sort),
+    attr('[data-record-header]', 'aria-sort', ({data}) => data.sort),
   ],
 } satisfies DefinitionOptions<PageData, RecordsData>

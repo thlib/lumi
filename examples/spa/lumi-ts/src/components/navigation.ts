@@ -12,13 +12,13 @@ export default {
     projectCount: data.projects.length,
   }),
   bindings: [
-    text<NavigationData, NavigationData>('.link .count', ({data}) => data.projectCount),
-    on<string, 'click', NavigationData>('.link', 'click', (_, el) => {
+    text('.link .count', ({data}) => data.projectCount),
+    on('.link', 'click', (_, el) => {
       if (el.getAttribute('href') === window.location.hash) {
         update(data => ({...data, navOpen: false}))
       }
     }),
-    attr<NavigationData, NavigationData>(
+    attr(
       '.link',
       'aria-current',
       ({data}, el) => (

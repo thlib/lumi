@@ -23,8 +23,6 @@ export const messages = {
     `property "${name}" must get TrustedHTML. The projection gave a different value.`,
   5: selector =>
     `repeat "${selector}" matches the component root. A repeat must match a descendant.`,
-  6: selector =>
-    `repeat "${selector}" contains the container of a child component.`,
   7: selector =>
     `binding "${selector}" in the list of a repeat matches an element outside that repeat.`,
   8: selector =>
@@ -47,7 +45,7 @@ export const messages = {
   22: () =>
     'the component source must have a root element.',
   23: selector =>
-    `repeat "${selector}": the list can contain only repeat, text, attr, prop, classToggle, and style bindings.`,
+    `repeat "${selector}": the list can contain only repeat, child, text, attr, prop, classToggle, and style bindings.`,
   24: () =>
     'child: the component must come from component().',
 }

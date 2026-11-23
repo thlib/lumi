@@ -52,13 +52,13 @@
         filter: data.recordFilter,
         sort: data.recordSort,
         sortIndicator: data.recordSort === 'ascending' ? '↑' : '↓',
-        rows: records.map(record => record.label),
+        rows: records,
         summary: `${records.length.toLocaleString('en-US')} records shown`,
       }
     },
     bindings: [
-      repeat('.record-row', ({data}) => data.rows, [
-        text(':scope', ({item}) => item),
+      repeat('.record-row', ({data}) => data.rows, ({item}) => item.id, [
+        text(':scope', ({item}) => item.label),
       ]),
       text('.record-summary', ({data}) => data.summary),
       text('.record-sort-indicator', ({data}) => data.sortIndicator),

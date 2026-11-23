@@ -36,6 +36,7 @@ const root = resolve(import.meta.dirname, '..')
  *   browserChannel: string | null,
  *   browserExecutable: string | null,
  *   build: boolean,
+ *   frameworks: readonly string[] | null,
  *   output: string,
  *   jsonOutput: string,
  *   help: boolean,
@@ -109,7 +110,7 @@ const root = resolve(import.meta.dirname, '..')
  */
 
 /** @type {readonly Framework[]} */
-const frameworks = Object.freeze([
+const allFrameworks = Object.freeze([
   {
     id: 'lumi-native',
     label: 'Lumi native',
@@ -174,6 +175,10 @@ const frameworks = Object.freeze([
 ])
 
 const LUMI_BASELINE = 'lumi-build'
+
+// The frameworks of this run. `--frameworks` selects a part of the list.
+/** @type {readonly Framework[]} */
+let frameworks = allFrameworks
 const TASK_THRESHOLD_MS = 10
 
 const contentTypes = new Map([
@@ -194,6 +199,7 @@ const defaultOptions = Object.freeze({
   browserChannel: null,
   browserExecutable: null,
   build: true,
+  frameworks: null,
   output: resolve(root, 'benchmark/results/spa-performance.md'),
   jsonOutput: resolve(root, 'benchmark/results/spa-performance.json'),
 })
@@ -204,6 +210,25 @@ async function main() {
   if (options.help) {
     printHelp()
     return
+  }
+
+  if (options.frameworks !== null) {
+    const selected = options.frameworks
+    const unknown = selected.filter(id => {
+      return !allFrameworks.some(framework => framework.id === id)
+    })
+
+    if (unknown.length > 0) {
+      throw new Error(
+        `Unknown framework "${unknown.join('", "')}". The frameworks are: `
+        + allFrameworks.map(framework => framework.id).join(', '),
+      )
+    }
+
+    // The report gives each result relative to the Lumi baseline.
+    frameworks = allFrameworks.filter(framework => {
+      return framework.id === LUMI_BASELINE || selected.includes(framework.id)
+    })
   }
 
   if (options.build) {
@@ -1403,6 +1428,8 @@ function parseArguments(arguments_) {
       options.recordFilterCycles = parsePositiveInteger(name, value)
     } else if (name === '--record-samples') {
       options.recordSamples = parsePositiveInteger(name, value)
+    } else if (name === '--frameworks') {
+      options.frameworks = parseNonEmptyString(name, value).split(',')
     } else if (name === '--output') {
       options.output = resolve(process.cwd(), value)
     } else if (name === '--json-output') {
@@ -1456,6 +1483,9 @@ Options:
                        Three 20k-row updates per cycle (default: 1)
   --record-samples=N   Samples that run the memory-heavy 20k case (default: 2)
   --skip-build         Use existing framework production bundles
+  --frameworks=ID,ID   Run only these frameworks and the Lumi baseline, to
+                       compare two versions of Lumi. Use --output and
+                       --json-output so that the full report stays as it is
   --output=PATH        Markdown report path
   --json-output=PATH   Raw JSON report path
   --browser-channel=NAME

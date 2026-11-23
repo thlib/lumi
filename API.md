@@ -22,12 +22,15 @@ The supported module is `@thlibjs/lumi`. It exports:
   `ProjectionContext` TypeScript types, plus `EventBindingOptions`,
   `EventBindingLocation`, and `EventBindingFrequency`
 
-`component()` returns a definition with `mount()`. A mounted component exposes
-only `root`, `update()`, and `unmount()`.
+`component()` returns a definition with `mount()`. A mounted
+component exposes only `root`, `update()`, and `unmount()`.
 
 The package also exports browser shims, for example
 `@thlibjs/lumi/shims/move-before.js`. Refer to
 [Browser requirements](#browser-requirements).
+
+The module `@thlibjs/lumi/check.js` has a check for tests. It is not in the
+Lumi bundle. Refer to [Selector check](#selector-check).
 
 Other source and declaration modules, renderer descriptors, preparation
 objects, and connected-binding lifecycle shapes are package internals. They
@@ -41,6 +44,7 @@ import {
   component,
   on,
   prop,
+  text,
 } from '@thlibjs/lumi'
 
 let actualData = {
@@ -63,8 +67,8 @@ const counter = component({
     text('output span', ({data}) => data.count),
     prop(
       '[data-disabled]',
-      ({data}) => data.counterDisabled,
       'disabled',
+      ({data}) => data.counterDisabled,
     ),
     on('[data-action="increment"]', 'click', () => {
       actualData = {
@@ -301,9 +305,10 @@ that took the place of the target. Markup that does not have exactly one
 element leaves the binding without an element.
 
 The projection runs once for each target and receives an element as its
-second argument. In a component without `repeat` and without a markup
-binding, this is the mounted element. In other components, it is the
-corresponding element of an inert copy of the component source. Projection
+second argument. In a component without `repeat`, without `child`, and
+without a markup binding, this is the mounted element. In other components,
+it is the corresponding element of an inert copy of the component source.
+Projection
 code may inspect stable template metadata such as `data-*` attributes, but
 should not retain the element, depend on its identity, or mutate it.
 
@@ -315,7 +320,7 @@ the corresponding native element type. Complex selectors safely fall back to
 | --- | --- | --- |
 | `repeat(selector, project, bindings?)` or `repeat(selector, project, key, bindings?)` | array or nullish | Repeats the matched template element once per item; an optional key preserves item identity, and optional built-in DOM bindings are scoped to each occurrence |
 | `text(selector, project)` | text value or nullish | Assigns `textContent`, or preserves it for nullish and invalid values |
-| `prop(selector, project, name)` | any non-nullish value, TrustedHTML for `innerHTML`/`outerHTML`, or nullish | Assigns the native property with `Reflect.set`, or does nothing for nullish |
+| `prop(selector, name, project)` | any non-nullish value, TrustedHTML for `innerHTML`/`outerHTML`, or nullish | Assigns the native property with `Reflect.set`, or does nothing for nullish |
 | `attr(selector, name, project)` | string, number, boolean, or nullish | Removes on `false`, creates an empty attribute on `true`, sets text, or does nothing for nullish |
 | `classToggle(selector, name, project)` | boolean or nullish | Toggles only the named class, or does nothing for nullish |
 | `style(selector, name, project)` | string or nullish | Sets one inline property, removes it for an empty string, or does nothing for nullish |
@@ -369,8 +374,8 @@ const markupPolicy = trustedTypes.createPolicy('application-markup', {
 
 prop(
   '.preview',
-  ({data}) => markupPolicy.createHTML(data.markup),
   'innerHTML',
+  ({data}) => markupPolicy.createHTML(data.markup),
 )
 ```
 
@@ -560,8 +565,8 @@ repeat('.item', ({data}) => data.items, [
 ])
 ```
 
-`on` and `child` remain component-level declarations. A repeat binding list
-accepts `repeat`, `text`, `prop`, `attr`, `classToggle`, and `style`; all of
+`on` remains a component-level declaration. A repeat binding list accepts
+`repeat`, `child`, `text`, `prop`, `attr`, `classToggle`, and `style`; all of
 them receive the repeated occurrence's context.
 
 Flat bindings remain useful when the template position is already clear:
@@ -651,6 +656,33 @@ values to one inert element and copy that element. The new element then has
 its text, attributes, and classes before it goes into the document, and it
 is equal to a copy of the source that got the same values. A custom element
 in such a copy has its attributes when its constructor runs.
+
+### Conditional regions
+
+A region that is in the DOM only for some data is a `repeat` with zero or one
+item. An empty array removes the element. An array with one item puts the
+element back at the same location:
+
+```js
+repeat('#profile', ({data}) => data.selected ? [data.selected] : [], [
+  text('.name', ({item}) => item.name),
+  attr('.email', 'href', ({item}) => `mailto:${item.email}`),
+])
+```
+
+The projections in the binding list run only when the item is there. They
+need no value for the state without an item.
+
+The element stays the same element while the array has one item, and its
+bindings get the new values. With a key projection, a different key gives a
+new element. A nullish result keeps the region as it is.
+
+A removed element loses its browser state, for example the text in a form
+control. To hide an element and keep its state, bind the `hidden` property:
+
+```js
+prop('#directory', 'hidden', ({data}) => data.selected !== undefined)
+```
 
 ## Explicit positional contexts
 
@@ -744,17 +776,47 @@ inspect their path strings, or require applications to use such a convention.
 
 ## `child(selector, component, project)`
 
-`child` mounts one nested component into the selected container. The
-projection selects the child's data from the parent snapshot:
+`child` puts one nested component into each selected container. The
+projection receives the context and gives the data of the child:
 
 ```js
-child('.profile-slot', profileComponent, page => page.profile)
+child('.profile-slot', profileComponent, ({data}) => data.profile)
 ```
 
-The child root is mounted once and persists across parent renders. The mount
-replaces the content of the container.
+The child replaces the content of the container. The root of the child stays
+the same element for all updates of the parent. A child at the component
+boundary is in the DOM from the mount of the parent.
 
-A selector that matches no element mounts no child. The development version
+In the child, `data` is the value that the projection gave. A nullish
+projection keeps the child as it is.
+
+In the binding list of a `repeat`, each occurrence gets its own child, and
+the projection receives the context of that occurrence:
+
+```js
+repeat('.member-row', ({data}) => data.members, ({item}) => item.id, [
+  child('.card-slot', memberCard, ({item}) => item),
+])
+```
+
+The repeated element itself can be the container: use the selector `:scope`.
+A child outside the list gets its context from the position of its
+container, as other bindings do. A [conditional region](#conditional-regions)
+can contain a child.
+
+A child is a part of the update of its parent. All projections of the parent
+and of its children run before a change to the live DOM, so an error in a
+projection of a child leaves the DOM as it was.
+
+Lumi compiles a child component one time for each mounted parent. Each
+container gets a copy of the source of the child, so a child in a large list
+does not resolve its selectors again.
+
+The event bindings of the child are on the root of that child. The selectors
+of the parent do not match an element in the child, and the selectors of the
+child match only its own elements.
+
+A selector that matches no element puts in no child. The development version
 gives a warning.
 
 ## DOM ownership
@@ -796,6 +858,101 @@ Lumi does not repair such a write to the state of a `text`, `attr`,
 with the value that they wrote last, not with the live DOM. The foreign
 state stays until the projection changes. A `prop` binding is different: it
 compares with the live property on each update.
+
+## Types
+
+Lumi ships TypeScript declarations. Give the data type to the component
+options. A binding at the component boundary then gets the type of `data`
+from the options:
+
+```ts
+import {
+  component,
+  repeat,
+  text,
+  type ComponentOptions,
+} from '@thlibjs/lumi'
+
+type Member = {id: string, name: string}
+type Team = {title: string, members: Member[]}
+
+const options: ComponentOptions<Team> = {
+  source: document.querySelector('template'),
+  bindings: [
+    // data is Team.
+    text('h1', ({data}) => data.title),
+    repeat<Member, Team>('li', ({data}) => data.members, ({item}) => item.id, [
+      // item is Member, and data is Team.
+      text('.name', ({item}) => item.name),
+    ]),
+  ],
+}
+
+const team = component(options).mount(document.querySelector('#team'))
+
+team.update({title: 'Design', members: [{id: 'ada', name: 'Ada'}]})
+```
+
+A `repeat` needs two type arguments: the item type and the data type.
+TypeScript examines the binding list before the projection of the `repeat`,
+so the list cannot get the item type from that projection. The bindings in
+the list then need no type argument. A `repeat` in the list of a different
+`repeat` has a third type argument, the item type of its parent:
+`repeat<Tag, Team, Member>(…)`.
+
+Some bindings are not in a position that has a type. Examples are a binding
+in a variable, a binding that a function such as `map` returns, and a
+binding outside the list of its `repeat`. Give such a binding its type
+arguments, or give a type to the context parameter:
+
+```ts
+import type {ProjectionContext} from '@thlibjs/lumi'
+
+text<Member>('li .name', ({item}) => item.name)
+text('li .name', ({item}: ProjectionContext<Member, Team>) => item.name)
+```
+
+`Binding<Data, Item>` is the type of a binding. `Item` is the type of
+`context.item` in its projection. `Binding<Data>` accepts each item type,
+and the `bindings` option of a component has this type.
+
+## Selector check
+
+A selector that matches no element is a no-op, so a selector with a typing
+mistake gives no error. Each selector resolves one time, in the component
+source. Thus a test can find such a selector without data and without a
+mount.
+
+`unmatchedSelectors(component)` gives the bindings of a component whose
+selector matches no element in the component source, in the order of their
+declaration. The argument is a component from `component()`, or its options:
+
+```js
+import assert from 'node:assert/strict'
+import {unmatchedSelectors} from '@thlibjs/lumi/check.js'
+import {counter} from './counter.js'
+
+assert.deepEqual(unmatchedSelectors(counter), [])
+```
+
+Each entry has the name of the binding function and the selector:
+
+```js
+[{binding: 'text', selector: 'ouput span'}]
+```
+
+The result of each selector is the result that a mount gets. A binding in
+the list of a `repeat` matches only in the element of that repeat, and no
+binding matches in the container of a child component. The function examines
+one component. Examine a child component with a second call.
+
+A markup binding (`innerHTML` or `outerHTML`) can create an element in an
+update. A selector for such an element is in the list, because the source
+does not have the element. Compare the list with the entries that you
+expect.
+
+The function needs a DOM. In Node.js, make the component source in a DOM
+library, for example jsdom.
 
 ## Development and production versions
 
@@ -859,7 +1016,6 @@ These errors are in the two versions:
 | `E3` | An `innerHTML` or `outerHTML` projection gave a value, but the document has no Trusted Types API. | Property name |
 | `E4` | An `innerHTML` or `outerHTML` projection gave a value that is not genuine `TrustedHTML`. | Property name |
 | `E5` | A `repeat` selector matches the component root. | Selector |
-| `E6` | The element of a `repeat` contains the container of a child component. | Selector |
 | `E7` | A binding in the list of a `repeat` matches an element outside that repeat. | Selector |
 | `E8` | A binding in the list of a `repeat` matches an element in a different repeat. | Selector |
 | `E9` | A `text`, `innerHTML`, or `outerHTML` binding contains the container of a child component. | Selector |
@@ -870,7 +1026,8 @@ These errors are in the two versions:
 
 `E1` and `E2` occur when the application makes the binding. `E3`, `E4`, and
 `E12` occur in the preparation of an update, before a change to the live
-DOM. `E5` to `E11` occur in `mount`, and the target keeps its content.
+DOM. `E5` and `E7` to `E11` occur in `mount`, and the target keeps its
+content. The code `E6` is not in use.
 
 These errors are only in the development version. In each of these
 situations, the production version gives the error of the browser:
@@ -880,7 +1037,7 @@ situations, the production version gives the error of the browser:
 | `E20` | The mount target is not an element or a document fragment. |
 | `E21` | The component source is not a `<template>`, a document fragment, or an element. |
 | `E22` | The component source has no root element. |
-| `E23` | The list of a `repeat` contains a binding that is not a `repeat`, `text`, `attr`, `prop`, `classToggle`, or `style` binding. |
+| `E23` | The list of a `repeat` contains a binding that is not a `repeat`, `child`, `text`, `attr`, `prop`, `classToggle`, or `style` binding. |
 | `E24` | The component of a `child` binding does not come from `component()`. |
 
 ### Errors that are not from Lumi

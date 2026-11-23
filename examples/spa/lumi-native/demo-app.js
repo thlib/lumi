@@ -6,6 +6,17 @@ import config from '../data-records.json' with {type: 'json'}
 
 export {emailValidation, emailValidationMessage} from './email-validation.js'
 
+// Safari does not have moveBefore(), which a keyed repeat uses to move an
+// element. Only a browser that needs the shim loads it. The inline modules
+// of this page start on DOMContentLoaded, so this module does not wait for
+// the shim. The first move of a keyed element comes from a user action.
+if (
+  typeof Element !== 'undefined'
+  && !('moveBefore' in Element.prototype)
+) {
+  import('../../../src/shims/move-before.js')
+}
+
 /** @typedef {'overview' | 'projects' | 'records' | 'activity' | 'teams'} Route */
 /** @typedef {'all' | 'active' | 'planning'} ProjectFilter */
 /** @typedef {'all' | 'alpha' | 'beta' | 'gamma' | 'delta'} RecordFilter */

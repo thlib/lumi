@@ -16,6 +16,7 @@ import {
   type MountedComponent,
   type ProjectionContext,
 } from '@thlibjs/lumi'
+import {unmatchedSelectors} from '@thlibjs/lumi/check.js'
 
 type CounterData = {
   count: number
@@ -46,7 +47,7 @@ const options: ComponentOptions<CounterData> = {
       const output: HTMLOutputElement = element
       return `${data.label}: ${data.count} (${output.htmlFor.value})`
     }),
-    prop<CounterData, CounterData>('output', ({data}) => data.count, 'value'),
+    prop<CounterData, CounterData>('output', 'value', ({data}) => data.count),
     attr<CounterData, CounterData>('output', 'aria-label', ({data}) => data.label),
     classToggle<CounterData, CounterData>('output', 'disabled', ({data}) => data.disabled),
     style<CounterData, CounterData>('output', 'opacity', ({data}) => data.disabled ? '0.5' : '1'),
@@ -65,7 +66,6 @@ on('button', 'click', () => {}, { once: true })
 
 const definition: Component<CounterData> = component(options)
 const mounted: MountedComponent<CounterData> = definition.mount(document.body)
-
 mounted.update({
   count: 1,
   label: 'Count',
@@ -98,7 +98,7 @@ declare const childComponent: Component<ChildData>
 const pageOptions: ComponentOptions<PageData> = {
   source: template,
   bindings: [
-    child('.profile', childComponent, page => page.profile),
+    child('.profile', childComponent, ({data}) => data.profile),
   ],
 }
 
@@ -134,6 +134,76 @@ const peopleOptions: ComponentOptions<PeoplePage> = {
 }
 
 component(peopleOptions)
+
+// A child in the list of a repeat gets the context of the occurrence.
+const memberListOptions: ComponentOptions<PeoplePage> = {
+  source: template,
+  bindings: [
+    repeat<Person, PeoplePage>('li', ({data}) => data.people, [
+      child('.slot', childComponent, ({item}) => {
+        const person: Person = item
+        return person
+      }),
+    ]),
+    child('.heading', childComponent, ({data}) => ({name: data.heading})),
+    // @ts-expect-error the projection gives the data type of the child.
+    child('.heading', childComponent, ({data}) => data.heading.length),
+  ],
+}
+
+component(memberListOptions)
+
+// The binding list of a repeat gives its item type to its bindings. Only
+// the repeat has type arguments.
+type Group = {title: string, people: Person[]}
+type GroupsPage = {groups: Group[], heading: string}
+
+const groupsOptions: ComponentOptions<GroupsPage> = {
+  source: template,
+  bindings: [
+    text('h1', ({data}) => {
+      const page: GroupsPage = data
+      return page.heading
+    }),
+    repeat<Group, GroupsPage>('section', ({data}) => data.groups, ({item}) => item.title, [
+      text('h2', ({item, data}) => {
+        const group: Group = item
+        const page: GroupsPage = data
+        return `${page.heading}: ${group.title}`
+      }),
+      attr('h2', 'title', ({item}) => item.title),
+      classToggle(':scope', 'empty', ({item}) => item.people.length === 0),
+      style(':scope', 'order', ({index}) => String(index)),
+      prop(':scope', 'hidden', ({item}) => item.people.length === 0),
+      repeat<Person, GroupsPage, Group>('li', ({item}) => item.people, [
+        text(':scope', ({item}) => {
+          const person: Person = item
+          return person.name
+        }),
+      ]),
+      // A typed context parameter gives the same result without type
+      // arguments.
+      repeat('li', ({item}: ProjectionContext<Group, GroupsPage>) => item.people, [
+        text(':scope', ({item}) => item.name),
+      ]),
+    ]),
+    // A binding outside the list of a repeat gets its context from the
+    // position of its element, so the component accepts each item type.
+    text<Person>('li .name', ({item}) => item.name),
+  ],
+}
+
+component(groupsOptions)
+
+repeat<Group, GroupsPage>('section', ({data}) => data.groups, [
+  // @ts-expect-error the list of a repeat gives the item type to its bindings.
+  text('h2', ({item}) => item.missing),
+])
+
+// @ts-expect-error a binding for a different item type is not in this list.
+repeat<Group, GroupsPage>('section', ({data}) => data.groups, [
+  text<Person>('h2', ({item}) => item.name),
+])
 
 repeat<Person, PeoplePage>(
   'li',
@@ -207,3 +277,10 @@ declare const dynamicName: string
 attr('output', dynamicName, () => true)
 // Explicit type arguments without the name fall back to a string name.
 attr<CounterData, CounterData>('output', 'aria-busy', ({data}) => data.disabled)
+
+// The selector check accepts a component or its options.
+const unmatched: Array<{binding: string, selector: string}> = [
+  ...unmatchedSelectors(definition),
+  ...unmatchedSelectors(options),
+]
+void unmatched

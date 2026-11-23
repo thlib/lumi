@@ -110,13 +110,13 @@ test('the production build gives an error code with the details', () => {
     'Lumi E1 attribute onclick',
   )
   assert.equal(
-    messageOf(() => production.prop('iframe', () => '', 'srcdoc')),
+    messageOf(() => production.prop('iframe', 'srcdoc', () => '')),
     'Lumi E2 property srcdoc',
   )
 
   const mounted = production.component({
     source: template,
-    bindings: [production.prop('output', ({data}) => data, 'innerHTML')],
+    bindings: [production.prop('output', 'innerHTML', ({data}) => data)],
   }).mount(document.createElement('div'))
 
   // jsdom has no Trusted Types API.
@@ -168,7 +168,7 @@ test('the production build gives no warning where the development build gives on
           // A third argument that is not valid.
           lumi.repeat('.extra', () => null, /** @type {never} */ (1)),
           // A child that matches no element.
-          lumi.child('.absent', lumi.component({source: template}), data => data),
+          lumi.child('.absent', lumi.component({source: template}), ({data}) => data),
           // An option that is not known, and an event that does not bubble.
           lumi.on('button', 'click', () => {}, /** @type {never} */ ({once: true})),
           lumi.on('button', 'focus', () => {}),

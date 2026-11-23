@@ -12,20 +12,6 @@ import {warn} from './internal/diagnostics.js'
 import {fail} from './internal/fail.js'
 
 /**
- * Returns the first matching element inside a component boundary, or null.
- *
- * The component root participates in matching because querySelector() only
- * searches descendants.
- *
- * @param {Element} root
- * @param {string} selector
- * @returns {Element | null}
- */
-export function findElement(root, selector) {
-  return root.matches(selector) ? root : root.querySelector(selector)
-}
-
-/**
  * Returns every matching element inside a component boundary in tree order.
  * The component root participates because querySelectorAll() searches only
  * descendants. An empty result is valid.
@@ -47,35 +33,35 @@ export function queryElements(root, selector) {
 
 /**
  * Resolves a selector without crossing child component boundaries.
- * The owning container itself remains available because it belongs to the
- * component that declared the child.
+ * The container of a child component itself remains available, because it
+ * belongs to the component that declared the child.
  *
  * @param {Element} root
  * @param {string} selector
- * @param {ReadonlyArray<Element>} ownedSubtrees
+ * @param {WeakSet<Element> | null} [containers] The containers of the child
+ * components in the mounted DOM, or null for a component without a child.
  * @returns {Element[]}
  */
-export function queryOwnedElements(root, selector, ownedSubtrees) {
+export function queryOwnedElements(root, selector, containers) {
   const elements = queryElements(root, selector)
 
-  if (ownedSubtrees.length === 0) {
+  if (!containers) {
     return elements
   }
 
-  return elements.filter(element => !isInsideOwnedSubtree(element, ownedSubtrees))
-}
+  return elements.filter(element => {
+    // The DOM in a container belongs to the child component.
+    for (
+      let parent = element === root ? null : element.parentElement;
+      parent !== null;
+      parent = parent === root ? null : parent.parentElement
+    ) {
+      if (containers.has(parent)) {
+        return false
+      }
+    }
 
-/**
- * Returns whether an element belongs to a nested component's owned DOM rather
- * than to the component that declared the child.
- *
- * @param {Element} element
- * @param {ReadonlyArray<Element>} ownedSubtrees
- * @returns {boolean}
- */
-export function isInsideOwnedSubtree(element, ownedSubtrees) {
-  return ownedSubtrees.some(owned => {
-    return owned !== element && owned.contains(element)
+    return true
   })
 }
 
@@ -157,26 +143,6 @@ export function elementPath(ancestor, descendant) {
   }
 
   return path
-}
-
-/**
- * Resolves a path produced by elementPath(). Other code can change the DOM
- * that Lumi owns. When the path then has no element, the result is
- * undefined.
- *
- * @param {Element} root
- * @param {ReadonlyArray<number>} path
- * @returns {Element | undefined}
- */
-export function elementAtPath(root, path) {
-  /** @type {Element | undefined} */
-  let current = root
-
-  for (const step of path) {
-    current = current?.children[step]
-  }
-
-  return current
 }
 
 /**
@@ -285,7 +251,8 @@ export function markCreated(node, end, createdBy, history) {
 }
 
 /**
- * Clones the single element that defines a component boundary.
+ * Gives the single element that defines a component boundary. Lumi makes
+ * copies of this element.
  *
  * A template contributes its inert content. A fragment contributes its
  * children. An element contributes itself. The source is never consumed or
@@ -297,7 +264,7 @@ export function markCreated(node, end, createdBy, history) {
  * @param {import('./types.js').ComponentSource | null} source
  * @returns {Element}
  */
-export function cloneSourceRoot(source) {
+export function sourceRoot(source) {
   const type = source?.nodeType
   /** @type {DocumentFragment | null} */
   let content = null
@@ -306,7 +273,7 @@ export function cloneSourceRoot(source) {
     const el = /** @type {Element} */ (source)
 
     if (el.localName !== 'template' || !('content' in el)) {
-      return /** @type {Element} */ (el.cloneNode(true))
+      return el
     }
 
     content = /** @type {HTMLTemplateElement} */ (el).content
@@ -332,8 +299,6 @@ export function cloneSourceRoot(source) {
   }
 
   return /** @type {Element} */ (
-    /** @type {Element} */ (
-      /** @type {DocumentFragment} */ (content).firstElementChild
-    ).cloneNode(true)
+    /** @type {DocumentFragment} */ (content).firstElementChild
   )
 }

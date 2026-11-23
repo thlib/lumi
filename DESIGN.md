@@ -1,28 +1,12 @@
 # Lumi design
 
-Lumi is a small browser-first rendering layer.
+The [README](./README.md) states the goal of Lumi and gives the reasons for
+it. This document gives the design: the architecture, the ownership
+boundaries, the event model, the exclusions, the acceptance tests, and the
+open questions. [API.md](./API.md) is the reference for the functions.
 
-It solves one problem: **Declarative DOM rendering** using as much native
-tooling as possible while respecting native encoding of data. Application code
-describes what the DOM should show. Rendering finds, creates, moves, and
-updates the necessary nodes.
-
-```text
-native HTML + ordinary JavaScript or TypeScript rules + a data snapshot
-                                  |
-                              update(data)
-                                  |
-                     minimal writes to the real DOM
-```
-
-Call `update(data)` to render a snapshot, then call it again when the snapshot
-changes. Data fetching remains an application concern.
-
-This is not a framework around the browser. It is the missing mechanical step
+Lumi is not a framework around the browser. It is the missing mechanical step
 between plain data and persistent native DOM.
-
-Declarative updates work with native HTML, without relocating that HTML into
-JavaScript or imposing a state-management model.
 
 ## The problem it removes
 
@@ -227,8 +211,8 @@ const counter = component({
     ),
     prop(
       '[data-disabled]',
-      ({data}) => data.counterDisabled,
       'disabled',
+      ({data}) => data.counterDisabled,
     ),
     on('[data-action="increment"]', 'click', () => {
       const count = actualData.count + 1
@@ -448,8 +432,9 @@ Component rules say how data affects declared DOM state:
 - DOM properties.
 - Attributes.
 - Classes and inline styles.
-- Conditional regions.
-- Positional and explicitly keyed repeated regions.
+- Positional and explicitly keyed repeated regions. A conditional region is
+  a repeated region with zero or one item, so it needs no separate rule.
+  Refer to [Conditional regions](./API.md#conditional-regions).
 - Child components.
 
 Projection functions should be pure: the same data should produce the same
@@ -782,7 +767,6 @@ feature that fails one of them must be redesigned or kept outside the API.
 These require prototypes and measurements:
 
 - The smallest useful typed binding API.
-- How conditional and repeated regions are anchored in ordinary HTML.
 - How an opaque, imperatively owned subtree is registered.
 - How component definitions stored outside the active document are packaged.
 - Browser support targets and the features worth shimming.

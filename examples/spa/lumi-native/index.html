@@ -321,7 +321,7 @@
           </section>
         </div>
 
-        <div id="profile" hidden>
+        <div id="profile">
           <a class="back-link" href="#/teams">
             <span aria-hidden="true">←</span>
             All team members
@@ -398,8 +398,8 @@
               toasts: data.toasts,
               memberCount: `${data.members.length} members`,
               members: data.members,
-              hasSelectedMember: selectedMember !== undefined,
-              selectedMember: selectedMember ?? data.members[0],
+              // The profile is in the DOM only when a member is selected.
+              profile: selectedMember === undefined ? [] : [selectedMember],
             }
           },
           bindings: [
@@ -413,13 +413,17 @@
                 attr('.name', 'href', ({item}) => `#/teams/${item.id}`),
                 attr('.avatar', 'data-person', ({item}) => item.id),
               ]),
-              text('#profile .avatar', ({data}) => data.selectedMember.initials),
-              text('#profile .name', ({data}) => data.selectedMember.name),
-              text('#profile .role', ({data}) => data.selectedMember.role),
-              text('#profile .team', ({data}) => data.selectedMember.team),
-              text('#profile .country', ({data}) => data.selectedMember.country),
-              text('#profile .email', ({data}) => data.selectedMember.email),
-              text('#profile .bio', ({data}) => data.selectedMember.bio),
+              repeat('#profile', ({data}) => data.profile, [
+                text('.avatar', ({item}) => item.initials),
+                text('.name', ({item}) => item.name),
+                text('.role', ({item}) => item.role),
+                text('.team', ({item}) => item.team),
+                text('.country', ({item}) => item.country),
+                text('.email', ({item}) => item.email),
+                text('.bio', ({item}) => item.bio),
+                attr('.email', 'href', ({item}) => `mailto:${item.email}`),
+                attr('.avatar', 'data-person', ({item}) => item.id),
+              ]),
               repeat('.toast', ({data}) => data.toasts, [
                 text('.message', ({item}) => item.message),
                 attr(':scope', 'data-toast-id', ({item}) => item.id),
@@ -461,18 +465,8 @@
                   toasts: data.toasts.filter(item => item.id !== id),
                 }))
               }),
-              prop('#directory', ({data}) => data.hasSelectedMember, 'hidden'),
-              prop('#profile', ({data}) => !data.hasSelectedMember, 'hidden'),
-              attr(
-                '#profile .email',
-                'href',
-                ({data}) => `mailto:${data.selectedMember.email}`,
-              ),
-              attr(
-                '#profile .avatar',
-                'data-person',
-                ({data}) => data.selectedMember.id,
-              ),
+              // The directory stays in the DOM, so its forms keep their state.
+              prop('#directory', 'hidden', ({data}) => data.profile.length > 0),
           ],
         }
 
@@ -799,13 +793,13 @@
             filter: data.recordFilter,
             sort: data.recordSort,
             sortIndicator: data.recordSort === 'ascending' ? '↑' : '↓',
-            rows: records.map(record => record.label),
+            rows: records,
             summary: `${records.length.toLocaleString('en-US')} records shown`,
           }
         },
         bindings: [
-          repeat('.record-row', ({data}) => data.rows, [
-            text(':scope', ({item}) => item),
+          repeat('.record-row', ({data}) => data.rows, ({item}) => item.id, [
+            text(':scope', ({item}) => item.label),
           ]),
           text('.record-summary', ({data}) => data.summary),
           text('.record-sort-indicator', ({data}) => data.sortIndicator),
